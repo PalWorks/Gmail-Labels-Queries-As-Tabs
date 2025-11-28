@@ -55914,6 +55914,132 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
       }
     });
   }
+  async function exportSettings() {
+    console.log("Gmail Tabs: Exporting settings...");
+    if (!currentUserEmail) {
+      console.error("Gmail Tabs: Export failed, no currentUserEmail");
+      alert("Error: Could not detect user email.");
+      return;
+    }
+    const settings = await getSettings(currentUserEmail);
+    console.log("Gmail Tabs: Settings to export:", settings);
+    const exportData = {
+      version: 1,
+      timestamp: Date.now(),
+      email: currentUserEmail,
+      // Include email for validation
+      tabs: settings.tabs
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const date = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const sanitizedEmail = currentUserEmail.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filename = `GmailTabs_${sanitizedEmail}_${date}.json`;
+    console.log("Gmail Tabs: Generated filename:", filename);
+    try {
+      console.log("Gmail Tabs: Sending download request to background...");
+      chrome.runtime.sendMessage({
+        action: "DOWNLOAD_FILE",
+        filename,
+        data: json
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("Gmail Tabs: Message failed", chrome.runtime.lastError);
+          alert("Error: Could not communicate with extension background. Please reload the page.");
+          return;
+        }
+        if (response && response.success) {
+          console.log("Gmail Tabs: Download initiated successfully", response.downloadId);
+        } else {
+          console.error("Gmail Tabs: Download failed", response?.error);
+          alert("Failed to download file: " + (response?.error || "Unknown error"));
+        }
+      });
+    } catch (err) {
+      console.error("Gmail Tabs: Unexpected error during export", err);
+      alert("Unexpected error during export. Please check console.");
+    }
+  }
+  function showImportModal() {
+    const modal = document.createElement("div");
+    modal.className = "gmail-tabs-modal";
+    modal.innerHTML = `
+        <div class="modal-content import-modal">
+            <div class="modal-header">
+                <h3>Import Configuration</h3>
+                <button class="close-btn">\u2715</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 8px; color: var(--modal-text);">Upload a JSON file or paste configuration below:</p>
+                
+                <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+                    <input type="file" id="import-file" accept=".json" style="display: none;">
+                    <button id="import-file-btn" class="secondary-btn" style="width: 100%;">
+                        \u{1F4C2} Select JSON File
+                    </button>
+                </div>
+
+                <textarea id="import-json" class="import-textarea" placeholder='{"version": 1, "tabs": [...]}'></textarea>
+                
+                <div class="modal-actions">
+                    <button class="secondary-btn close-btn-action">Cancel</button>
+                    <button id="import-confirm-btn" class="primary-btn">Import</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelectorAll(".close-btn, .close-btn-action").forEach((btn) => {
+      btn.addEventListener("click", close);
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) close();
+    });
+    const fileInput = modal.querySelector("#import-file");
+    const fileBtn = modal.querySelector("#import-file-btn");
+    const textArea = modal.querySelector("#import-json");
+    fileBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e2) => {
+          if (e2.target?.result) {
+            textArea.value = e2.target.result;
+            fileBtn.textContent = `\u2705 Loaded: ${file.name}`;
+            setTimeout(() => fileBtn.textContent = "\u{1F4C2} Select JSON File", 3e3);
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+    modal.querySelector("#import-confirm-btn")?.addEventListener("click", async () => {
+      const jsonStr = textArea.value.trim();
+      if (!jsonStr) {
+        alert("Please select a file or paste configuration JSON.");
+        return;
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        if (!data.tabs || !Array.isArray(data.tabs)) {
+          throw new Error('Invalid format: Missing "tabs" array.');
+        }
+        if (data.email && currentUserEmail && data.email !== currentUserEmail) {
+          alert(`Error: This configuration belongs to "${data.email}" but you are connected as "${currentUserEmail}". Import rejected.`);
+          return;
+        }
+        if (currentUserEmail && confirm("This will replace your current tabs. Are you sure?")) {
+          await updateTabOrder(currentUserEmail, data.tabs);
+          currentSettings = await getSettings(currentUserEmail);
+          renderTabs();
+          close();
+          alert("Configuration imported successfully!");
+        }
+      } catch (e) {
+        alert("Error importing: " + e.message);
+      }
+    });
+  }
   function updateActiveTab() {
     const hash = window.location.hash;
     const bar = document.getElementById(TABS_BAR_ID);
@@ -56002,6 +56128,18 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
                     <input type="checkbox" id="modal-unread-toggle">
                     <label for="modal-unread-toggle">Show Unread Count</label>
                 </div>
+
+                <div style="border-top: 1px solid var(--list-border); margin-top: 16px; padding-top: 16px;">
+                    <h4 style="margin: 0 0 12px 0; font-weight: 500; font-size: 14px; color: var(--modal-text);">Data & Sync</h4>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="export-btn" class="secondary-btn" style="flex: 1;">
+                            Export Config
+                        </button>
+                        <button id="import-btn" class="secondary-btn" style="flex: 1;">
+                            Import Config
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer" style="padding: 16px; background: var(--disabled-input-bg); border-top: 1px solid var(--list-border); font-size: 0.8em; color: var(--modal-text); text-align: center;">
                 Connected as: <span id="modal-account-email" style="font-weight: bold;">Detecting...</span>
@@ -56009,6 +56147,11 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
         </div>
     `;
     document.body.appendChild(modal);
+    modal.querySelector("#export-btn")?.addEventListener("click", exportSettings);
+    modal.querySelector("#import-btn")?.addEventListener("click", () => {
+      modal.remove();
+      showImportModal();
+    });
     const emailSpan = modal.querySelector("#modal-account-email");
     if (emailSpan && currentUserEmail) {
       emailSpan.textContent = currentUserEmail;

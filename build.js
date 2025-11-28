@@ -8,7 +8,7 @@ const isWatch = process.argv.includes('--watch');
 const commonConfig = {
     entryPoints: [
         'src/content.ts',
-        'src/options.ts',
+
         'src/popup.ts',
         'src/background.ts',
         'src/xhrInterceptor.ts'
