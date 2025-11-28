@@ -621,13 +621,22 @@ body.force-light {
 /* .gmail-header-btn removed */
 
 .tab-info {
-    flex-grow: 1;
+    flex: 1;
+    min-width: 0;
+    /* Crucial for ellipsis */
     text-align: left;
     margin-left: 8px;
-    white-space: nowrap;
+    margin-right: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+#modal-labels-list .actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 4px;
 }
 
 /* Theme Selector Styles */
