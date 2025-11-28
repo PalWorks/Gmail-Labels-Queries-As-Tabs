@@ -158,12 +158,76 @@ function injectPageWorld() {
     (document.head || document.documentElement).appendChild(script);
 }
 
+/**
+ * Scrapes the Gmail sidebar to build a map of Label Name -> Internal ID.
+ * This is crucial because XHR updates often use internal IDs (e.g. Label_4)
+ * while tabs use display names (e.g. Delete/BankNotifications).
+ */
+function buildLabelMapFromDOM(): Map<string, string> {
+    const map = new Map<string, string>();
+
+    // Robust selector: Look for any link that points to a label
+    // This bypasses obfuscated class names like .aio
+    const labelLinks = document.querySelectorAll('a[href*="#label/"]');
+
+    labelLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (!href) return;
+
+        // Extract ID: #label/Label_4
+        const rawId = href.split('#label/')[1];
+        if (!rawId) return;
+
+        const id = decodeURIComponent(rawId).replace(/\+/g, ' ');
+
+        // The display name is usually in the 'title' attribute of the link 
+        // OR in a child element's 'title' or text content.
+        // Gmail sidebar links usually have 'title' on the <a> or a child div.
+        let title = link.getAttribute('title');
+
+        if (!title) {
+            // Try children
+            const childWithTitle = link.querySelector('[title]');
+            if (childWithTitle) {
+                title = childWithTitle.getAttribute('title');
+            }
+        }
+
+        // Fallback: aria-label (often "Label name, 5 unread conversations")
+        if (!title) {
+            const ariaLabel = link.getAttribute('aria-label');
+            if (ariaLabel) {
+                // Strip ", X unread..." suffix if present
+                title = ariaLabel.split(',')[0];
+            }
+        }
+
+        if (title) {
+            map.set(title.toLowerCase(), id);
+            // Also map the ID to itself
+            map.set(id.toLowerCase(), id);
+        }
+    });
+
+    console.log('Gmail Tabs: Built DOM Label Map (Size: ' + map.size + ')');
+    return map;
+}
+
 function handleUnreadUpdates(updates: { label: string; count: number }[]) {
-    // console.log('Gmail Tabs: Received unread updates', updates);
+    console.log('Gmail Tabs: Received unread updates', updates);
 
     // Map updates to a quick lookup
     const updateMap = new Map<string, number>();
     updates.forEach(u => updateMap.set(u.label, u.count));
+
+    // DEBUG: Log all available keys to see what we are working with
+    // console.log('Gmail Tabs: Available Keys:', Array.from(updateMap.keys()).join(', '));
+
+    // Build the Name -> ID map from DOM
+    const domLabelMap = buildLabelMapFromDOM();
+
+    // Helper for fuzzy matching: remove all non-alphanumeric chars and lowercase
+    const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     // Update visible tabs
     const bar = document.getElementById(TABS_BAR_ID);
@@ -183,31 +247,48 @@ function handleUnreadUpdates(updates: { label: string; count: number }[]) {
         } else if (tabType === 'hash') {
             if (tabValue === '#inbox') labelId = '^i';
             else if (tabValue === '#starred') labelId = '^t';
-            else if (tabValue === '#sent') labelId = '^f'; // Sent is usually ^f (from) or ^s? Gmail uses ^f for sent usually? No wait, ^i=inbox, ^t=starred, ^r=drafts, ^s=spam? ^f=sent? 
-            // Actually, let's just rely on the label name matching for custom labels, and map system labels if needed.
-            // For now, let's try to match exact label names if they come through as such.
-            // The XHR interception might return internal IDs (like ^i) or display names. 
-            // We might need a mapping. For now, let's assume custom labels match.
+            else if (tabValue === '#drafts') labelId = '^r';
+            else if (tabValue === '#sent') labelId = '^f';
+            else if (tabValue === '#spam') labelId = '^s';
+            else if (tabValue === '#trash') labelId = '^k';
+            else if (tabValue === '#all') labelId = '^all';
             else if (tabValue.startsWith('#label/')) {
-                // Decode the label name from the hash (e.g. Delete%2FNotifications -> Delete/Notifications)
-                // Also replace + with space as Gmail uses + for spaces in URLs
+                // Decode: Delete%2FNotifications -> Delete/Notifications
                 labelId = decodeURIComponent(tabValue.replace('#label/', '').replace(/\+/g, ' '));
+            } else if (tabValue.startsWith('#search/label:')) {
+                // Handle saved searches for labels: #search/label:my-label
+                // Decode: #search/label%3Amy-label -> my-label
+                const raw = decodeURIComponent(tabValue.replace('#search/', ''));
+                if (raw.startsWith('label:')) {
+                    labelId = raw.replace('label:', '');
+                }
             }
         }
 
-        // Check if we have an update for this label
-        // We try both the raw labelId and mapped system IDs
-        let count = updateMap.get(labelId);
+        // Try to resolve the Display Name to an Internal ID using our DOM map
+        // e.g. "Delete/BankNotifications" -> "Label_4"
+        let resolvedId = labelId;
+        if (domLabelMap.has(labelId.toLowerCase())) {
+            resolvedId = domLabelMap.get(labelId.toLowerCase()) || labelId;
+            // console.log(`Gmail Tabs: Resolved '${labelId}' -> '${resolvedId}'`);
+        }
 
-        // System Label Mapping (Common ones)
-        if (count === undefined) {
-            if (tabValue === '#inbox') count = updateMap.get('^i');
-            else if (tabValue === '#starred') count = updateMap.get('^t');
-            else if (tabValue === '#drafts') count = updateMap.get('^r');
-            else if (tabValue === '#sent') count = updateMap.get('^f'); // Sent
-            else if (tabValue === '#spam') count = updateMap.get('^s'); // Spam
-            else if (tabValue === '#trash') count = updateMap.get('^k'); // Trash
-            else if (tabValue === '#all') count = updateMap.get('^all'); // All Mail
+        // Check if we have an update for this label (using resolved ID)
+        let count = updateMap.get(resolvedId);
+        // If direct match failed, try fuzzy match on the RESOLVED ID
+        if (count === undefined && resolvedId && !resolvedId.startsWith('^')) {
+            const normalizedTarget = normalize(resolvedId);
+            // console.log(`Gmail Tabs: Fuzzy matching for '${resolvedId}' (norm: ${normalizedTarget})`);
+
+            // Iterate over all updates to find a fuzzy match
+            for (const [key, val] of updateMap.entries()) {
+                const normalizedKey = normalize(key);
+                if (normalizedKey === normalizedTarget) {
+                    count = val;
+                    // console.log(`Gmail Tabs: Fuzzy match success! '${resolvedId}' -> '${key}'`);
+                    break;
+                }
+            }
         }
 
         if (count !== undefined) {
@@ -445,11 +526,8 @@ function renderTabs() {
         deleteBtn.title = 'Remove Tab';
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm(`Remove tab "${tab.title}"?`) && currentUserEmail) {
-                await removeTab(currentUserEmail, tab.id);
-                currentSettings = await getSettings(currentUserEmail);
-                renderTabs();
-            }
+            console.log('Gmail Tabs: Delete button clicked for', tab.title);
+            showDeleteModal(tab);
         });
         actions.appendChild(deleteBtn);
         tabEl.appendChild(actions);
@@ -460,33 +538,22 @@ function renderTabs() {
                 return;
             }
 
-            // --- InboxSDK Navigation Integration ---
-            if (currentSdk) {
-                if (tab.type === 'label') {
-                    try {
-                        // Try object syntax with 'name' (common) or 'labelName'
-                        // If it fails, fallback to hash
-                        currentSdk.Router.goto('label', { name: tab.value });
-                    } catch (e) {
-                        console.warn('Gmail Tabs: Router.goto failed, falling back to hash:', e);
-                        window.location.hash = `#label/${encodeURIComponent(tab.value)}`;
-                    }
-                } else if (tab.type === 'hash') {
-                    // Handle standard views if mapped, else hash
-                    if (tab.value === '#inbox') currentSdk.Router.goto('inbox');
-                    else if (tab.value === '#sent') currentSdk.Router.goto('sent');
-                    else if (tab.value === '#starred') currentSdk.Router.goto('starred');
-                    else if (tab.value === '#drafts') currentSdk.Router.goto('drafts');
-                    else window.location.hash = tab.value;
-                }
-            } else {
-                // Fallback
-                if (tab.type === 'hash') {
-                    window.location.hash = tab.value;
-                } else {
-                    window.location.href = getLabelUrl(tab.value);
-                }
+            // --- Navigation ---
+            // We use window.location.hash directly for maximum robustness.
+            // InboxSDK's Router.goto has been flaky with "Extra parameters" errors.
+            // Gmail's native hash navigation is reliable.
+
+            if (tab.type === 'label') {
+                // Encode the label for the URL
+                // Gmail uses + for spaces and encodes other chars
+                const encoded = encodeURIComponent(tab.value).replace(/%20/g, '+');
+                window.location.hash = `#label/${encoded}`;
+            } else if (tab.type === 'hash') {
+                window.location.hash = tab.value;
             }
+
+            // Highlight immediately (optimistic)
+            updateActiveTab();
         });
 
         // Drag Events
@@ -638,6 +705,52 @@ function showEditModal(tab: Tab) {
             // Refresh settings and re-render
             currentSettings = await getSettings(currentUserEmail);
             renderTabs();
+        }
+    });
+}
+
+// --- Delete Modal ---
+function showDeleteModal(tab: Tab) {
+    const modal = document.createElement('div');
+    modal.className = 'gmail-tabs-modal';
+
+    modal.innerHTML = `
+        <div class="modal-content delete-tab-modal">
+            <div class="modal-body" style="text-align: center; padding: 32px;">
+                <div class="delete-icon-wrapper">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </div>
+                <h3 style="margin: 16px 0 8px 0; font-size: 20px; font-weight: 500;">Remove Tab?</h3>
+                <p style="color: var(--gmail-tab-text); margin-bottom: 24px; font-size: 14px; line-height: 1.5;">
+                    This will remove <strong>"${tab.title}"</strong> from your tab bar.
+                </p>
+                <div class="modal-actions" style="justify-content: center; gap: 12px; margin-top: 0;">
+                    <button class="secondary-btn close-btn-action">Cancel</button>
+                    <button id="delete-confirm-btn" class="primary-btn danger-btn">Remove</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelectorAll('.close-btn-action').forEach(btn => {
+        btn.addEventListener('click', close);
+    });
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) close();
+    });
+
+    modal.querySelector('#delete-confirm-btn')?.addEventListener('click', async () => {
+        if (currentUserEmail) {
+            await removeTab(currentUserEmail, tab.id);
+            close();
+            // Refresh settings and re-render
+            currentSettings = await getSettings(currentUserEmail);
+            renderTabs();
+        } else {
+            console.error('Gmail Tabs: Cannot delete, currentUserEmail is null');
         }
     });
 }

@@ -71,8 +71,13 @@
     }
   }
   function isValidLabel(label) {
+    if (!label) return false;
     if (label.includes("http")) return false;
-    if (label.length > 100) return false;
+    if (label.includes("gmail/att/")) return false;
+    if (label.includes("/")) {
+      if (label.startsWith("/")) return false;
+    }
+    if (label.length > 80) return false;
     return true;
   }
   interceptXHR();

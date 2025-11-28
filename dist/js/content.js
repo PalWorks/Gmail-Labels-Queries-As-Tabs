@@ -55321,7 +55321,18 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
   }
   async function removeTab(accountId, tabId) {
     const settings = await getSettings(accountId);
-    settings.tabs = settings.tabs.filter((t2) => t2.id !== tabId);
+    console.log(`Gmail Tabs: Removing tab ${tabId} from account ${accountId}`);
+    const initialLength = settings.tabs.length;
+    settings.tabs = settings.tabs.filter((t2) => {
+      const match = t2.id === tabId;
+      if (match) console.log(`Gmail Tabs: Found tab to remove: ${t2.title} (${t2.id})`);
+      return !match;
+    });
+    if (settings.tabs.length === initialLength) {
+      console.warn(`Gmail Tabs: Failed to find tab with ID ${tabId} to remove. Available IDs:`, settings.tabs.map((t2) => t2.id));
+    } else {
+      console.log(`Gmail Tabs: Tab removed. New count: ${settings.tabs.length}`);
+    }
     await saveSettings(accountId, settings);
   }
   async function updateTab(accountId, tabId, updates) {
@@ -55475,9 +55486,42 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
     };
     (document.head || document.documentElement).appendChild(script);
   }
+  function buildLabelMapFromDOM() {
+    const map = /* @__PURE__ */ new Map();
+    const labelLinks = document.querySelectorAll('a[href*="#label/"]');
+    labelLinks.forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href) return;
+      const rawId = href.split("#label/")[1];
+      if (!rawId) return;
+      const id = decodeURIComponent(rawId).replace(/\+/g, " ");
+      let title = link.getAttribute("title");
+      if (!title) {
+        const childWithTitle = link.querySelector("[title]");
+        if (childWithTitle) {
+          title = childWithTitle.getAttribute("title");
+        }
+      }
+      if (!title) {
+        const ariaLabel = link.getAttribute("aria-label");
+        if (ariaLabel) {
+          title = ariaLabel.split(",")[0];
+        }
+      }
+      if (title) {
+        map.set(title.toLowerCase(), id);
+        map.set(id.toLowerCase(), id);
+      }
+    });
+    console.log("Gmail Tabs: Built DOM Label Map (Size: " + map.size + ")");
+    return map;
+  }
   function handleUnreadUpdates(updates) {
+    console.log("Gmail Tabs: Received unread updates", updates);
     const updateMap = /* @__PURE__ */ new Map();
     updates.forEach((u) => updateMap.set(u.label, u.count));
+    const domLabelMap = buildLabelMapFromDOM();
+    const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
     const bar = document.getElementById(TABS_BAR_ID);
     if (!bar) return;
     const tabs = bar.querySelectorAll(".gmail-tab");
@@ -55492,20 +55536,34 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
       } else if (tabType === "hash") {
         if (tabValue === "#inbox") labelId = "^i";
         else if (tabValue === "#starred") labelId = "^t";
+        else if (tabValue === "#drafts") labelId = "^r";
         else if (tabValue === "#sent") labelId = "^f";
+        else if (tabValue === "#spam") labelId = "^s";
+        else if (tabValue === "#trash") labelId = "^k";
+        else if (tabValue === "#all") labelId = "^all";
         else if (tabValue.startsWith("#label/")) {
-          labelId = tabValue.replace("#label/", "");
+          labelId = decodeURIComponent(tabValue.replace("#label/", "").replace(/\+/g, " "));
+        } else if (tabValue.startsWith("#search/label:")) {
+          const raw = decodeURIComponent(tabValue.replace("#search/", ""));
+          if (raw.startsWith("label:")) {
+            labelId = raw.replace("label:", "");
+          }
         }
       }
-      let count = updateMap.get(labelId);
-      if (count === void 0) {
-        if (tabValue === "#inbox") count = updateMap.get("^i");
-        else if (tabValue === "#starred") count = updateMap.get("^t");
-        else if (tabValue === "#drafts") count = updateMap.get("^r");
-        else if (tabValue === "#sent") count = updateMap.get("^f");
-        else if (tabValue === "#spam") count = updateMap.get("^s");
-        else if (tabValue === "#trash") count = updateMap.get("^k");
-        else if (tabValue === "#all") count = updateMap.get("^all");
+      let resolvedId = labelId;
+      if (domLabelMap.has(labelId.toLowerCase())) {
+        resolvedId = domLabelMap.get(labelId.toLowerCase()) || labelId;
+      }
+      let count = updateMap.get(resolvedId);
+      if (count === void 0 && resolvedId && !resolvedId.startsWith("^")) {
+        const normalizedTarget = normalize(resolvedId);
+        for (const [key, val] of updateMap.entries()) {
+          const normalizedKey = normalize(key);
+          if (normalizedKey === normalizedTarget) {
+            count = val;
+            break;
+          }
+        }
       }
       if (count !== void 0) {
         const countSpan = tabEl.querySelector(".unread-count");
@@ -55677,11 +55735,8 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
       deleteBtn.title = "Remove Tab";
       deleteBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (confirm(`Remove tab "${tab.title}"?`) && currentUserEmail) {
-          await removeTab(currentUserEmail, tab.id);
-          currentSettings = await getSettings(currentUserEmail);
-          renderTabs();
-        }
+        console.log("Gmail Tabs: Delete button clicked for", tab.title);
+        showDeleteModal(tab);
       });
       actions.appendChild(deleteBtn);
       tabEl.appendChild(actions);
@@ -55689,28 +55744,13 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
         if (e.target.closest(".tab-actions") || e.target.closest(".tab-drag-handle")) {
           return;
         }
-        if (currentSdk) {
-          if (tab.type === "label") {
-            try {
-              currentSdk.Router.goto("label", { name: tab.value });
-            } catch (e2) {
-              console.warn("Gmail Tabs: Router.goto failed, falling back to hash:", e2);
-              window.location.hash = `#label/${encodeURIComponent(tab.value)}`;
-            }
-          } else if (tab.type === "hash") {
-            if (tab.value === "#inbox") currentSdk.Router.goto("inbox");
-            else if (tab.value === "#sent") currentSdk.Router.goto("sent");
-            else if (tab.value === "#starred") currentSdk.Router.goto("starred");
-            else if (tab.value === "#drafts") currentSdk.Router.goto("drafts");
-            else window.location.hash = tab.value;
-          }
-        } else {
-          if (tab.type === "hash") {
-            window.location.hash = tab.value;
-          } else {
-            window.location.href = getLabelUrl(tab.value);
-          }
+        if (tab.type === "label") {
+          const encoded = encodeURIComponent(tab.value).replace(/%20/g, "+");
+          window.location.hash = `#label/${encoded}`;
+        } else if (tab.type === "hash") {
+          window.location.hash = tab.value;
         }
+        updateActiveTab();
       });
       tabEl.addEventListener("dragstart", handleDragStart);
       tabEl.addEventListener("dragenter", handleDragEnter);
@@ -55835,9 +55875,44 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
       }
     });
   }
-  function getLabelUrl(labelName) {
-    const encoded = encodeURIComponent(labelName).replace(/%20/g, "+");
-    return `https://mail.google.com/mail/u/0/#label/${encoded}`;
+  function showDeleteModal(tab) {
+    const modal = document.createElement("div");
+    modal.className = "gmail-tabs-modal";
+    modal.innerHTML = `
+        <div class="modal-content delete-tab-modal">
+            <div class="modal-body" style="text-align: center; padding: 32px;">
+                <div class="delete-icon-wrapper">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </div>
+                <h3 style="margin: 16px 0 8px 0; font-size: 20px; font-weight: 500;">Remove Tab?</h3>
+                <p style="color: var(--gmail-tab-text); margin-bottom: 24px; font-size: 14px; line-height: 1.5;">
+                    This will remove <strong>"${tab.title}"</strong> from your tab bar.
+                </p>
+                <div class="modal-actions" style="justify-content: center; gap: 12px; margin-top: 0;">
+                    <button class="secondary-btn close-btn-action">Cancel</button>
+                    <button id="delete-confirm-btn" class="primary-btn danger-btn">Remove</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelectorAll(".close-btn-action").forEach((btn) => {
+      btn.addEventListener("click", close);
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) close();
+    });
+    modal.querySelector("#delete-confirm-btn")?.addEventListener("click", async () => {
+      if (currentUserEmail) {
+        await removeTab(currentUserEmail, tab.id);
+        close();
+        currentSettings = await getSettings(currentUserEmail);
+        renderTabs();
+      } else {
+        console.error("Gmail Tabs: Cannot delete, currentUserEmail is null");
+      }
+    });
   }
   function updateActiveTab() {
     const hash = window.location.hash;

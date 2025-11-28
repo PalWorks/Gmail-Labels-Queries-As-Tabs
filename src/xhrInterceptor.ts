@@ -149,9 +149,25 @@ function isValidLabel(label: string): boolean {
     // Basic filter to avoid false positives
     // Gmail system labels: ^i, ^t, ^b, ^f, ^k, ^s, ^r, ^all, ^io_im
     // Custom labels: anything string
-    // Exclude obvious non-labels if possible (e.g. "1", "0", urls)
+
+    // Exclude obvious non-labels
+    if (!label) return false;
     if (label.includes('http')) return false;
-    if (label.length > 100) return false; // Unlikely to be a label
+    if (label.includes('gmail/att/')) return false; // Attachment paths
+    if (label.includes('/')) {
+        // Custom labels CAN have slashes (Nested/Label), but usually not starting with gmail/
+        // Let's be careful. Real labels don't usually start with a slash.
+        if (label.startsWith('/')) return false;
+    }
+    if (label.length > 80) return false; // Unlikely to be a label if extremely long
+
+    // Reject if it looks like a file path or ID string that isn't a label
+    // e.g. "1764..." (timestamps/IDs often appear as strings)
+    // Real labels are usually either:
+    // 1. System: ^...
+    // 2. Internal: Label_...
+    // 3. Custom: Human readable text
+
     return true;
 }
 

@@ -87,7 +87,18 @@
   }
   async function removeTab(accountId, tabId) {
     const settings = await getSettings(accountId);
-    settings.tabs = settings.tabs.filter((t) => t.id !== tabId);
+    console.log(`Gmail Tabs: Removing tab ${tabId} from account ${accountId}`);
+    const initialLength = settings.tabs.length;
+    settings.tabs = settings.tabs.filter((t) => {
+      const match = t.id === tabId;
+      if (match) console.log(`Gmail Tabs: Found tab to remove: ${t.title} (${t.id})`);
+      return !match;
+    });
+    if (settings.tabs.length === initialLength) {
+      console.warn(`Gmail Tabs: Failed to find tab with ID ${tabId} to remove. Available IDs:`, settings.tabs.map((t) => t.id));
+    } else {
+      console.log(`Gmail Tabs: Tab removed. New count: ${settings.tabs.length}`);
+    }
     await saveSettings(accountId, settings);
   }
   async function updateTabOrder(accountId, newTabs) {

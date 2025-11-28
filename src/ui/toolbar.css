@@ -726,3 +726,69 @@ body.force-light {
     cursor: pointer;
     margin: 0;
 }
+
+/* Delete Modal Specifics */
+.delete-tab-modal {
+    width: 320px !important;
+    /* Override default width */
+    border-radius: 12px !important;
+}
+
+.delete-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    background-color: rgba(217, 48, 37, 0.1);
+    /* Soft red bg */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: #d93025;
+}
+
+.delete-icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+.danger-btn {
+    background-color: #d93025 !important;
+    color: #fff !important;
+}
+
+.danger-btn:hover {
+    background-color: #b31412 !important;
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: var(--gmail-tab-text);
+    border: 1px solid var(--input-border);
+    padding: 8px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.secondary-btn:hover {
+    background-color: var(--gmail-tab-hover-bg);
+    color: var(--gmail-tab-hover-text);
+}
+
+/* Dark Mode Overrides for Delete Modal */
+.force-dark .delete-icon-wrapper {
+    background-color: rgba(242, 139, 130, 0.1);
+    color: #f28b82;
+}
+
+.force-dark .danger-btn {
+    background-color: #f28b82 !important;
+    color: #202124 !important;
+}
+
+.force-dark .danger-btn:hover {
+    background-color: #e07b73 !important;
+}
