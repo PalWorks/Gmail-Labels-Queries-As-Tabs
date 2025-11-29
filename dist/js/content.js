@@ -55711,7 +55711,7 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
       nameSpan.className = "tab-name";
       nameSpan.textContent = tab.title;
       tabEl.appendChild(nameSpan);
-      if (currentSettings.showUnreadCount) {
+      if (currentSettings && currentSettings.showUnreadCount) {
         const countSpan = document.createElement("span");
         countSpan.className = "unread-count";
         countSpan.textContent = "";
@@ -56500,7 +56500,9 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
     return "";
   }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", () => {
+      init();
+    });
   } else {
     init();
   }

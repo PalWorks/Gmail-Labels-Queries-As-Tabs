@@ -496,7 +496,7 @@ function renderTabs() {
         tabEl.appendChild(nameSpan);
 
         // Unread Count
-        if (currentSettings.showUnreadCount) {
+        if (currentSettings && currentSettings.showUnreadCount) {
             const countSpan = document.createElement('span');
             countSpan.className = 'unread-count';
             // Placeholder or empty initially
@@ -1506,7 +1506,9 @@ function getUnreadCountFromDOM(tab: Tab): string {
 
 // Run init
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+    });
 } else {
     init();
 }
