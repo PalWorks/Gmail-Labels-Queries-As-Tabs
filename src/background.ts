@@ -61,10 +61,13 @@ chrome.action.onClicked.addListener((tab) => {
     }
 });
 
-// Optional: Install hook
+// Install hook: Open Welcome Page & Reload Gmail Tabs
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-        // Could set default labels here if we wanted
+        // 1. Open Welcome Page
+        chrome.tabs.create({ url: 'welcome.html' });
+
+        // 2. Set default labels (if needed)
         const defaultLabels = [
             { name: 'Inbox', id: 'default-inbox' },
             { name: 'Sent', id: 'default-sent' }
@@ -73,6 +76,16 @@ chrome.runtime.onInstalled.addListener((details) => {
             if (!result.labels) {
                 chrome.storage.sync.set({ labels: defaultLabels });
             }
+        });
+
+        // 3. Auto-Reload Open Gmail Tabs
+        // This ensures the content script is injected immediately
+        chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+            tabs.forEach((tab) => {
+                if (tab.id) {
+                    chrome.tabs.reload(tab.id);
+                }
+            });
         });
     }
 });

@@ -9,9 +9,10 @@ const commonConfig = {
     entryPoints: [
         'src/content.ts',
 
-        'src/popup.ts',
+
         'src/background.ts',
-        'src/xhrInterceptor.ts'
+        'src/xhrInterceptor.ts',
+        'src/welcome.ts'
     ],
     bundle: true,
     outdir: 'dist/js',

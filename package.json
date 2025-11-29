@@ -5,7 +5,7 @@
     "scripts": {
         "build": "node build.js && npm run copy-assets",
         "watch": "node build.js --watch",
-        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp src/ui/*.css dist/css/ && cp src/popup.html dist/ && cp -r _locales dist/ && cp src/icons/*.png dist/icons/",
+        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp src/ui/*.css dist/css/ && cp src/welcome.html dist/ && cp src/welcome.css dist/css/ && cp -r _locales dist/ && cp src/icons/*.png dist/icons/",
         "lint": "eslint src/**/*.ts",
         "test": "jest",
         "package": "npm run build && cd dist && zip -r ../extension.zip ."

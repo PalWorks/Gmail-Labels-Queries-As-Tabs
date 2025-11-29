@@ -70,6 +70,7 @@
   });
   chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === "install") {
+      chrome.tabs.create({ url: "welcome.html" });
       const defaultLabels = [
         { name: "Inbox", id: "default-inbox" },
         { name: "Sent", id: "default-sent" }
@@ -78,6 +79,13 @@
         if (!result.labels) {
           chrome.storage.sync.set({ labels: defaultLabels });
         }
+      });
+      chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            chrome.tabs.reload(tab.id);
+          }
+        });
       });
     }
   });
