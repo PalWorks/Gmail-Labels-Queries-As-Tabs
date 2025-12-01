@@ -462,11 +462,24 @@ body.force-light {
     /* For absolute positioning of marker */
 }
 
-.gmail-tab.drag-over::before {
+.gmail-tab.drop-before::before {
     content: '';
     position: absolute;
     left: -6px;
-    /* Position in the gap between tabs */
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    background-color: #1a73e8;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3);
+}
+
+.gmail-tab.drop-after::after {
+    content: '';
+    position: absolute;
+    right: -6px;
     top: 8px;
     bottom: 8px;
     width: 4px;
@@ -491,7 +504,8 @@ body.force-light {
     background-color: #303134;
 }
 
-.force-dark .gmail-tab.drag-over::before {
+.force-dark .gmail-tab.drop-before::before,
+.force-dark .gmail-tab.drop-after::after {
     background-color: #8ab4f8;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
 }

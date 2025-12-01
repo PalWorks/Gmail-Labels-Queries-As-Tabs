@@ -31,7 +31,7 @@ export interface Settings {
 const DEFAULT_SETTINGS: Settings = {
     tabs: [],
     theme: 'system',
-    showUnreadCount: false
+    showUnreadCount: true
 };
 
 function getAccountKey(accountId: string): string {
@@ -224,7 +224,7 @@ export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<
             const newSettings: Settings = {
                 tabs: tabs,
                 theme: items.theme || 'system',
-                showUnreadCount: items.showUnreadCount || false
+                showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true
             };
 
             await saveSettings(accountId, newSettings);

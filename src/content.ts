@@ -414,13 +414,28 @@ function handleDragStart(this: HTMLElement, e: DragEvent) {
     }
 }
 
-function handleDragOver(e: DragEvent) {
+function handleDragOver(this: HTMLElement, e: DragEvent) {
     if (e.preventDefault) {
         e.preventDefault();
     }
     if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'move';
     }
+
+    // Calculate position within the element
+    const rect = this.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const width = rect.width;
+
+    // Remove existing classes first
+    this.classList.remove('drop-before', 'drop-after');
+
+    if (relX < width / 2) {
+        this.classList.add('drop-before');
+    } else {
+        this.classList.add('drop-after');
+    }
+
     return false;
 }
 
@@ -431,7 +446,7 @@ function handleDragEnter(this: HTMLElement, e: DragEvent) {
 function handleDragLeave(this: HTMLElement, e: DragEvent) {
     // Prevent flickering when entering child elements
     if (this.contains(e.relatedTarget as Node)) return;
-    this.classList.remove('drag-over');
+    this.classList.remove('drag-over', 'drop-before', 'drop-after');
 }
 
 async function handleDrop(this: HTMLElement, e: DragEvent) {
@@ -439,17 +454,29 @@ async function handleDrop(this: HTMLElement, e: DragEvent) {
         e.stopPropagation();
     }
 
-    // Remove the drop marker
-    this.classList.remove('drag-over');
+    const dropPosition = this.classList.contains('drop-before') ? 'before' : 'after';
+
+    // Remove the drop markers
+    this.classList.remove('drag-over', 'drop-before', 'drop-after');
 
     if (dragSrcEl !== this) {
         const oldIndex = parseInt(dragSrcEl!.dataset.index || '0');
-        const newIndex = parseInt(this.dataset.index || '0');
+        let newIndex = parseInt(this.dataset.index || '0');
+
+        if (dropPosition === 'after') {
+            newIndex++;
+        }
 
         // Optimistic update
         if (currentSettings && currentUserEmail) {
             const tabs = [...currentSettings.tabs];
             const [movedTab] = tabs.splice(oldIndex, 1);
+
+            // Adjust index if item was moved from before the new index
+            if (oldIndex < newIndex) {
+                newIndex--;
+            }
+
             tabs.splice(newIndex, 0, movedTab);
 
             // Update local state immediately
@@ -466,7 +493,7 @@ async function handleDrop(this: HTMLElement, e: DragEvent) {
 function handleDragEnd(this: HTMLElement, e: DragEvent) {
     dragSrcEl = null;
     document.querySelectorAll('.gmail-tab').forEach(item => {
-        item.classList.remove('drag-over', 'dragging');
+        item.classList.remove('drag-over', 'dragging', 'drop-before', 'drop-after');
     });
 }
 

@@ -55251,7 +55251,7 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
   var DEFAULT_SETTINGS = {
     tabs: [],
     theme: "system",
-    showUnreadCount: false
+    showUnreadCount: true
   };
   function getAccountKey(accountId) {
     return `account_${accountId}`;
@@ -55371,7 +55371,7 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
         const newSettings = {
           tabs,
           theme: items.theme || "system",
-          showUnreadCount: items.showUnreadCount || false
+          showUnreadCount: items.showUnreadCount !== void 0 ? items.showUnreadCount : true
         };
         await saveSettings(accountId, newSettings);
       }
@@ -55657,6 +55657,15 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = "move";
     }
+    const rect = this.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const width = rect.width;
+    this.classList.remove("drop-before", "drop-after");
+    if (relX < width / 2) {
+      this.classList.add("drop-before");
+    } else {
+      this.classList.add("drop-after");
+    }
     return false;
   }
   function handleDragEnter(e) {
@@ -55664,19 +55673,26 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
   }
   function handleDragLeave(e) {
     if (this.contains(e.relatedTarget)) return;
-    this.classList.remove("drag-over");
+    this.classList.remove("drag-over", "drop-before", "drop-after");
   }
   async function handleDrop(e) {
     if (e.stopPropagation) {
       e.stopPropagation();
     }
-    this.classList.remove("drag-over");
+    const dropPosition = this.classList.contains("drop-before") ? "before" : "after";
+    this.classList.remove("drag-over", "drop-before", "drop-after");
     if (dragSrcEl !== this) {
       const oldIndex = parseInt(dragSrcEl.dataset.index || "0");
-      const newIndex = parseInt(this.dataset.index || "0");
+      let newIndex = parseInt(this.dataset.index || "0");
+      if (dropPosition === "after") {
+        newIndex++;
+      }
       if (currentSettings && currentUserEmail) {
         const tabs = [...currentSettings.tabs];
         const [movedTab] = tabs.splice(oldIndex, 1);
+        if (oldIndex < newIndex) {
+          newIndex--;
+        }
         tabs.splice(newIndex, 0, movedTab);
         currentSettings.tabs = tabs;
         renderTabs();
@@ -55688,7 +55704,7 @@ table[role='presentation'].inboxsdk__thread_view_with_custom_view > tr {
   function handleDragEnd(e) {
     dragSrcEl = null;
     document.querySelectorAll(".gmail-tab").forEach((item) => {
-      item.classList.remove("drag-over", "dragging");
+      item.classList.remove("drag-over", "dragging", "drop-before", "drop-after");
     });
   }
   function renderTabs() {
