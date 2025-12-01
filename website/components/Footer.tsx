@@ -26,7 +26,7 @@ export const Footer: React.FC = () => {
           <div className="col-span-1">
             <Link to="/" className="flex items-center space-x-2 mb-4">
               <img
-                src="/logo.png"
+                src={`${import.meta.env.BASE_URL}logo.png`}
                 alt="Logo"
                 className="h-8 w-8 rounded-lg"
               />

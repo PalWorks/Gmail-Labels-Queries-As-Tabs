@@ -8,7 +8,7 @@ export const Privacy: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-3xl shadow-sm p-8 md:p-12 border border-[#E1E3E1]">
           <div className="flex flex-col items-start mb-8">
-            <img src="/logo.png" alt="Logo" className="w-12 h-12 mb-6 rounded-xl" />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Logo" className="w-12 h-12 mb-6 rounded-xl" />
             <div className="flex items-center space-x-3">
               <div className="p-3 bg-[#E6F4EA] rounded-full">
                 <Shield className="w-6 h-6 text-[#188038]" />
