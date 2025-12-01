@@ -1,0 +1,5 @@
+{
+  "name": "PinTabs for Gmail",
+  "description": "A landing page for a Chrome extension that allows users to pin Gmail labels and custom search queries as native inbox tabs.",
+  "requestFramePermissions": []
+}

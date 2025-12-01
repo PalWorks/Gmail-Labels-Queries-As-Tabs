@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gmail Labels & Queries as Tabs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      /* Smooth scrolling */
+      html {
+        scroll-behavior: smooth;
+      }
+      
+      /* Vertical Marquee Animations */
+      @keyframes marquee-up {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-50%); }
+      }
+      @keyframes marquee-down {
+        0% { transform: translateY(-50%); }
+        100% { transform: translateY(0); }
+      }
+      
+      .animate-marquee-up {
+        animation: marquee-up 60s linear infinite;
+      }
+      
+      .animate-marquee-down {
+        animation: marquee-down 60s linear infinite;
+      }
+
+      /* Pause animation on hover if desired, though often for background walls it keeps moving */
+      .group:hover .animate-marquee-up,
+      .group:hover .animate-marquee-down {
+        animation-play-state: paused;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-[#F6F8FC] text-[#1F1F1F]">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
