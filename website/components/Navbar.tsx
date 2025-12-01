@@ -52,14 +52,14 @@ export const Navbar: React.FC = () => {
 
           <div className="hidden md:flex items-center space-x-8">
             {NAV_LINKS.map((link) => (
-              <a
+              <Link
                 key={link.name}
-                href={link.href}
+                to={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className="text-[#444746] hover:text-[#0B57D0] font-medium transition-colors text-sm"
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
             <Button variant="primary" size="sm">
               Add to Chrome
@@ -82,14 +82,14 @@ export const Navbar: React.FC = () => {
         <div className="md:hidden bg-white border-b border-[#E1E3E1]">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {NAV_LINKS.map((link) => (
-              <a
+              <Link
                 key={link.name}
-                href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
+                to={link.href}
+                onClick={() => setIsOpen(false)}
                 className="block px-3 py-2 rounded-md text-base font-medium text-[#444746] hover:text-[#0B57D0] hover:bg-[#F0F4F9]"
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
             <div className="mt-4 px-3">
               <Button fullWidth onClick={() => setIsOpen(false)}>Add to Chrome</Button>

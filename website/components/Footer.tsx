@@ -40,8 +40,8 @@ export const Footer: React.FC = () => {
           <div>
             <h3 className="text-sm font-medium text-[#1F1F1F] uppercase tracking-wider mb-4">Product</h3>
             <ul className="space-y-3">
-              <li><a href="/#features" onClick={(e) => handleNavClick(e, '/#features')} className="text-[#444746] hover:text-[#0B57D0] text-sm">Features</a></li>
-              <li><a href="/#pricing" onClick={(e) => handleNavClick(e, '/#pricing')} className="text-[#444746] hover:text-[#0B57D0] text-sm">Pricing</a></li>
+              <li><Link to="/#features" className="text-[#444746] hover:text-[#0B57D0] text-sm">Features</Link></li>
+              <li><Link to="/#pricing" className="text-[#444746] hover:text-[#0B57D0] text-sm">Pricing</Link></li>
               <li><Link to="/changelog" className="text-[#444746] hover:text-[#0B57D0] text-sm">Changelog</Link></li>
             </ul>
           </div>
@@ -51,7 +51,7 @@ export const Footer: React.FC = () => {
             <ul className="space-y-3">
               <li><Link to="/privacy" className="text-[#444746] hover:text-[#0B57D0] text-sm">Privacy Policy</Link></li>
               <li><Link to="/terms" className="text-[#444746] hover:text-[#0B57D0] text-sm">Terms & Conditions</Link></li>
-              <li><a href="/#contact" onClick={(e) => handleNavClick(e, '/#contact')} className="text-[#444746] hover:text-[#0B57D0] text-sm">Get in Touch</a></li>
+              <li><Link to="/#contact" className="text-[#444746] hover:text-[#0B57D0] text-sm">Get in Touch</Link></li>
             </ul>
           </div>
         </div>

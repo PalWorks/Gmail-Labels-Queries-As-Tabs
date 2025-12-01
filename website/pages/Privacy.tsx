@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const Privacy: React.FC = () => {
   return (
@@ -55,7 +56,7 @@ export const Privacy: React.FC = () => {
 
             <h2 className="text-xl font-medium text-[#1F1F1F] mt-8 mb-4">Contact Us</h2>
             <p>
-              If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us <a href="/#contact" className="text-[#0B57D0] hover:underline">here</a>.
+              If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us <Link to="/#contact" className="text-[#0B57D0] hover:underline">here</Link>.
             </p>
           </div>
         </div>
