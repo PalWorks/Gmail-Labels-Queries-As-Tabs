@@ -1004,7 +1004,7 @@ function createSettingsModal() {
                     <div class="input-group" id="modal-title-group" style="display:none;">
                         <input type="text" id="modal-new-title" placeholder="Tab Title">
                     </div>
-                    <button id="modal-add-btn" class="primary-btn" style="width: 100%; margin-bottom: 16px;">Add Tab</button>
+                    <button id="modal-add-btn" class="primary-btn" style="width: 100%; margin-bottom: 16px;" disabled>Add Tab</button>
                 </div>
                 <div style="border-bottom: 1px solid var(--list-border); margin-bottom: 16px;"></div>
                 <ul id="modal-labels-list"></ul>
@@ -1028,19 +1028,33 @@ function createSettingsModal() {
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 16px; background: var(--disabled-input-bg); border-top: 1px solid var(--list-border); font-size: 0.8em; color: var(--modal-text); text-align: center;">
-                Connected as: <span id="modal-account-email" style="font-weight: bold;">Detecting...</span>
+            <div class="modal-footer" style="padding: 16px; background: var(--disabled-input-bg); border-top: 1px solid var(--list-border); font-size: 0.8em; color: var(--modal-text); display: flex; justify-content: space-between; align-items: center;">
+                <span>Connected as: <span id="modal-account-email" style="font-weight: bold;">Detecting...</span></span>
+                <div id="modal-help-btn" style="cursor: pointer; color: #5f6368; display: flex; align-items: center;" title="Help & Support">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-18 22.5-39t53.5-21q32 0 48 17.5t16 38.5q0 20-13 37t-53 49q-27.5 23-40.5 46T442-394ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
+                </div>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
 
+    // Auto-focus input
+    setTimeout(() => {
+        const input = modal.querySelector('#modal-new-label') as HTMLInputElement;
+        if (input) input.focus();
+    }, 100);
+
     // Export/Import Listeners
     modal.querySelector('#export-btn')?.addEventListener('click', exportSettings);
     modal.querySelector('#import-btn')?.addEventListener('click', () => {
         modal.remove(); // Close settings modal first
         showImportModal();
+    });
+
+    // Help Button Listener
+    modal.querySelector('#modal-help-btn')?.addEventListener('click', () => {
+        window.open('https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/#contact', '_blank');
     });
 
     // Set Account Email
@@ -1081,6 +1095,9 @@ function createSettingsModal() {
                 titleGroup.style.display = 'none';
             }
         }
+
+        // Toggle Add Button
+        addBtn.disabled = value === '';
     });
 
     // Modal Drag and Drop Logic
@@ -1298,6 +1315,16 @@ function createSettingsModal() {
             // Also update the main bar
             currentSettings = await getSettings(currentUserEmail);
             renderTabs();
+
+            // Show Feedback
+            const originalText = addBtn.textContent;
+            addBtn.textContent = 'Tab Added';
+            addBtn.classList.add('success');
+            setTimeout(() => {
+                addBtn.textContent = originalText;
+                addBtn.classList.remove('success');
+                addBtn.disabled = true; // Re-disable since input is cleared
+            }, 1000);
         }
     });
 
