@@ -43,6 +43,7 @@ export const Footer: React.FC = () => {
               <li><Link to="/#features" className="text-[#444746] hover:text-[#0B57D0] text-sm">Features</Link></li>
               <li><Link to="/#pricing" className="text-[#444746] hover:text-[#0B57D0] text-sm">Pricing</Link></li>
               <li><Link to="/changelog" className="text-[#444746] hover:text-[#0B57D0] text-sm">Changelog</Link></li>
+              <li><a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs" target="_blank" rel="noopener noreferrer" className="text-[#444746] hover:text-[#0B57D0] text-sm">Source Code</a></li>
             </ul>
           </div>
 
