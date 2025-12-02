@@ -82,7 +82,7 @@ const DemoCarousel: React.FC = () => {
                 <img
                   src={item.src}
                   alt={item.alt}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
               ) : (
                 <div className="w-full h-full bg-black flex items-center justify-center">
