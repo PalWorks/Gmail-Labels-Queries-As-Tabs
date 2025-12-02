@@ -21,18 +21,28 @@ interface CarouselItem {
 const DEMO_ITEMS: CarouselItem[] = [
   {
     type: 'image',
-    src: 'https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?q=80&w=2006&auto=format&fit=crop', // Dashboard/Analytics placeholder
-    alt: 'Organized Inbox View'
-  },
-  {
-    type: 'video',
-    src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', // Sample video
-    poster: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop'
+    src: '/banner-01.png',
+    alt: 'Drag & Drop Organization'
   },
   {
     type: 'image',
-    src: 'https://images.unsplash.com/photo-1555421689-491a97ff2040?q=80&w=2070&auto=format&fit=crop', // Productivity/Laptop placeholder
-    alt: 'Search Results Pinned'
+    src: '/banner-02.png',
+    alt: 'Rename & Customize Tabs'
+  },
+  {
+    type: 'image',
+    src: '/banner-03.png',
+    alt: 'Pin Search Queries'
+  },
+  {
+    type: 'image',
+    src: '/banner-04.png',
+    alt: 'Edit Tab Details'
+  },
+  {
+    type: 'image',
+    src: '/banner-05.png',
+    alt: 'Dark Mode Support'
   }
 ];
 
@@ -62,35 +72,35 @@ const DemoCarousel: React.FC = () => {
   return (
     <div className="relative group w-full h-full bg-black">
       <div className="overflow-hidden w-full h-full">
-        <div 
+        <div
           className="flex transition-transform duration-500 ease-in-out h-full"
           style={{ transform: `translateX(-${currentIndex * 100}%)` }}
         >
           {DEMO_ITEMS.map((item, index) => (
             <div key={index} className="min-w-full h-full flex items-center justify-center bg-[#F6F8FC] relative">
               {item.type === 'image' ? (
-                <img 
-                  src={item.src} 
-                  alt={item.alt} 
+                <img
+                  src={item.src}
+                  alt={item.alt}
                   className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-black flex items-center justify-center">
-                  <video 
+                  <video
                     ref={index === currentIndex ? videoRef : null}
-                    src={item.src} 
+                    src={item.src}
                     poster={item.poster}
-                    controls 
+                    controls
                     className="max-w-full max-h-full"
                     playsInline
                   />
                 </div>
               )}
-              
+
               {/* Overlay Caption (Optional) */}
               {item.type === 'image' && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-8 text-white">
-                   <p className="font-medium text-lg">{item.alt}</p>
+                  <p className="font-medium text-lg">{item.alt}</p>
                 </div>
               )}
             </div>
@@ -99,7 +109,7 @@ const DemoCarousel: React.FC = () => {
       </div>
 
       {/* Navigation Arrows */}
-      <button 
+      <button
         onClick={prev}
         className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white text-[#1F1F1F] shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none z-10"
         aria-label="Previous slide"
@@ -107,7 +117,7 @@ const DemoCarousel: React.FC = () => {
         <ChevronLeft className="w-6 h-6" />
       </button>
 
-      <button 
+      <button
         onClick={next}
         className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 hover:bg-white text-[#1F1F1F] shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none z-10"
         aria-label="Next slide"
@@ -121,11 +131,10 @@ const DemoCarousel: React.FC = () => {
           <button
             key={index}
             onClick={() => goToSlide(index)}
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-              index === currentIndex 
-                ? 'bg-white w-6' 
+            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${index === currentIndex
+                ? 'bg-white w-6'
                 : 'bg-white/50 hover:bg-white/80'
-            }`}
+              }`}
             aria-label={`Go to slide ${index + 1}`}
           />
         ))}
@@ -220,26 +229,26 @@ export const Home: React.FC = () => {
       <section className="py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-[#F6F8FC] rounded-2xl shadow-xl border border-[#E1E3E1] overflow-hidden p-2">
-            
+
             {/* Browser Frame */}
             <div className="bg-white rounded-xl flex flex-col h-[500px] md:h-[600px] overflow-hidden">
-                
-                {/* Fake Browser Header */}
-                <div className="h-12 bg-[#F6F8FC] flex items-center px-4 border-b border-[#E1E3E1] space-x-2">
-                  <div className="flex space-x-2 mr-4">
-                     <div className="w-3 h-3 rounded-full bg-[#FF5F57] border border-[#E0443E]"></div>
-                     <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]"></div>
-                     <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]"></div>
-                  </div>
-                  <div className="flex-1 bg-white h-8 rounded-md border border-[#E1E3E1] flex items-center px-3 text-xs text-[#444746]">
-                     <span className="opacity-50">https://mail.google.com/mail/u/0/#inbox</span>
-                  </div>
-                </div>
 
-                {/* Carousel Content */}
-                <div className="flex-1 bg-white relative">
-                   <DemoCarousel />
+              {/* Fake Browser Header */}
+              <div className="h-12 bg-[#F6F8FC] flex items-center px-4 border-b border-[#E1E3E1] space-x-2">
+                <div className="flex space-x-2 mr-4">
+                  <div className="w-3 h-3 rounded-full bg-[#FF5F57] border border-[#E0443E]"></div>
+                  <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]"></div>
+                  <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]"></div>
                 </div>
+                <div className="flex-1 bg-white h-8 rounded-md border border-[#E1E3E1] flex items-center px-3 text-xs text-[#444746]">
+                  <span className="opacity-50">https://mail.google.com/mail/u/0/#inbox</span>
+                </div>
+              </div>
+
+              {/* Carousel Content */}
+              <div className="flex-1 bg-white relative">
+                <DemoCarousel />
+              </div>
             </div>
 
           </div>
@@ -279,23 +288,23 @@ export const Home: React.FC = () => {
             <h2 className="text-3xl font-normal text-[#1F1F1F]">How it works</h2>
             <p className="mt-4 text-lg text-[#444746]">Three simple steps to inbox zen.</p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
-             <div>
-               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white border border-[#E1E3E1] text-[#1F1F1F] font-bold text-2xl mb-6 shadow-sm">1</div>
-               <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Perform a Search</h3>
-               <p className="text-[#444746]">Type any query in Gmail search bar. Complex operators supported.</p>
-             </div>
-             <div>
-               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white border border-[#E1E3E1] text-[#1F1F1F] font-bold text-2xl mb-6 shadow-sm">2</div>
-               <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Click "Pin as Tab"</h3>
-               <p className="text-[#444746]">Our extension adds a small pin button next to the search results.</p>
-             </div>
-             <div>
-               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#0B57D0] text-white font-bold text-2xl mb-6 shadow-md">3</div>
-               <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Access Instantly</h3>
-               <p className="text-[#444746]">Your new tab appears immediately. Click it anytime to run that search live.</p>
-             </div>
+            <div>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white border border-[#E1E3E1] text-[#1F1F1F] font-bold text-2xl mb-6 shadow-sm">1</div>
+              <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Perform a Search</h3>
+              <p className="text-[#444746]">Type any query in Gmail search bar. Complex operators supported.</p>
+            </div>
+            <div>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white border border-[#E1E3E1] text-[#1F1F1F] font-bold text-2xl mb-6 shadow-sm">2</div>
+              <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Click "Pin as Tab"</h3>
+              <p className="text-[#444746]">Our extension adds a small pin button next to the search results.</p>
+            </div>
+            <div>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#0B57D0] text-white font-bold text-2xl mb-6 shadow-md">3</div>
+              <h3 className="text-lg font-medium mb-2 text-[#1F1F1F]">Access Instantly</h3>
+              <p className="text-[#444746]">Your new tab appears immediately. Click it anytime to run that search live.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -355,9 +364,9 @@ export const Home: React.FC = () => {
 
         <div className="max-w-7xl mx-auto px-4 h-[600px] relative">
           <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-b from-[#F6F8FC] via-transparent to-[#F6F8FC] h-full"></div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full overflow-hidden mask-image-gradient">
-            
+
             {/* Column 1: Up */}
             <div className="flex flex-col space-y-6 animate-marquee-up group">
               {[...TESTIMONIALS_COL_1, ...TESTIMONIALS_COL_1].map((review, i) => (
@@ -386,18 +395,18 @@ export const Home: React.FC = () => {
       {/* Tally Embed Section */}
       <section id="contact" className="py-20 bg-white scroll-mt-20">
         <div className="max-w-4xl mx-auto px-4">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-normal text-[#1F1F1F]">Get in Touch</h2>
-            </div>
-           <iframe 
-              data-tally-src="https://tally.so/embed/Me17aA?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1" 
-              loading="lazy" 
-              width="100%" 
-              height="596" 
-              frameBorder="0" 
-              title="Get in Touch"
-              className="w-full"
-            ></iframe>
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-normal text-[#1F1F1F]">Get in Touch</h2>
+          </div>
+          <iframe
+            data-tally-src="https://tally.so/embed/Me17aA?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1"
+            loading="lazy"
+            width="100%"
+            height="596"
+            frameBorder="0"
+            title="Get in Touch"
+            className="w-full"
+          ></iframe>
         </div>
       </section>
 
@@ -407,10 +416,10 @@ export const Home: React.FC = () => {
           <h2 className="text-3xl md:text-5xl font-normal text-[#1F1F1F] mb-6">Ready to upgrade your inbox?</h2>
           <p className="text-xl text-[#444746] mb-10">Join thousands of users who have reclaimed their email sanity.</p>
           <div className="flex flex-col items-center">
-             <Button size="lg" className="shadow-lg transform hover:scale-105 transition-transform duration-200">
-               Add to Chrome for Free
-             </Button>
-             <p className="mt-4 text-sm text-[#444746] opacity-70">Requires Chrome browser • No credit card needed</p>
+            <Button size="lg" className="shadow-lg transform hover:scale-105 transition-transform duration-200">
+              Add to Chrome for Free
+            </Button>
+            <p className="mt-4 text-sm text-[#444746] opacity-70">Requires Chrome browser • No credit card needed</p>
           </div>
         </div>
       </section>
