@@ -61,7 +61,7 @@ export const Navbar: React.FC = () => {
                 {link.name}
               </Link>
             ))}
-            <Button variant="primary" size="sm">
+            <Button variant="primary" size="sm" onClick={() => window.open('https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde?pli=1', '_blank')}>
               Add to Chrome
             </Button>
           </div>
@@ -92,7 +92,7 @@ export const Navbar: React.FC = () => {
               </Link>
             ))}
             <div className="mt-4 px-3">
-              <Button fullWidth onClick={() => setIsOpen(false)}>Add to Chrome</Button>
+              <Button fullWidth onClick={() => { setIsOpen(false); window.open('https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde?pli=1', '_blank'); }}>Add to Chrome</Button>
             </div>
           </div>
         </div>

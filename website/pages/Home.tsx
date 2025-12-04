@@ -218,7 +218,7 @@ export const Home: React.FC = () => {
             Pin any Label or Search Query as a native tab alongside Primary, Social, and Promotions. Seamlessly integrated into Gmail.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Button size="lg" className="shadow-md">
+            <Button size="lg" className="shadow-md" onClick={() => window.open('https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde?pli=1', '_blank')}>
               Add to Chrome - It's Free
             </Button>
           </div>
@@ -416,7 +416,7 @@ export const Home: React.FC = () => {
           <h2 className="text-3xl md:text-5xl font-normal text-[#1F1F1F] mb-6">Ready to upgrade your inbox?</h2>
           <p className="text-xl text-[#444746] mb-10">Join thousands of users who have reclaimed their email sanity.</p>
           <div className="flex flex-col items-center">
-            <Button size="lg" className="shadow-lg transform hover:scale-105 transition-transform duration-200">
+            <Button size="lg" className="shadow-lg transform hover:scale-105 transition-transform duration-200" onClick={() => window.open('https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde?pli=1', '_blank')}>
               Add to Chrome for Free
             </Button>
             <p className="mt-4 text-sm text-[#444746] opacity-70">Requires Chrome browser • No credit card needed</p>
