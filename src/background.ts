@@ -47,9 +47,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.error("Background: Error processing download request:", e);
             sendResponse({ success: false, error: e.message });
         }
-        return true; // Keep channel open for async response
+    } else if (message.action === 'UNINSTALL_SELF') {
+        console.log("Background: Received UNINSTALL_SELF request");
+        if (chrome.management && chrome.management.uninstallSelf) {
+            chrome.management.uninstallSelf({ showConfirmDialog: true }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error("Background: Uninstall failed:", chrome.runtime.lastError);
+                }
+            });
+        } else {
+            console.error("Background: chrome.management.uninstallSelf is not available. Check permissions.");
+        }
     }
+    return true; // Keep channel open for async response
 });
+
+// Set the uninstall URL on startup/install
+const FEEDBACK_URL = 'https://tally.so/r/D4BBRR?transparentBackground=1&formEventsForwarding=1';
+if (chrome.runtime.setUninstallURL) {
+    chrome.runtime.setUninstallURL(FEEDBACK_URL, () => {
+        console.log("Background: Uninstall URL set to", FEEDBACK_URL);
+    });
+}
 
 chrome.action.onClicked.addListener((tab) => {
     if (tab.id) {

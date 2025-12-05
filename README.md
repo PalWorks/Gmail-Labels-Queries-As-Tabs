@@ -5,6 +5,9 @@ A Chrome extension that injects a user-configurable tabs bar into Gmail. Each ta
 ## Features
 
 -   **Customizable Tabs**: Add, remove, and reorder tabs for your most used labels and search queries.
+-   **Drag & Drop**: Easily reorder tabs with drag and drop.
+-   **Themes**: Choose between Light, Dark, or System themes.
+-   **Data Export/Import**: Backup and restore your configuration.
 -   **Seamless Integration**: Tabs look and feel like part of Gmail.
 -   **Sync**: Settings are synced across all your Chrome instances.
 -   **Privacy Focused**: No external network requests, no analytics.
