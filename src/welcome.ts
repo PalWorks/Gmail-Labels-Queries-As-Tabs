@@ -5,6 +5,47 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     const openGmailBtn = document.getElementById('open-gmail-btn');
+    const themeRadios = document.querySelectorAll('input[name="theme"]') as NodeListOf<HTMLInputElement>;
+
+    // --- Theme Logic ---
+
+    // Function to apply theme
+    function applyTheme(theme: string) {
+        if (theme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        } else if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+            // System
+            document.documentElement.removeAttribute('data-theme');
+        }
+    }
+
+    // Load saved theme
+    chrome.storage.sync.get(['theme'], (result) => {
+        const savedTheme = result.theme || 'system';
+        applyTheme(savedTheme);
+
+        // Update radio button
+        const radioToSelect = document.querySelector(`input[name="theme"][value="${savedTheme}"]`) as HTMLInputElement;
+        if (radioToSelect) {
+            radioToSelect.checked = true;
+        }
+    });
+
+    // Listen for changes
+    themeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            if (target.checked) {
+                const newTheme = target.value;
+                applyTheme(newTheme);
+                chrome.storage.sync.set({ theme: newTheme });
+            }
+        });
+    });
+
+    // --- Existing Logic ---
 
     if (openGmailBtn) {
         openGmailBtn.addEventListener('click', () => {

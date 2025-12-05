@@ -10,10 +10,31 @@
     --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     --step-circle-bg: #e8f0fe;
     --step-circle-text: #1967d2;
+    --option-hover: #f1f3f4;
+    --option-selected-bg: #e8f0fe;
+    --option-selected-border: #1a73e8;
 }
 
+/* Force Dark Theme */
+html[data-theme="dark"] {
+    --bg-color: #202124;
+    --text-primary: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --primary-color: #8ab4f8;
+    --primary-hover: #aecbfa;
+    --card-bg: #303134;
+    --card-border: #5f6368;
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --step-circle-bg: #41331c;
+    --step-circle-text: #8ab4f8;
+    --option-hover: #3c4043;
+    --option-selected-bg: #41331c;
+    --option-selected-border: #8ab4f8;
+}
+
+/* System Dark Theme (overrides root if not forced light) */
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg-color: #202124;
         --text-primary: #e8eaed;
         --text-secondary: #9aa0a6;
@@ -24,6 +45,9 @@
         --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         --step-circle-bg: #41331c;
         --step-circle-text: #8ab4f8;
+        --option-hover: #3c4043;
+        --option-selected-bg: #41331c;
+        --option-selected-border: #8ab4f8;
     }
 }
 
@@ -36,6 +60,7 @@ body {
     display: flex;
     justify-content: center;
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
@@ -67,8 +92,20 @@ header {
     fill: #fff;
 }
 
+/* Handle logo icon color in dark mode specifically if needed, 
+   but usually white on primary color is fine. 
+   If primary color changes to light blue in dark mode, we might want dark icon?
+   Let's check the variables. 
+   Light: primary #1a73e8 (dark blue), icon white. OK.
+   Dark: primary #8ab4f8 (light blue), icon white might be low contrast?
+   Google usually uses dark icon on light blue accent.
+*/
+html[data-theme="dark"] .logo-icon {
+    fill: #202124;
+}
+
 @media (prefers-color-scheme: dark) {
-    .logo-icon {
+    :root:not([data-theme="light"]) .logo-icon {
         fill: #202124;
     }
 }
@@ -101,7 +138,7 @@ h1 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s, border-color 0.3s;
 }
 
 .step-card:hover {
@@ -135,6 +172,73 @@ p {
     margin: 0;
 }
 
+/* Theme Section */
+.theme-section {
+    margin-bottom: 48px;
+    text-align: center;
+}
+
+.theme-options {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.theme-option {
+    cursor: pointer;
+    position: relative;
+}
+
+.theme-option input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.theme-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    border: 2px solid var(--card-border);
+    border-radius: 8px;
+    width: 100px;
+    transition: all 0.2s ease;
+    background-color: var(--card-bg);
+}
+
+.theme-option:hover .theme-card {
+    background-color: var(--option-hover);
+}
+
+.theme-option input:checked+.theme-card {
+    border-color: var(--option-selected-border);
+    background-color: var(--option-selected-bg);
+}
+
+.theme-icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 8px;
+    fill: var(--text-secondary);
+}
+
+.theme-option input:checked+.theme-card .theme-icon {
+    fill: var(--primary-color);
+}
+
+.theme-card span {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.theme-option input:checked+.theme-card span {
+    color: var(--primary-color);
+}
+
 /* Action Area */
 .action-area {
     margin-bottom: 48px;
@@ -152,8 +256,13 @@ p {
     transition: background-color 0.2s;
 }
 
+/* Fix button text color in dark mode if primary color is light */
+html[data-theme="dark"] .primary-btn {
+    color: #202124;
+}
+
 @media (prefers-color-scheme: dark) {
-    .primary-btn {
+    :root:not([data-theme="light"]) .primary-btn {
         color: #202124;
     }
 }

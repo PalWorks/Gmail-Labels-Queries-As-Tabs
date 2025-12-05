@@ -346,6 +346,12 @@ body.force-light {
     transition: background-color 0.2s;
 }
 
+.gmail-tab-menu-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
 /* Removed hover dependency for opacity */
 
 .gmail-tab-menu-btn:hover {
