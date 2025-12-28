@@ -18,7 +18,8 @@ const commonConfig = {
     outdir: 'dist/js',
     platform: 'browser',
     target: ['es2020'],
-    sourcemap: true,
+    sourcemap: false,
+    minify: true,
     logLevel: 'info',
 };
 
