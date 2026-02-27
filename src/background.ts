@@ -8,9 +8,7 @@
 import '@inboxsdk/core/background.js';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'openOptions') {
-        chrome.runtime.openOptionsPage();
-    } else if (message.action === 'DOWNLOAD_FILE') {
+    if (message.action === 'DOWNLOAD_FILE') {
         try {
             console.log("Background: Received DOWNLOAD_FILE request");
 
@@ -18,11 +16,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 throw new Error("chrome.downloads API is not available");
             }
 
-            // Use Base64 encoding to avoid character issues
-            // Wrap in try-catch specifically for encoding issues
+            // Use TextEncoder for reliable UTF-8 → base64 encoding
             let base64Data;
             try {
-                base64Data = btoa(unescape(encodeURIComponent(message.data)));
+                const encoder = new TextEncoder();
+                const bytes = encoder.encode(message.data);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                base64Data = btoa(binary);
             } catch (e) {
                 throw new Error("Failed to encode data: " + (e as Error).message);
             }
@@ -86,18 +89,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         // 1. Open Welcome Page
         chrome.tabs.create({ url: 'welcome.html' });
 
-        // 2. Set default labels (if needed)
-        const defaultLabels = [
-            { name: 'Inbox', id: 'default-inbox' },
-            { name: 'Sent', id: 'default-sent' }
-        ];
-        chrome.storage.sync.get(['labels'], (result) => {
-            if (!result.labels) {
-                chrome.storage.sync.set({ labels: defaultLabels });
-            }
-        });
-
-        // 3. Auto-Reload Open Gmail Tabs
+        // 2. Auto-Reload Open Gmail Tabs
         // This ensures the content script is injected immediately
         chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
             tabs.forEach((tab) => {

@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target.checked) {
                 const newTheme = target.value;
                 applyTheme(newTheme);
+                // Save to global 'theme' key — content.ts will migrate to account-scoped on init
                 chrome.storage.sync.set({ theme: newTheme });
             }
         });

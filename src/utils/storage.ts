@@ -217,30 +217,37 @@ export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<
     if (exists) return;
 
     // Check for legacy top-level settings
-    chrome.storage.sync.get(['tabs', 'labels', 'theme', 'showUnreadCount'], async (items) => {
-        // If we have legacy data (tabs or labels)
-        if (items.tabs || items.labels) {
-            console.log(`Migrating legacy settings to account: ${accountId}`);
+    await new Promise<void>((resolve, reject) => {
+        chrome.storage.sync.get(['tabs', 'labels', 'theme', 'showUnreadCount'], async (items) => {
+            try {
+                // If we have legacy data (tabs or labels)
+                if (items.tabs || items.labels) {
+                    console.log(`Migrating legacy settings to account: ${accountId}`);
 
-            let tabs: Tab[] = items.tabs || [];
+                    let tabs: Tab[] = items.tabs || [];
 
-            // Handle very old 'labels' format migration if needed
-            if (items.labels && (!tabs || tabs.length === 0)) {
-                tabs = (items.labels as LegacyTabLabel[]).map(l => ({
-                    id: l.id,
-                    title: l.displayName || l.name,
-                    type: 'label',
-                    value: l.name
-                }));
+                    // Handle very old 'labels' format migration if needed
+                    if (items.labels && (!tabs || tabs.length === 0)) {
+                        tabs = (items.labels as LegacyTabLabel[]).map(l => ({
+                            id: l.id,
+                            title: l.displayName || l.name,
+                            type: 'label',
+                            value: l.name
+                        }));
+                    }
+
+                    const newSettings: Settings = {
+                        tabs: tabs,
+                        theme: items.theme || 'system',
+                        showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true
+                    };
+
+                    await saveSettings(accountId, newSettings);
+                }
+                resolve();
+            } catch (e) {
+                reject(e);
             }
-
-            const newSettings: Settings = {
-                tabs: tabs,
-                theme: items.theme || 'system',
-                showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true
-            };
-
-            await saveSettings(accountId, newSettings);
-        }
+        });
     });
 }

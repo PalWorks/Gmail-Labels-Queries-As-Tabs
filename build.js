@@ -20,6 +20,7 @@ const commonConfig = {
     target: ['es2020'],
     sourcemap: false,
     minify: true,
+    drop: ['console'],
     logLevel: 'info',
 };
 
