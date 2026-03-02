@@ -1,9 +1,9 @@
 /**
  * pageWorld.ts
- * 
+ *
  * This script is injected into the "MAIN" world of the Gmail page.
  * It has access to the same window and global objects as Gmail's own scripts.
- * 
+ *
  * Purpose:
  * Intercept XMLHttpRequest to capture real-time unread count updates from Gmail's
  * internal API responses (specifically /sync/ and /mail/u/0/).
@@ -15,12 +15,17 @@ interface UnreadUpdate {
     count: number;
 }
 
+/** Extended XMLHttpRequest with URL tracking for interception */
+interface InstrumentedXHR extends XMLHttpRequest {
+    _url: string;
+}
+
 // Helper to dispatch events back to the content script (isolated world)
 function dispatchUnreadUpdate(updates: UnreadUpdate[]) {
     if (!updates || updates.length === 0) return;
 
     const event = new CustomEvent('gmailTabs:unreadUpdate', {
-        detail: updates
+        detail: updates,
     });
     document.dispatchEvent(event);
 }
@@ -31,8 +36,7 @@ function parseGmailJson(text: string): any {
         // Remove anti-hijacking prefix if present
         const cleanText = text.replace(/^\)]}'\n/, '');
         return JSON.parse(cleanText);
-    } catch (e) {
-        // console.warn('Gmail Tabs: Failed to parse JSON', e);
+    } catch {
         return null;
     }
 }
@@ -44,19 +48,16 @@ function interceptXHR() {
     const originalSend = XHR.send;
 
     // We don't strictly need to intercept open, but it's good for tracking URL
-    XHR.open = function (method: string, url: string | URL) {
-        // @ts-ignore
+    XHR.open = function (this: InstrumentedXHR, method: string, url: string | URL) {
         this._url = url.toString();
-        // @ts-ignore
-        return originalOpen.apply(this, arguments);
+        return originalOpen.apply(this, arguments as any);
     };
 
-    XHR.send = function (body) {
+    XHR.send = function (this: InstrumentedXHR, _body) {
         const xhr = this;
 
         // Add load listener to capture response
         this.addEventListener('load', function () {
-            // @ts-ignore
             const url = xhr._url || '';
 
             // Check if this is a relevant URL
@@ -74,8 +75,7 @@ function interceptXHR() {
             }
         });
 
-        // @ts-ignore
-        return originalSend.apply(this, arguments);
+        return originalSend.apply(this, arguments as any);
     };
 }
 
@@ -99,7 +99,7 @@ function processResponse(responseText: string) {
     // index 0 is a string (label ID)
     // index 1 is a number (unread count) - sometimes it's index 2 or 3 depending on the specific endpoint
 
-    // NOTE: This is a simplified heuristic. Gmail's format changes. 
+    // NOTE: This is a simplified heuristic. Gmail's format changes.
     // A more robust way often involves looking for specific "u" (unread) keys or known structures.
     // For now, we'll try to find the specific "counts" array which is usually present in initial load
     // and some sync responses.
@@ -117,7 +117,7 @@ function findCounts(obj: any, updates: UnreadUpdate[]) {
     if (Array.isArray(obj)) {
         // Heuristic for Label Count Tuple: [ "LabelName", UnreadCount, ... ]
         // Usually: [ "LabelName", UnreadCount, TotalCount, ... ]
-        // Constraints: 
+        // Constraints:
         // - Length >= 2
         // - [0] is string (Label ID)
         // - [1] is integer (Unread Count)

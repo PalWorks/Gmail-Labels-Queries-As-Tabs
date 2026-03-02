@@ -5,8 +5,8 @@
  * Manages tab reordering via drag events.
  */
 
-import { updateTabOrder, getSettings, Tab } from '../utils/storage';
-import { state, TABS_BAR_ID } from './state';
+import { updateTabOrder, getSettings } from '../utils/storage';
+import { getAppSettings, getUserEmail, setAppSettings } from './state';
 
 // ---------------------------------------------------------------------------
 // Tab Bar Drag State
@@ -87,8 +87,8 @@ export function createHandleDrop(renderTabs: () => void) {
                 newIndex++;
             }
 
-            if (state.currentSettings && state.currentUserEmail) {
-                const tabs = [...state.currentSettings.tabs];
+            if (getAppSettings() && getUserEmail()) {
+                const tabs = [...getAppSettings()!.tabs];
                 const [movedTab] = tabs.splice(oldIndex, 1);
 
                 if (oldIndex < newIndex) {
@@ -97,10 +97,10 @@ export function createHandleDrop(renderTabs: () => void) {
 
                 tabs.splice(newIndex, 0, movedTab);
 
-                state.currentSettings.tabs = tabs;
+                getAppSettings()!.tabs = tabs;
                 renderTabs();
 
-                await updateTabOrder(state.currentUserEmail, tabs);
+                await updateTabOrder(getUserEmail()!, tabs);
             }
         }
         return false;
@@ -109,7 +109,7 @@ export function createHandleDrop(renderTabs: () => void) {
 
 export function handleDragEnd(this: HTMLElement, _e: DragEvent): void {
     dragSrcEl = null;
-    document.querySelectorAll('.gmail-tab').forEach(item => {
+    document.querySelectorAll('.gmail-tab').forEach((item) => {
         item.classList.remove('drag-over', 'dragging', 'drop-before', 'drop-after');
     });
     document.removeEventListener('dragover', handleSmartDragOver);
@@ -130,9 +130,9 @@ function handleSmartDragOver(e: DragEvent): void {
     // Group tabs by rows
     const rows: { top: number; bottom: number; tabs: HTMLElement[] }[] = [];
 
-    tabs.forEach(tab => {
+    tabs.forEach((tab) => {
         const rect = tab.getBoundingClientRect();
-        const row = rows.find(r => Math.abs(r.top - rect.top) < 10);
+        const row = rows.find((r) => Math.abs(r.top - rect.top) < 10);
         if (row) {
             row.tabs.push(tab);
             row.bottom = Math.max(row.bottom, rect.bottom);
@@ -170,10 +170,10 @@ function handleSmartDragOver(e: DragEvent): void {
     let closestTab: { element: HTMLElement; dist: number; offset: number } = {
         element: targetRow.tabs[0],
         dist: Number.POSITIVE_INFINITY,
-        offset: 0
+        offset: 0,
     };
 
-    targetRow.tabs.forEach(tab => {
+    targetRow.tabs.forEach((tab) => {
         const rect = tab.getBoundingClientRect();
         const tabCenter = rect.left + rect.width / 2;
         const dist = Math.abs(clientX - tabCenter);
@@ -184,7 +184,7 @@ function handleSmartDragOver(e: DragEvent): void {
         }
     });
 
-    tabs.forEach(t => t.classList.remove('drop-before', 'drop-after'));
+    tabs.forEach((t) => t.classList.remove('drop-before', 'drop-after'));
 
     if (closestTab.element && closestTab.element !== dragSrcEl) {
         if (closestTab.offset < 0) {
@@ -210,14 +210,14 @@ function handleSmartDrop(e: DragEvent): void {
             newIndex++;
         }
 
-        document.querySelectorAll('.gmail-tab').forEach(item => {
+        document.querySelectorAll('.gmail-tab').forEach((item) => {
             item.classList.remove('drag-over', 'dragging', 'drop-before', 'drop-after');
         });
         document.removeEventListener('dragover', handleSmartDragOver);
         document.removeEventListener('drop', handleSmartDrop);
 
-        if (state.currentSettings && state.currentUserEmail) {
-            const tabs = [...state.currentSettings.tabs];
+        if (getAppSettings() && getUserEmail()) {
+            const tabs = [...getAppSettings()!.tabs];
             const [movedTab] = tabs.splice(oldIndex, 1);
 
             if (oldIndex < newIndex) {
@@ -226,11 +226,11 @@ function handleSmartDrop(e: DragEvent): void {
 
             tabs.splice(newIndex, 0, movedTab);
 
-            state.currentSettings.tabs = tabs;
+            getAppSettings()!.tabs = tabs;
             // We need to call renderTabs but we don't have a direct reference here.
             // The smart drop handler needs to trigger a re-render.
             // We'll dispatch a custom event that content.ts listens for.
-            updateTabOrder(state.currentUserEmail, tabs).catch(err =>
+            updateTabOrder(getUserEmail()!, tabs).catch((err) =>
                 console.error('Gmail Tabs: Failed to persist tab reorder', err)
             );
             document.dispatchEvent(new CustomEvent('gmailTabs:rerender'));
@@ -321,8 +321,8 @@ export function createModalDragHandlers(
                 newIndex++;
             }
 
-            if (state.currentUserEmail) {
-                const settings = await getSettings(state.currentUserEmail);
+            if (getUserEmail()) {
+                const settings = await getSettings(getUserEmail()!);
                 const newTabs = [...settings.tabs];
                 const [movedTab] = newTabs.splice(oldIndex, 1);
 
@@ -332,9 +332,9 @@ export function createModalDragHandlers(
 
                 newTabs.splice(newIndex, 0, movedTab);
 
-                await updateTabOrder(state.currentUserEmail, newTabs);
+                await updateTabOrder(getUserEmail()!, newTabs);
                 refreshList();
-                state.currentSettings = await getSettings(state.currentUserEmail);
+                setAppSettings(await getSettings(getUserEmail()!));
                 renderTabs();
             }
         }
@@ -343,7 +343,7 @@ export function createModalDragHandlers(
 
     const handleModalDragEnd = function (this: HTMLElement) {
         modalDragSrcEl = null;
-        list.querySelectorAll('li').forEach(item => {
+        list.querySelectorAll('li').forEach((item) => {
             item.classList.remove('drag-over', 'dragging', 'drop-above', 'drop-below');
         });
     };

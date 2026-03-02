@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Listen for changes
-    themeRadios.forEach(radio => {
+    themeRadios.forEach((radio) => {
         radio.addEventListener('change', (e) => {
             const target = e.target as HTMLInputElement;
             if (target.checked) {
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (openGmailBtn) {
         openGmailBtn.addEventListener('click', () => {
             // Check for existing Gmail tabs
-            chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+            chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
                 if (tabs && tabs.length > 0) {
                     // Activate the first one found
                     const tab = tabs[0];
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         chrome.tabs.update(tab.id, { active: true });
                         chrome.tabs.reload(tab.id);
                         // Optional: Close the welcome tab if you want, but keeping it open is fine too
-                        // window.close(); 
+                        // window.close();
                     }
                 } else {
                     // No tab found, open a new one

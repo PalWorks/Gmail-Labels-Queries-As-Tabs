@@ -1,13 +1,15 @@
 {
     "name": "gmail-labels-as-tabs",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Injects a user-configurable tabs bar into Gmail linked to labels.",
     "scripts": {
         "clean": "rm -rf dist",
         "build": "npm run clean && node build.js && npm run copy-assets",
         "watch": "node build.js --watch",
-        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp LICENSE dist/ && cp src/ui/*.css dist/css/ && cp src/welcome.html dist/ && cp src/welcome.css dist/css/ && cp -r _locales dist/ && cp src/icons/*.png dist/icons/",
-        "lint": "eslint src/**/*.ts",
+        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp LICENSE dist/ && cp src/ui/*.css dist/css/ && cp src/welcome.html dist/ && cp src/welcome.css dist/css/ && cp src/options.html dist/ && cp src/options.css dist/css/ && cp -r _locales dist/ && cp src/icons/*.png dist/icons/",
+        "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+        "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --fix",
+        "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",
         "test": "jest",
         "package": "npm run build && rm -f extension.zip && cd dist && zip -r ../extension.zip ."
     },
@@ -23,6 +25,8 @@
         "@types/jest": "^29.5.12",
         "@types/jsdom": "^27.0.0",
         "@types/node": "^20.11.24",
+        "@typescript-eslint/eslint-plugin": "^8.56.1",
+        "@typescript-eslint/parser": "^8.56.1",
         "esbuild": "^0.27.0",
         "eslint": "^8.57.0",
         "jest": "^29.7.0",

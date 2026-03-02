@@ -312,20 +312,20 @@ body.force-light {
     border-bottom: 1px solid var(--list-border);
 }
 
-#modal-labels-list .actions button {
+#modal-labels-list .tab-actions .tab-action-btn {
     background: none;
     border: none;
     cursor: pointer;
     color: var(--action-btn-text);
 }
 
-#modal-labels-list .actions button:hover {
+#modal-labels-list .tab-actions .tab-action-btn:hover {
     color: var(--action-btn-hover-text);
     background-color: var(--action-btn-hover-bg);
     border-radius: 4px;
 }
 
-#modal-labels-list .actions .remove-btn:hover {
+#modal-labels-list .tab-actions .tab-action-btn.remove-btn:hover {
     color: var(--remove-btn-hover);
 }
 
@@ -717,7 +717,7 @@ body.force-light {
 /* Ensure it sits nicely in flex containers */
 /* .gmail-header-btn removed */
 
-.tab-info {
+.tab-info-text {
     flex: 1;
     min-width: 0;
     /* Crucial for ellipsis */
@@ -729,7 +729,7 @@ body.force-light {
     text-overflow: ellipsis;
 }
 
-#modal-labels-list .actions {
+#modal-labels-list .tab-actions {
     display: flex;
     align-items: center;
     flex-shrink: 0;

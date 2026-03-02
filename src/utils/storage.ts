@@ -8,9 +8,9 @@
 
 export interface Tab {
     id: string;
-    title: string;       // Display Name
+    title: string; // Display Name
     type: 'label' | 'hash'; // 'label' for legacy/simple, 'hash' for custom views
-    value: string;       // The label name or full hash string
+    value: string; // The label name or full hash string
 }
 
 // Legacy interface for migration
@@ -20,8 +20,19 @@ interface LegacyTabLabel {
     displayName?: string;
 }
 
+export type RuleAction = 'trash' | 'archive' | 'markRead' | 'moveToLabel';
+
+export interface Rule {
+    tabId: string; // Links to Tab.id
+    action: RuleAction;
+    daysOld: number; // Threshold in days
+    enabled: boolean;
+    targetLabel?: string; // Only for 'moveToLabel' action
+}
+
 export interface Settings {
     tabs: Tab[];
+    rules: Rule[];
     // Legacy support for migration
     labels?: LegacyTabLabel[];
     theme: 'system' | 'light' | 'dark';
@@ -34,17 +45,18 @@ const DEFAULT_SETTINGS: Settings = {
             id: 'default-inbox',
             title: 'Inbox',
             type: 'hash',
-            value: '#inbox'
+            value: '#inbox',
         },
         {
             id: 'default-sent',
             title: 'Sent',
             type: 'hash',
-            value: '#sent'
-        }
+            value: '#sent',
+        },
     ],
+    rules: [],
     theme: 'system',
-    showUnreadCount: true
+    showUnreadCount: true,
 };
 
 function getAccountKey(accountId: string): string {
@@ -60,7 +72,7 @@ function checkRuntimeError(reject: (reason?: any) => void): boolean {
         console.warn('Gmail Tabs: Storage Error:', msg);
         if (msg && msg.includes('Extension context invalidated')) {
             console.error('Gmail Tabs: Extension context invalidated. Please refresh the page.');
-            // Rejecting might still cause unhandled promise rejections in some chains, 
+            // Rejecting might still cause unhandled promise rejections in some chains,
             // but it's better than a hard crash.
             // Alternatively, we could resolve with default values to keep the UI alive but non-functional.
             // Let's reject so the caller knows something went wrong.
@@ -83,7 +95,15 @@ export async function getSettings(accountId: string): Promise<Settings> {
             chrome.storage.sync.get([key], (items) => {
                 if (checkRuntimeError(reject)) return;
                 const stored = items[key];
-                const settings = { ...DEFAULT_SETTINGS, ...stored } as Settings;
+                // Deep-clone defaults to avoid shared reference mutation
+                // (e.g., pushing to rules[] would mutate DEFAULT_SETTINGS)
+                const defaults: Settings = {
+                    tabs: [...DEFAULT_SETTINGS.tabs.map((t) => ({ ...t }))],
+                    rules: [...DEFAULT_SETTINGS.rules.map((r) => ({ ...r }))],
+                    theme: DEFAULT_SETTINGS.theme,
+                    showUnreadCount: DEFAULT_SETTINGS.showUnreadCount,
+                };
+                const settings = { ...defaults, ...stored } as Settings;
                 resolve(settings);
             });
         } catch (e) {
@@ -103,8 +123,8 @@ export async function getAllAccounts(): Promise<string[]> {
             chrome.storage.sync.get(null, (items) => {
                 if (checkRuntimeError(reject)) return;
                 const accounts = Object.keys(items)
-                    .filter(k => k.startsWith('account_'))
-                    .map(k => k.replace('account_', ''));
+                    .filter((k) => k.startsWith('account_'))
+                    .map((k) => k.replace('account_', ''));
                 resolve(accounts);
             });
         } catch (e) {
@@ -141,13 +161,18 @@ export async function saveSettings(accountId: string, newSettings: Partial<Setti
 /**
  * Adds a new tab to the list for a specific account.
  */
-export async function addTab(accountId: string, title: string, value: string, type: 'label' | 'hash' = 'label'): Promise<void> {
+export async function addTab(
+    accountId: string,
+    title: string,
+    value: string,
+    type: 'label' | 'hash' = 'label'
+): Promise<void> {
     const settings = await getSettings(accountId);
     const newTab: Tab = {
         id: crypto.randomUUID(),
         title: title.trim(),
         value: value.trim(),
-        type: type
+        type: type,
     };
 
     // Avoid duplicates based on value
@@ -171,7 +196,10 @@ export async function removeTab(accountId: string, tabId: string): Promise<void>
     });
 
     if (settings.tabs.length === initialLength) {
-        console.warn(`Gmail Tabs: Failed to find tab with ID ${tabId} to remove. Available IDs:`, settings.tabs.map(t => t.id));
+        console.warn(
+            `Gmail Tabs: Failed to find tab with ID ${tabId} to remove. Available IDs:`,
+            settings.tabs.map((t) => t.id)
+        );
     } else {
         console.log(`Gmail Tabs: Tab removed. New count: ${settings.tabs.length}`);
     }
@@ -199,6 +227,64 @@ export async function updateTabOrder(accountId: string, newTabs: Tab[]): Promise
     settings.tabs = newTabs;
     await saveSettings(accountId, settings);
 }
+
+// ---------------------------------------------------------------------------
+// Rule CRUD
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds a rule for a tab. Prevents duplicates by tabId.
+ */
+export async function addRule(accountId: string, rule: Rule): Promise<void> {
+    const settings = await getSettings(accountId);
+    // Prevent duplicate rule for the same tab
+    if (!settings.rules.some((r) => r.tabId === rule.tabId)) {
+        settings.rules.push(rule);
+        await saveSettings(accountId, settings);
+    }
+}
+
+/**
+ * Updates an existing rule by tabId.
+ */
+export async function updateRule(accountId: string, tabId: string, updates: Partial<Rule>): Promise<void> {
+    const settings = await getSettings(accountId);
+    const index = settings.rules.findIndex((r) => r.tabId === tabId);
+    if (index !== -1) {
+        settings.rules[index] = { ...settings.rules[index], ...updates };
+        await saveSettings(accountId, settings);
+    }
+}
+
+/**
+ * Removes a rule by tabId.
+ */
+export async function removeRule(accountId: string, tabId: string): Promise<void> {
+    const settings = await getSettings(accountId);
+    settings.rules = settings.rules.filter((r) => r.tabId !== tabId);
+    await saveSettings(accountId, settings);
+}
+
+/**
+ * Returns rules enriched with tab metadata (title, value) for script generation.
+ * Only returns enabled rules that have a matching tab.
+ */
+export async function getRulesForExport(
+    accountId: string
+): Promise<Array<Rule & { tabTitle: string; tabValue: string }>> {
+    const settings = await getSettings(accountId);
+    return settings.rules
+        .filter((r) => r.enabled)
+        .map((r) => {
+            const tab = settings.tabs.find((t) => t.id === r.tabId);
+            return tab ? { ...r, tabTitle: tab.title, tabValue: tab.value } : null;
+        })
+        .filter((r): r is Rule & { tabTitle: string; tabValue: string } => r !== null);
+}
+
+// ---------------------------------------------------------------------------
+// Legacy Migration
+// ---------------------------------------------------------------------------
 
 /**
  * Helper to migrate legacy global settings to a specific account.
@@ -228,18 +314,19 @@ export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<
 
                     // Handle very old 'labels' format migration if needed
                     if (items.labels && (!tabs || tabs.length === 0)) {
-                        tabs = (items.labels as LegacyTabLabel[]).map(l => ({
+                        tabs = (items.labels as LegacyTabLabel[]).map((l) => ({
                             id: l.id,
                             title: l.displayName || l.name,
                             type: 'label',
-                            value: l.name
+                            value: l.name,
                         }));
                     }
 
                     const newSettings: Settings = {
                         tabs: tabs,
+                        rules: [],
                         theme: items.theme || 'system',
-                        showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true
+                        showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true,
                     };
 
                     await saveSettings(accountId, newSettings);

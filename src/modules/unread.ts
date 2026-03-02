@@ -8,6 +8,11 @@
 
 import { Tab } from '../utils/storage';
 import { TABS_BAR_ID } from './state';
+import {
+    NAV_SELECTORS,
+    UNREAD_COUNT_SELECTOR,
+    LABEL_LINK_SELECTOR,
+} from '../utils/selectors';
 
 // ---------------------------------------------------------------------------
 // Label Normalization
@@ -20,7 +25,7 @@ import { TABS_BAR_ID } from './state';
 export function normalizeLabel(name: string): string {
     return decodeURIComponent(name)
         .toLowerCase()
-        .replace(/[\/\-_]/g, ' ')
+        .replace(/[/\-_]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -37,9 +42,9 @@ export function normalizeLabel(name: string): string {
 export function buildLabelMapFromDOM(): Map<string, string> {
     const map = new Map<string, string>();
 
-    const labelLinks = document.querySelectorAll('a[href*="#label/"]');
+    const labelLinks = document.querySelectorAll(LABEL_LINK_SELECTOR);
 
-    labelLinks.forEach(link => {
+    labelLinks.forEach((link) => {
         const href = link.getAttribute('href');
         if (!href) return;
 
@@ -86,7 +91,7 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
     console.log('Gmail Tabs: Received unread updates', updates);
 
     const updateMap = new Map<string, number>();
-    updates.forEach(u => updateMap.set(u.label, u.count));
+    updates.forEach((u) => updateMap.set(u.label, u.count));
 
     const domLabelMap = buildLabelMapFromDOM();
 
@@ -96,7 +101,7 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
     if (!bar) return;
 
     const tabs = bar.querySelectorAll('.gmail-tab');
-    tabs.forEach(t => {
+    tabs.forEach((t) => {
         const tabEl = t as HTMLElement;
         const tabValue = tabEl.dataset.value;
         const tabType = tabEl.dataset.type;
@@ -188,7 +193,7 @@ export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<v
             if (response.ok) {
                 const text = await response.text();
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(text, "text/xml");
+                const xmlDoc = parser.parseFromString(text, 'text/xml');
                 const fullcount = xmlDoc.querySelector('fullcount');
 
                 if (fullcount && fullcount.textContent) {
@@ -216,14 +221,15 @@ export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<v
  * Legacy DOM Scraping fallback for unread counts.
  */
 export function getUnreadCountFromDOM(tab: Tab): string {
-    const isInbox = (tab.type === 'hash' && tab.value === '#inbox') ||
+    const isInbox =
+        (tab.type === 'hash' && tab.value === '#inbox') ||
         (tab.type === 'label' && tab.value.toLowerCase() === 'inbox');
 
-    const isSent = (tab.type === 'hash' && tab.value === '#sent') ||
-        (tab.type === 'label' && tab.value.toLowerCase() === 'sent');
+    const isSent =
+        (tab.type === 'hash' && tab.value === '#sent') || (tab.type === 'label' && tab.value.toLowerCase() === 'sent');
 
     if (isInbox || isSent) {
-        const nav = document.querySelector('[role="navigation"]') || document.querySelector('.wT');
+        const nav = document.querySelector(NAV_SELECTORS[0]) || document.querySelector(NAV_SELECTORS[1]);
         if (!nav) return '';
 
         const links = nav.querySelectorAll('a');
@@ -247,7 +253,7 @@ export function getUnreadCountFromDOM(tab: Tab): string {
             }
 
             if (isMatch) {
-                const bsU = link.querySelector('.bsU');
+                const bsU = link.querySelector(UNREAD_COUNT_SELECTOR);
                 if (bsU && bsU.textContent) return bsU.textContent;
 
                 if (ariaLabel) {
@@ -282,7 +288,7 @@ export function getUnreadCountFromDOM(tab: Tab): string {
 
     if (!link) {
         const normalizedTarget = normalizeLabel(labelName);
-        const candidates = document.querySelectorAll('a[href*="#label/"]');
+        const candidates = document.querySelectorAll(LABEL_LINK_SELECTOR);
 
         for (const candidate of candidates) {
             const title = candidate.getAttribute('title');
@@ -312,7 +318,7 @@ export function getUnreadCountFromDOM(tab: Tab): string {
             return match ? match[1] : '';
         }
 
-        const countEl = link.querySelector('.bsU');
+        const countEl = link.querySelector(UNREAD_COUNT_SELECTOR);
         if (countEl) {
             return countEl.textContent || '';
         }

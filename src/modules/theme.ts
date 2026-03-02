@@ -8,11 +8,13 @@
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+import { MAIN_CONTENT_SELECTOR } from '../utils/selectors';
+
 // Gmail dark mode background colors (and close variants)
 const GMAIL_DARK_BG_COLORS = [
-    'rgb(32, 33, 36)',     // Standard Gmail dark
-    'rgb(26, 26, 26)',     // Alternate dark
-    'rgb(41, 42, 45)',     // Slightly lighter dark variant
+    'rgb(32, 33, 36)', // Standard Gmail dark
+    'rgb(26, 26, 26)', // Alternate dark
+    'rgb(41, 42, 45)', // Slightly lighter dark variant
 ];
 
 /**
@@ -33,7 +35,7 @@ export function detectGmailDarkMode(): boolean {
     }
 
     // Strategy 3: Check Gmail's main content area if available
-    const mainContent = document.querySelector('.nH') as HTMLElement;
+    const mainContent = document.querySelector(MAIN_CONTENT_SELECTOR) as HTMLElement;
     if (mainContent) {
         const contentBg = getComputedStyle(mainContent).backgroundColor;
         if (GMAIL_DARK_BG_COLORS.includes(contentBg)) {

@@ -10,10 +10,10 @@ import '@inboxsdk/core/background.js';
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'DOWNLOAD_FILE') {
         try {
-            console.log("Background: Received DOWNLOAD_FILE request");
+            console.log('Background: Received DOWNLOAD_FILE request');
 
             if (!chrome.downloads) {
-                throw new Error("chrome.downloads API is not available");
+                throw new Error('chrome.downloads API is not available');
             }
 
             // Use TextEncoder for reliable UTF-8 → base64 encoding
@@ -27,39 +27,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }
                 base64Data = btoa(binary);
             } catch (e) {
-                throw new Error("Failed to encode data: " + (e as Error).message);
+                throw new Error('Failed to encode data: ' + (e as Error).message);
             }
 
             const url = 'data:application/json;base64,' + base64Data;
 
-            chrome.downloads.download({
-                url: url,
-                filename: message.filename,
-                saveAs: false,
-                conflictAction: 'uniquify'
-            }, (downloadId) => {
-                if (chrome.runtime.lastError) {
-                    console.error("Background: Download failed:", chrome.runtime.lastError);
-                    sendResponse({ success: false, error: chrome.runtime.lastError.message });
-                } else {
-                    console.log("Background: Download started, ID:", downloadId);
-                    sendResponse({ success: true, downloadId: downloadId });
+            chrome.downloads.download(
+                {
+                    url: url,
+                    filename: message.filename,
+                    saveAs: false,
+                    conflictAction: 'uniquify',
+                },
+                (downloadId) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('Background: Download failed:', chrome.runtime.lastError);
+                        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        console.log('Background: Download started, ID:', downloadId);
+                        sendResponse({ success: true, downloadId: downloadId });
+                    }
                 }
-            });
+            );
         } catch (e: any) {
-            console.error("Background: Error processing download request:", e);
+            console.error('Background: Error processing download request:', e);
             sendResponse({ success: false, error: e.message });
         }
     } else if (message.action === 'UNINSTALL_SELF') {
-        console.log("Background: Received UNINSTALL_SELF request");
+        console.log('Background: Received UNINSTALL_SELF request');
         if (chrome.management && chrome.management.uninstallSelf) {
             chrome.management.uninstallSelf({ showConfirmDialog: true }, () => {
                 if (chrome.runtime.lastError) {
-                    console.error("Background: Uninstall failed:", chrome.runtime.lastError);
+                    console.error('Background: Uninstall failed:', chrome.runtime.lastError);
                 }
             });
         } else {
-            console.error("Background: chrome.management.uninstallSelf is not available. Check permissions.");
+            console.error('Background: chrome.management.uninstallSelf is not available. Check permissions.');
         }
     }
     return true; // Keep channel open for async response
@@ -69,17 +72,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 const FEEDBACK_URL = 'https://tally.so/r/D4BBRR?transparentBackground=1&formEventsForwarding=1';
 if (chrome.runtime.setUninstallURL) {
     chrome.runtime.setUninstallURL(FEEDBACK_URL, () => {
-        console.log("Background: Uninstall URL set to", FEEDBACK_URL);
+        console.log('Background: Uninstall URL set to', FEEDBACK_URL);
     });
 }
 
 chrome.action.onClicked.addListener((tab) => {
     if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "TOGGLE_SETTINGS" })
-            .catch((err) => {
-                // Ignore errors if the content script isn't ready
-                console.warn("Could not send message to tab:", err);
-            });
+        chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_SETTINGS' }).catch((err) => {
+            // Ignore errors if the content script isn't ready
+            console.warn('Could not send message to tab:', err);
+        });
     }
 });
 
@@ -91,7 +93,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
         // 2. Auto-Reload Open Gmail Tabs
         // This ensures the content script is injected immediately
-        chrome.tabs.query({ url: "https://mail.google.com/*" }, (tabs) => {
+        chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
             tabs.forEach((tab) => {
                 if (tab.id) {
                     chrome.tabs.reload(tab.id);

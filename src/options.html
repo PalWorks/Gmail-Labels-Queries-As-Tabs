@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Labels as Tabs: Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/options.css">
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-mark">
+                    <img src="icons/icon48.png" alt="Gmail Labels as Tabs">
+                </div>
+                <span class="brand-text">Gmail Tabs</span>
+            </div>
+
+            <ul class="nav-list">
+                <li>
+                    <a href="#settings" class="nav-item active" data-section="settings">
+                        <span class="nav-icon">⚙️</span>
+                        <span class="nav-label">Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#rules" class="nav-item" data-section="rules">
+                        <span class="nav-icon">⚡</span>
+                        <span class="nav-label">Automation Rules</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#guide" class="nav-item" data-section="guide">
+                        <span class="nav-icon">📖</span>
+                        <span class="nav-label">User Guide</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#privacy" class="nav-item" data-section="privacy">
+                        <span class="nav-icon">🔒</span>
+                        <span class="nav-label">Privacy</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#contact" class="nav-item" data-section="contact">
+                        <span class="nav-icon">💬</span>
+                        <span class="nav-label">Get in Touch</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#logs" class="nav-item" data-section="logs">
+                        <span class="nav-icon">📋</span>
+                        <span class="nav-label">Logs / History</span>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-footer-icons">
+                    <button id="sidebar-theme-toggle" class="sidebar-icon-btn" title="Toggle theme">
+                        <svg viewBox="0 0 24 24" class="icon-moon" id="theme-icon-moon">
+                            <path
+                                d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
+                        </svg>
+                        <svg viewBox="0 0 24 24" class="icon-sun hidden" id="theme-icon-sun">
+                            <path
+                                d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79zM4 10.5H1v2h3zm9-9.95h-2V3.5h2zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79zM20 10.5v2h3v-2zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2zm-7.45-3.91l1.41 1.41 1.79-1.79-1.41-1.41z" />
+                        </svg>
+                    </button>
+                    <div class="sidebar-icon-btn extension-icon" title="Gmail Labels as Tabs">
+                        <svg viewBox="0 0 24 24" class="logo-icon-sm">
+                            <path
+                                d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+                        </svg>
+                    </div>
+                </div>
+                <span class="version-tag">v1.1.0</span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content" id="content">
+
+            <!-- Settings Section -->
+            <section class="section" id="section-settings" data-section="settings">
+                <div class="section-header">
+                    <h1>⚙️ Settings</h1>
+                    <p class="section-subtitle">Manage your tabs, preferences, and data.</p>
+                </div>
+
+                <!-- Theme -->
+                <div class="card">
+                    <h3>Theme</h3>
+                    <div class="theme-btn-group" id="settings-theme-group">
+                        <button class="theme-btn" data-theme="system">System</button>
+                        <button class="theme-btn" data-theme="light">Light</button>
+                        <button class="theme-btn" data-theme="dark">Dark</button>
+                    </div>
+                </div>
+
+                <!-- Add Tab -->
+                <div class="card">
+                    <h3>Add Tab</h3>
+                    <p class="muted">Type a Gmail label name or paste a Gmail view URL (e.g. #search/...). The extension
+                        will detect the type automatically.</p>
+                    <div class="add-tab-controls">
+                        <input type="text" id="settings-add-input" class="input-text full-width"
+                            placeholder="Label Name or View URL">
+                        <div id="settings-add-title-group" class="add-title-group hidden">
+                            <input type="text" id="settings-add-title" class="input-text full-width"
+                                placeholder="Tab Title">
+                        </div>
+                        <div id="settings-add-error" class="input-error hidden"></div>
+                        <button id="settings-add-btn" class="btn-primary full-width" disabled>Add Tab</button>
+                    </div>
+                </div>
+
+                <!-- Tab List -->
+                <div class="card">
+                    <h3>Your Tabs</h3>
+                    <p class="muted">Drag to reorder. Changes save automatically.</p>
+                    <ul id="settings-tab-list" class="settings-tab-list">
+                        <li class="muted">Loading...</li>
+                    </ul>
+                </div>
+
+                <!-- Preferences -->
+                <div class="card">
+                    <h3>Preferences</h3>
+                    <div class="pref-row">
+                        <span>Show Unread Count</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pref-unread">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Data & Sync -->
+                <div class="card">
+                    <h3>Data & Sync</h3>
+                    <div class="btn-row">
+                        <button id="settings-export-btn" class="btn-secondary">Export Config</button>
+                        <button id="settings-import-btn" class="btn-secondary">Import Config</button>
+                    </div>
+                    <hr class="card-divider">
+                    <h4>Danger Zone</h4>
+                    <button id="settings-uninstall-btn" class="btn-danger">Uninstall Extension</button>
+                </div>
+
+                <!-- Connected Account -->
+                <div class="card connected-card">
+                    <span class="muted">Connected as: <strong id="settings-account-email">Detecting...</strong></span>
+                </div>
+            </section>
+
+            <!-- Automation Rules Section -->
+            <section class="section hidden" id="section-rules" data-section="rules">
+                <div class="section-header">
+                    <h1>⚡ Automation Rules</h1>
+                    <p class="section-subtitle">Configure per-tab rules to automatically manage emails via Google Apps
+                        Script.</p>
+                </div>
+                <div class="card" id="rules-list-card">
+                    <div id="rules-list">
+                        <p class="muted">Loading your tabs...</p>
+                    </div>
+                    <hr class="card-divider">
+                    <div class="pref-row">
+                        <span>Google Sheet URL for logging <span class="muted">(optional)</span></span>
+                        <input type="url" id="sheet-url" class="input-text"
+                            placeholder="https://docs.google.com/spreadsheets/d/...">
+                    </div>
+                    <button id="generate-script-btn" class="btn-primary full-width">🚀 Generate & Copy Script</button>
+                    <a href="#guide" class="link-subtle" id="view-guide-link" style="text-align:center;">📖 View Setup
+                        Guide →</a>
+                </div>
+            </section>
+
+            <!-- User Guide Section -->
+            <section class="section hidden" id="section-guide" data-section="guide">
+                <div class="section-header">
+                    <h1>📖 User Guide</h1>
+                    <p class="section-subtitle">How to set up email automation in 6 simple steps.</p>
+                </div>
+                <div class="card guide-card">
+                    <ol class="guide-steps">
+                        <li>
+                            <strong>Configure your rules</strong>
+                            <p>Go to <a href="#rules">Automation Rules</a> and set up actions for each tab (trash,
+                                archive, mark read, or move).</p>
+                        </li>
+                        <li>
+                            <strong>Generate the script</strong>
+                            <p>Click <strong>"Generate & Copy Script"</strong>. The Apps Script code is copied to your
+                                clipboard.</p>
+                        </li>
+                        <li>
+                            <strong>Open Google Apps Script</strong>
+                            <p><a href="https://script.google.com" target="_blank" rel="noopener" class="btn-link">Open
+                                    script.google.com ↗</a></p>
+                        </li>
+                        <li>
+                            <strong>Create a new project and paste</strong>
+                            <p>Click <strong>"New Project"</strong>, select all existing code (<kbd>Ctrl+A</kbd>), paste
+                                your code (<kbd>Ctrl+V</kbd>), and save (<kbd>Ctrl+S</kbd>).</p>
+                        </li>
+                        <li>
+                            <strong>Set up a daily trigger</strong>
+                            <p>Click the <strong>⏰ Triggers</strong> icon in the sidebar → "Add Trigger" → choose
+                                <code>autoCleanup</code>, <code>Time-driven</code>, <code>Day timer</code> → Save.
+                            </p>
+                        </li>
+                        <li>
+                            <strong>Authorize when prompted</strong>
+                            <p>Click "Advanced" → "Go to autoCleanup (unsafe)" → "Allow". This lets the script manage
+                                <em>your</em> Gmail under <em>your</em> account.
+                            </p>
+                        </li>
+                    </ol>
+                </div>
+                <div class="card">
+                    <h3>Frequently Asked Questions</h3>
+                    <div class="faq-item">
+                        <strong>How often does it run?</strong>
+                        <p>Based on your trigger. We recommend daily (e.g., 1am to 2am).</p>
+                    </div>
+                    <div class="faq-item">
+                        <strong>Is it safe?</strong>
+                        <p>Yes. "Delete" always uses <strong>Trash</strong>. Emails are recoverable for 30 days.
+                            Nothing is permanently deleted.</p>
+                    </div>
+                    <div class="faq-item">
+                        <strong>How do I stop it?</strong>
+                        <p>Open <a href="https://script.google.com" target="_blank"
+                                rel="noopener">script.google.com</a>, go to <strong>Triggers</strong>, and delete the
+                            trigger.</p>
+                    </div>
+                    <div class="faq-item">
+                        <strong>What if I change a rule?</strong>
+                        <p>Update your rules here → click "Generate & Copy Script" again → paste over the old script in
+                            Apps Script → Save. Takes 15 seconds.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Privacy Section -->
+            <section class="section hidden" id="section-privacy" data-section="privacy">
+                <div class="section-header">
+                    <h1>🔒 Privacy</h1>
+                    <p class="section-subtitle">Your data stays with you. Always.</p>
+                </div>
+                <div class="card">
+                    <h3>Zero External Requests</h3>
+                    <p>This extension makes <strong>zero external network requests</strong>. No analytics, no tracking,
+                        no telemetry. Your browsing data never leaves your browser.</p>
+                </div>
+                <div class="card">
+                    <h3>Local Storage Only</h3>
+                    <p>All settings are stored in <code>chrome.storage.sync</code>, synced between your Chrome browsers
+                        via your Google account, but never sent to any third-party server.</p>
+                </div>
+                <div class="card">
+                    <h3>Apps Script Runs Under Your Account</h3>
+                    <p>The generated Apps Script runs under <strong>your own Google account</strong>. This extension has
+                        no access to your Gmail, no API keys, and no OAuth tokens. The script is entirely yours.</p>
+                </div>
+                <div class="card">
+                    <h3>Permissions Explained</h3>
+                    <ul class="privacy-list">
+                        <li><strong>storage</strong>: Save your tab configuration and rules</li>
+                        <li><strong>downloads</strong>: Export your settings as a JSON file</li>
+                        <li><strong>management</strong>: Enable self-uninstall from settings</li>
+                        <li><strong>host (mail.google.com)</strong>: Inject the tab bar into Gmail's UI</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Get in Touch Section -->
+            <section class="section hidden" id="section-contact" data-section="contact">
+                <div class="section-header">
+                    <h1>💬 Get in Touch</h1>
+                    <p class="section-subtitle">Have feedback, a bug report, or a feature request?</p>
+                </div>
+                <div class="card" id="contact-form-card">
+                    <p>We'd love to hear from you. The feedback form will be available here soon.</p>
+                    <div id="tally-embed-container" class="tally-placeholder">
+                        <div class="placeholder-icon">📬</div>
+                        <p>Feedback form coming soon</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs / History Section -->
+            <section class="section hidden" id="section-logs" data-section="logs">
+                <div class="section-header">
+                    <h1>📋 Logs / History</h1>
+                    <p class="section-subtitle">Track what your automation has done.</p>
+                </div>
+                <div class="card">
+                    <h3>Activity Logging via Google Sheet</h3>
+                    <p>Your automation history is logged to a <strong>Google Sheet</strong> that you control. Each time
+                        the script runs, it appends a summary row with the date, label, action, and thread count.</p>
+                    <h4>How to set up:</h4>
+                    <ol class="guide-steps compact">
+                        <li>Create a blank Google Sheet</li>
+                        <li>Copy its URL</li>
+                        <li>Paste it into the "Google Sheet URL" field in <a href="#rules">Automation Rules</a></li>
+                        <li>Regenerate and re-paste your script</li>
+                    </ol>
+                </div>
+                <div class="card">
+                    <h3>View Execution History</h3>
+                    <p>You can also view execution logs directly in the Apps Script editor:</p>
+                    <a href="https://script.google.com" target="_blank" rel="noopener" class="btn-secondary">Open Apps
+                        Script Dashboard ↗</a>
+                    <p class="muted" style="margin-top: 12px;">In the editor, go to <strong>Executions</strong> in the
+                        left sidebar to see a history of every run, including successes and errors.</p>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <script src="js/options.js"></script>
+</body>
+
+</html>

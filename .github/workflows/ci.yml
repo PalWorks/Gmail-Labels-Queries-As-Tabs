@@ -27,8 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests with coverage
+        run: npm test -- --coverage
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build extension
         run: npm run build
@@ -40,11 +43,105 @@ jobs:
             echo "::error::Found $count console.log statements in production bundle"
             exit 1
           fi
-          echo "✅ Zero console.log in production bundle"
+          echo "Zero console.log in production bundle"
+
+      # ------------------------------------------------------------------
+      # Phase 5: CI/CD Hardening
+      # ------------------------------------------------------------------
+
+      # 5.1  Package and validate zip size
+      - name: Package extension and validate zip
+        run: |
+          npm run package
+          if [ ! -f extension.zip ]; then
+            echo "::error::extension.zip was not created"
+            exit 1
+          fi
+          size=$(stat --format=%s extension.zip)
+          max=$((5 * 1024 * 1024))
+          echo "extension.zip size: $size bytes"
+          if [ "$size" -gt "$max" ]; then
+            echo "::error::extension.zip exceeds 5MB Chrome Web Store limit ($size bytes)"
+            exit 1
+          fi
+          echo "Zip size within 5MB limit"
+
+      # 5.2  Manifest / package.json version parity
+      - name: Verify version parity
+        run: |
+          manifest_ver=$(node -e "console.log(require('./manifest.json').version)")
+          package_ver=$(node -e "console.log(require('./package.json').version)")
+          echo "manifest.json version: $manifest_ver"
+          echo "package.json  version: $package_ver"
+          if [ "$manifest_ver" != "$package_ver" ]; then
+            echo "::error::Version mismatch: manifest.json=$manifest_ver, package.json=$package_ver"
+            exit 1
+          fi
+          echo "Versions match"
+
+      # 5.3  Zero @ts-ignore in production source
+      - name: Check for @ts-ignore in source
+        run: |
+          count=$(grep -r '@ts-ignore' src/ --include='*.ts' | wc -l)
+          if [ "$count" -gt "0" ]; then
+            echo "::error::Found $count @ts-ignore comment(s) in src/"
+            grep -rn '@ts-ignore' src/ --include='*.ts'
+            exit 1
+          fi
+          echo "Zero @ts-ignore in source"
+
+      # 5.4  Verify dist folder contains all required files
+      - name: Verify dist structure
+        run: |
+          required_files=(
+            "dist/js/content.js"
+            "dist/js/background.js"
+            "dist/js/options.js"
+            "dist/js/welcome.js"
+            "dist/js/xhrInterceptor.js"
+            "dist/css/toolbar.css"
+            "dist/css/options.css"
+            "dist/css/welcome.css"
+            "dist/manifest.json"
+            "dist/options.html"
+            "dist/welcome.html"
+          )
+          missing=0
+          for f in "${required_files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing required file: $f"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt "0" ]; then
+            echo "::error::$missing required file(s) missing from dist/"
+            exit 1
+          fi
+          echo "All required files present in dist/"
+
+      # ------------------------------------------------------------------
+      # Artifact uploads
+      # ------------------------------------------------------------------
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension-dist
           path: dist/
+          retention-days: 7
+
+      # 5.5  Upload extension.zip artifact
+      - name: Upload extension zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: extension.zip
+          retention-days: 7
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
           retention-days: 7

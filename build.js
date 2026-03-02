@@ -12,7 +12,8 @@ const commonConfig = {
 
         'src/background.ts',
         'src/xhrInterceptor.ts',
-        'src/welcome.ts'
+        'src/welcome.ts',
+        'src/options.ts'
     ],
     bundle: true,
     outdir: 'dist/js',
@@ -26,7 +27,13 @@ const commonConfig = {
 
 async function build() {
     if (isWatch) {
-        const ctx = await esbuild.context(commonConfig);
+        const devConfig = {
+            ...commonConfig,
+            sourcemap: true,
+            minify: false,
+            drop: [],
+        };
+        const ctx = await esbuild.context(devConfig);
         await ctx.watch();
         console.log('Watching for changes...');
     } else {

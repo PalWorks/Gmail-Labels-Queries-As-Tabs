@@ -1,380 +1,431 @@
-# Production Code Audit Report
+# Gmail Labels as Tabs: Repository Audit
 
-**Repository:** Gmail Labels & Queries as Tabs  
-**Audit Date:** 2026-02-27  
-**Auditor:** Gemini AntiGravity (Principal Architect Role)  
-**Scope:** Full static analysis + architectural review of all source files
+> **Version Analyzed:** 1.1.0 (Manifest V3)
+> **Stack:** TypeScript, esbuild, Chrome Extension APIs, InboxSDK
+> **License:** MIT
 
----
+## 1. High Level Overview
 
-## Architectural Summary
+**Gmail Labels as Tabs** is a Chrome Extension that injects a configurable tab bar directly into Gmail's web interface. Each tab maps to a Gmail label or a built-in view (Inbox, Sent, Drafts, etc.), giving users one-click navigation between their most-used labels. The extension also supports **automation rules** that generate Google Apps Script for email cleanup (trash, archive, mark-read, move-to-label) and **real-time unread count badges** via XHR interception of Gmail's internal API.
 
-This is a Chrome MV3 extension (TypeScript + esbuild) that injects a configurable tab bar into Gmail's web interface. It operates across three execution contexts: a **Service Worker** (`background.ts`) for privileged Chrome APIs, a **Content Script** (`content.ts`, 2141 lines) in the isolated world for DOM manipulation, and a **Page World Script** (`xhrInterceptor.ts`) that monkey-patches `XMLHttpRequest` to intercept Gmail's internal API responses for real-time unread counts. Settings are persisted via `chrome.storage.sync` with per-account namespacing (`storage.ts`). A separate Vite+React marketing website lives in `website/`. The dominant architectural risk is that `content.ts` is a monolithic 2141-line file containing all UI, business logic, modals, drag-and-drop, navigation, and unread count logic with no separation of concerns.
+**Primary use case:** Power Gmail users who rely heavily on labels and want browser-tab-style navigation without leaving Gmail.
 
----
+**Domain:** Email productivity tooling, Chrome Extension ecosystem, Gmail DOM integration.
 
-## Critical Defects
+## 2. Directory Structure
 
-### C1. Migration Function is Fire-and-Forget (Silent Data Loss Risk)
+```
+gmail-labels-as-tabs/
+├── .github/workflows/       # CI + website deployment pipelines
+│   ├── ci.yml               # Test, build, verify no console.log, upload artifact
+│   └── deploy_website.yml   # Build + deploy website/ to GitHub Pages
+├── _locales/en/             # Chrome i18n (extension description string)
+├── dist/                    # Production build output (gitignored)
+├── src/                     # All extension source code
+│   ├── background.ts        # Service worker entry point
+│   ├── content.ts           # Main content script coordinator
+│   ├── xhrInterceptor.ts    # Page-world XHR interceptor for unread counts
+│   ├── options.ts           # Options page entry point (standalone HTML page)
+│   ├── options.html          # Options page markup
+│   ├── options.css           # Options page styles
+│   ├── welcome.ts           # Onboarding page logic
+│   ├── welcome.html          # Onboarding page markup
+│   ├── welcome.css           # Onboarding page styles
+│   ├── modules/             # Feature modules (content script domain)
+│   │   ├── state.ts         # Shared mutable state singleton + constants
+│   │   ├── theme.ts         # Theme detection + CSS class switching
+│   │   ├── tabs.ts          # Tab bar rendering, navigation, dropdowns
+│   │   ├── unread.ts        # Unread count (Atom feed + DOM scraping + XHR)
+│   │   ├── modals.ts        # All modal dialogs (Pin, Edit, Delete, Settings, Import, Uninstall)
+│   │   ├── dragdrop.ts      # Drag-and-drop (tab bar + modal list reordering)
+│   │   └── rules.ts         # Google Apps Script code generator
+│   ├── utils/
+│   │   └── storage.ts       # chrome.storage.sync wrapper (multi-account CRUD)
+│   ├── ui/
+│   │   └── toolbar.css      # Tab bar + modal styles injected into Gmail
+│   └── experimental/
+│       └── LabelMenuIntegration.ts  # Archived feature (commented out)
+├── test/                    # Unit tests
+│   ├── rules.test.ts        # Tests for Apps Script generation
+│   └── storage.test.ts      # Tests for storage CRUD + migration
+├── website/                 # Marketing/landing page (React, separate build)
+├── build.js                 # esbuild configuration (5 entry points)
+├── manifest.json            # Chrome Extension Manifest V3
+├── package.json             # NPM scripts + dev dependencies
+├── tsconfig.json            # TypeScript compiler configuration
+├── jest.config.js           # Jest test runner configuration
+└── generate_icons.py        # Utility script for icon generation
+```
 
-- **File:** `storage.ts`, function `migrateLegacySettingsIfNeeded`
-- **Line:** 220
-- **Root Cause:** The inner `chrome.storage.sync.get()` callback at line 220 contains an `async` callback, but the outer function has already `return`ed by the time the callback fires. The `Promise<void>` returned to the caller resolves **before** the migration actually saves.
-- **Real-world Impact:** In `content.ts:307`, `finalizeInit` calls `await migrateLegacySettingsIfNeeded(email)` then immediately calls `getSettings(email)`. If migration is needed, `getSettings` may execute before `saveSettings` completes inside the callback, returning default settings instead of migrated settings. **Legacy user data could appear lost on the first load after upgrading.**
-- **Severity:** :red_circle: **Critical**
-- **Fix:** Wrap the inner `chrome.storage.sync.get` call in a `Promise` and `await` it, so the returned `Promise<void>` only resolves after migration is complete.
+### Folder Responsibilities
+
+| Folder | Responsibility |
+|---|---|
+| `src/modules/` | Feature-sliced modules for the content script. Each handles one concern (tabs, modals, theme, etc.). |
+| `src/utils/` | Shared infrastructure. Currently only `storage.ts` for chrome.storage.sync management. |
+| `src/ui/` | CSS files injected into Gmail. `toolbar.css` styles the tab bar and all modal overlays. |
+| `src/experimental/` | Archived/deferred features. Currently contains a commented-out Label Menu Integration. |
+| `test/` | Unit tests using Jest + ts-jest + jsdom. Tests storage CRUD and script generation. |
+| `website/` | Independent React app for the public landing page, deployed to GitHub Pages. Has its own `package.json`. |
+| `.github/workflows/` | Two pipelines: CI (test + build + verify) and website deployment (GitHub Pages). |
+
+## 3. Entry Points and Execution Flow
+
+The extension has **five esbuild entry points** defined in `build.js`:
+
+| Entry Point | Role | Runs In |
+|---|---|---|
+| `src/content.ts` | Main coordinator; injects tab bar into Gmail | Content script (isolated world) |
+| `src/background.ts` | Service worker; handles downloads, uninstall, install hooks | Background (service worker) |
+| `src/xhrInterceptor.ts` | Intercepts Gmail XHR for unread counts | Page world (MAIN world) |
+| `src/options.ts` | Options page UI | Standalone HTML page |
+| `src/welcome.ts` | Onboarding page | Standalone HTML page |
+
+### Content Script Execution Flow (Primary)
+
+```
+Browser loads mail.google.com
+        │
+        ▼
+manifest.json injects content.ts + toolbar.css at document_end
+        │
+        ▼
+content.ts::init()
+   ├─── injectPageWorld()            ← Injects xhrInterceptor.js into MAIN world
+   ├─── initializeFromDOM()          ← Extracts user email from DOM (polling fallback)
+   ├─── loadInboxSDK()              ← Loads InboxSDK for route tracking (non-fatal)
+   ├─── attemptInjection()          ← Finds Gmail toolbar, inserts tab bar after it
+   ├─── startObserver()             ← MutationObserver to re-inject if Gmail re-renders
+   ├─── addEventListener(popstate)  ← Track URL changes for active tab highlighting
+   ├─── storage.onChanged           ← Reactive settings reload on any storage change
+   ├─── runtime.onMessage           ← Handle TOGGLE_SETTINGS from background click
+   └─── gmailTabs:unreadUpdate      ← Custom events from xhrInterceptor
+```
+
+### Module Wiring Pattern
+
+Circular dependency between `tabs.ts` and `modals.ts` is resolved via **callback injection**:
+
+```
+content.ts
+    │
+    ├──► setRenderCallback(renderTabs)      → modals.ts gets renderTabs
+    ├──► setModalCallbacks({...})           → tabs.ts gets modal openers
+    └──► document.addEventListener(rerender) → dragdrop triggers re-render
+```
+
+### Background Service Worker Flow
+
+```
+background.ts
+    ├─── import @inboxsdk/core/background.js  ← Required by InboxSDK
+    ├─── onMessage: DOWNLOAD_FILE             ← Exports settings as JSON file
+    ├─── onMessage: UNINSTALL_SELF            ← Triggers chrome.management.uninstallSelf
+    ├─── action.onClicked                     ← Extension icon click → TOGGLE_SETTINGS
+    └─── onInstalled (install)                ← Opens welcome page + reloads Gmail tabs
+```
+
+### XHR Interceptor Flow (Page World)
+
+```
+xhrInterceptor.ts (injected into Gmail's MAIN world)
+    ├─── Monkey-patches XMLHttpRequest.open/send
+    ├─── Filters for /sync/ and /mail/u/X/ URLs
+    ├─── Parses response (strips anti-hijacking prefix)
+    ├─── Recursively finds [labelId, unreadCount] tuples
+    └─── Dispatches CustomEvent('gmailTabs:unreadUpdate') → content script
+```
+
+## 4. Architectural Patterns
+
+### 4.1 Module-Based Content Script Architecture
+
+The content script uses a **feature-sliced module pattern** rather than classes. Each module in `src/modules/` owns one vertical concern:
+
+- **state.ts:** Global mutable singleton (`AppState`) imported by all modules. Acts as a simple shared state store (no event bus, no immutability).
+- **theme.ts:** Pure functions for Gmail dark mode detection and CSS class toggling.
+- **tabs.ts:** Imperative DOM construction for the tab bar. Re-renders by clearing `innerHTML` and rebuilding.
+- **unread.ts:** Three-strategy unread count resolution (Atom feed > DOM scraping > XHR updates).
+- **modals.ts:** Six modal types, all constructed via imperative DOM APIs. The largest module (919 lines).
+- **dragdrop.ts:** HTML5 Drag and Drop API handlers for both the tab bar and the settings modal list.
+- **rules.ts:** Pure function that generates Google Apps Script source code from user rules. No side effects.
+
+### 4.2 Dual-World Architecture
+
+The extension operates across two JavaScript execution environments:
+
+- **Isolated World (Content Script):** `content.ts` and all modules. Has access to `chrome.*` APIs but cannot access Gmail's JavaScript globals.
+- **MAIN World (Page Script):** `xhrInterceptor.ts`. Can intercept Gmail's XHR calls but has no `chrome.*` access. Communication flows one-way via `CustomEvent` dispatched on `document`.
+
+### 4.3 Multi-Account Storage
+
+Settings are keyed by Gmail email address (`account_{email}`), enabling per-account tab configurations. Legacy global storage is migrated on first detection of a new account.
+
+### 4.4 Reactive Settings
+
+Storage changes trigger a listener in `content.ts` that reloads settings and re-renders the tab bar. This enables the Options page (a separate context) to update the Gmail UI in real time.
+
+## 5. Core Modules and Relationships
+
+```
+                    ┌──────────────────────┐
+                    │     content.ts       │
+                    │   (Coordinator)      │
+                    └─────────┬────────────┘
+          ┌───────────┬───────┼──────────┬─────────────┐
+          ▼           ▼       ▼          ▼             ▼
+    ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────────┐ ┌──────────┐
+    │ tabs.ts  │ │modals │ │theme  │ │ unread.ts │ │dragdrop │
+    │          │ │.ts     │ │.ts     │ │           │ │.ts       │
+    └────┬─────┘ └───┬────┘ └────────┘ └──────┬────┘ └────┬─────┘
+         │           │                         │           │
+         └───────────┴─────────┬───────────────┘           │
+                               ▼                           │
+                        ┌─────────────┐                    │
+                        │  state.ts   │◄───────────────────┘
+                        │ (Singleton) │
+                        └──────┬──────┘
+                               ▼
+                        ┌─────────────┐
+                        │ storage.ts  │
+                        │ (Persistence│
+                        │  Layer)     │
+                        └─────────────┘
+```
+
+### Module Size and Complexity
+
+| Module | Lines | Complexity Notes |
+|---|---|---|
+| `modals.ts` | 919 | Largest module. 6 modal types with full DOM construction. Settings modal alone is 335 lines. |
+| `content.ts` | 333 | Coordinator with initialization, observer, and event wiring. |
+| `storage.ts` | 331 | Multi-account CRUD with legacy migration. Well-structured. |
+| `unread.ts` | 323 | Three unread strategies with label normalization and fuzzy matching. |
+| `tabs.ts` | 312 | Tab rendering with drag events, dropdowns, and active tab detection. |
+| `dragdrop.ts` | 360 | Dual drag-and-drop systems (tab bar + modal list). |
+| `options.ts` | 657 | Full options page with routing, theme controls, drag-and-drop, and script generation. |
+| `rules.ts` | 233 | Pure code generation. Cleanest module. |
+| `xhrInterceptor.ts` | 177 | XHR monkey-patching with heuristic label detection. |
+| `theme.ts` | 104 | Multi-strategy dark mode detection. |
+| `state.ts` | 32 | Minimal shared state definition. |
+| `welcome.ts` | 72 | Onboarding page logic. |
+
+## 6. Configuration Management
+
+### Chrome Storage (`chrome.storage.sync`)
+
+All user settings are persisted via `chrome.storage.sync` with a multi-account key scheme:
 
 ```typescript
-// BROKEN: returns before inner callback runs
-chrome.storage.sync.get([...], async (items) => {
-    await saveSettings(accountId, newSettings); // runs after caller resolves
-});
-
-// FIXED: await the inner promise
-return new Promise<void>((resolve, reject) => {
-    chrome.storage.sync.get([...], async (items) => {
-        if (items.tabs || items.labels) {
-            await saveSettings(accountId, newSettings);
-        }
-        resolve();
-    });
-});
-```
-
----
-
-### C2. Stale Test File Will Not Compile
-
-- **File:** `test/storage.test.ts`, line 8
-- **Root Cause:** Imports `addLabel` and `removeLabel` from `storage.ts`, but these functions were renamed to `addTab` and `removeTab` during the "Universal Tabs" refactor (commit `2eded72`). The file also mocks a `labels` array instead of the current `tabs`-based structure.
-- **Real-world Impact:** `npm test` will fail with a compile error. **There are zero functional tests for the current storage API.**
-- **Severity:** :red_circle: **Critical**
-
----
-
-### C3. XSS Vulnerability via `innerHTML` in Modals
-
-- **File:** `content.ts`, functions `showEditModal` (line 1041), `showDeleteModal` (line 1099), `showPinModal` (line 985)
-- **Root Cause:** User-controlled `tab.title` and `tab.value` are interpolated directly into `innerHTML` strings via template literals:
-  ```typescript
-  modal.innerHTML = `... value="${tab.value}" ... ${tab.title} ...`;
-  ```
-  If a user imports a crafted JSON config containing `tab.title = '<img src=x onerror=alert(1)>'`, the HTML will execute.
-- **Real-world Impact:** Stored XSS within the Gmail page context. While the attack surface is limited (user must import a malicious JSON), the content script runs with access to the Gmail DOM and `chrome.*` APIs. An attacker could exfiltrate email content or chrome storage.
-- **Severity:** :red_circle: **Critical**
-- **Fix:** Use `document.createElement` and `textContent` instead of `innerHTML`, or sanitize inputs with a helper like `escapeHtml()`.
-
----
-
-### C4. Race Condition in Dual Email Detection
-
-- **File:** `content.ts`, functions `initializeFromDOM` (line 96) and `loadInboxSDK` (line 124)
-- **Root Cause:** Both paths run concurrently and both check `if (!currentUserEmail)` before calling `finalizeInit()`. There is no mutex or lock. If both detect the email at nearly the same time (e.g., DOM polling finds it at t=1000ms, SDK resolves at t=1050ms), `finalizeInit` could be called twice — causing double migration, double render, and a settings race.
-- **Real-world Impact:** Rare but observable: duplicate tab bars, flickering, or settings overwrite.
-- **Severity:** :yellow_circle: **High** (mitigated by the check being on the same JS thread, but `await finalizeInit()` yields to the event loop, widening the window)
-- **Fix:** Use a `let initPromise: Promise<void> | null = null` guard:
-  ```typescript
-  if (!currentUserEmail) {
-      currentUserEmail = email;
-      initPromise = initPromise || finalizeInit(email);
-      await initPromise;
-  }
-  ```
-
----
-
-## High Priority Issues
-
-### H1. Unhandled Promise Rejections in Drag-and-Drop
-
-- **File:** `content.ts`, functions `handleSmartDrop` (line 628), `handleGlobalDrop` (line 713)
-- **Root Cause:** `updateTabOrder(currentUserEmail, tabs)` is called without `await` or `.catch()`. If storage write fails (e.g., context invalidated), the rejection is unhandled.
-- **Impact:** Unhandled promise rejection warning; tabs appear reordered locally but the change is silently lost.
-- **Severity:** :yellow_circle: **High**
-
----
-
-### H2. `openOptions` Handler References Non-Existent Options Page
-
-- **File:** `background.ts`, line 11-12
-- **Root Cause:** `chrome.runtime.openOptionsPage()` is called when message action is `'openOptions'`, but no `options_page` or `options_ui` key is defined in `manifest.json`. This will throw a runtime error.
-- **Impact:** Dead code path that would error if ever triggered. Currently no code sends a message with action `'openOptions'`.
-- **Severity:** :yellow_circle: **High** (will break if someone adds an options trigger)
-
----
-
-### H3. `onInstalled` Writes Legacy Format
-
-- **File:** `background.ts`, lines 90-97
-- **Root Cause:** On first install, the background script writes `{ labels: [...] }` to `chrome.storage.sync` — the **old v0 format**. The current storage layer expects per-account keys (`account_{email}`). This creates orphaned legacy data that triggers the migration path on first Gmail load.
-- **Impact:** Unnecessary migration cycle on every fresh install. The legacy data write is semantically incorrect for the current architecture.
-- **Severity:** :yellow_circle: **High**
-- **Fix:** Remove the legacy `labels` write entirely; `DEFAULT_SETTINGS` in `storage.ts` already provides the correct defaults.
-
----
-
-### H4. `MutationObserver` Fires on Every DOM Change
-
-- **File:** `content.ts`, function `startObserver` (line 1447)
-- **Root Cause:** The observer watches `document.body` with `{ childList: true, subtree: true }` and calls `attemptInjection()` + `updateActiveTab()` on *every* mutation. Gmail is a highly dynamic SPA — this fires hundreds of times per minute.
-- **Impact:** Performance degradation. Each call queries the DOM for toolbar selectors and iterates all tab elements.
-- **Severity:** :yellow_circle: **High**
-- **Fix:** Add debouncing (e.g., `requestAnimationFrame` or `setTimeout` with a flag) and filter mutations for relevance before acting.
-
----
-
-### H5. Settings Merge is Shallow (Tabs Array Overwrite)
-
-- **File:** `storage.ts`, function `getSettings` (line 86)
-- **Root Cause:** `{ ...DEFAULT_SETTINGS, ...stored }` performs a shallow merge. If stored settings exist but have an empty `tabs: []` array, it will **not** fall back to the default tabs — it will use the empty array. This is correct for the current use case (user intentionally deleted all tabs), but if `stored` somehow has a corrupted shape (e.g., `tabs: null`), the extension will crash when iterating.
-- **Impact:** No runtime validation of stored data shape.
-- **Severity:** :yellow_circle: **High**
-- **Fix:** Add a validation step: `if (!Array.isArray(settings.tabs)) settings.tabs = DEFAULT_SETTINGS.tabs;`
-
----
-
-### H6. No `sendResponse` in `exportAllAccounts` Message
-
-- **File:** `content.ts`, function `exportAllAccounts` (line 1382)
-- **Root Cause:** `chrome.runtime.sendMessage` is called without a response callback. The background script's listener `return true` keeps the channel open, but no one is listening. Chrome logs a warning: "message port closed before a response was received."
-- **Impact:** Console noise; if the download fails, the user sees no feedback.
-- **Severity:** :yellow_circle: **High**
-
----
-
-## Medium / Low Issues
-
-### M1. Deprecated API: `unescape()` + `encodeURIComponent()`
-
-- **File:** `background.ts`, line 25
-- **Root Cause:** `btoa(unescape(encodeURIComponent(message.data)))` uses the deprecated `unescape()`. While it works for UTF-8 to Base64 encoding, it's flagged by linters and may be removed in future JS engines.
-- **Severity:** :orange_circle: **Medium**
-- **Fix:** Use `TextEncoder` + manual Base64 encoding or a polyfill.
-
----
-
-### M2. `@ts-ignore` Suppressions (3 instances)
-
-- **Files:** `xhrInterceptor.ts` (lines 48, 50, 59, 77), `content.ts` (line 155)
-- **Root Cause:** Used to suppress type errors for `this._url` property on XHR and `this.remove()` on script element. While these work at runtime, they bypass type safety.
-- **Severity:** :orange_circle: **Medium**
-- **Fix:** Use module augmentation to extend `XMLHttpRequest` interface with `_url: string`.
-
----
-
-### M3. `console.log` Statements in Production Code (30+ instances)
-
-- **All files**
-- **Root Cause:** Extensive debug logging left in production code. No log level control.
-- **Impact:** Console noise for end users; PII exposure (email addresses logged at line 100, 110, 135, 310, etc.)
-- **Severity:** :orange_circle: **Medium**
-- **Fix:** Implement a logger utility with a `DEBUG` flag, or strip `console.log` at build time via esbuild's `drop` option.
-
----
-
-### M4. No Input Validation on Import JSON Schema
-
-- **File:** `content.ts`, function `showImportModal` (line 1269)
-- **Root Cause:** Only checks `data.tabs && Array.isArray(data.tabs)`. Does not validate individual tab objects have required fields (`id`, `title`, `type`, `value`). Malformed tabs could crash rendering.
-- **Severity:** :orange_circle: **Medium**
-
----
-
-### M5. Hash Navigation Doesn't Account for Gmail's Multi-Account Paths
-
-- **File:** `content.ts`, function `getLabelUrl` (line 1404)
-- **Root Cause:** Hardcodes `/mail/u/0/` in the URL. Users on their 2nd/3rd account use `/mail/u/1/`, `/mail/u/2/`, etc.
-- **Impact:** The function is unused (see Dead Code section), but if reinstated, it would navigate to the wrong account.
-- **Severity:** :green_circle: **Low**
-
----
-
-### M6. CSS Duplication (`.tab-drag-handle` defined twice)
-
-- **File:** `toolbar.css`, lines 422-430 and lines 540-551
-- **Root Cause:** Two separate selectors define the same `.tab-drag-handle` base styles with conflicting values.
-- **Impact:** Confusing maintenance; first definition's `display: none !important` overrides the second.
-- **Severity:** :green_circle: **Low**
-
----
-
-### M7. Missing `return true` for Async `sendResponse`
-
-- **File:** `content.ts`, `onMessage` listener (line 79)
-- **Root Cause:** The listener handles `GET_ACCOUNT_INFO` synchronously with `sendResponse`, but does not `return true`. For `TOGGLE_SETTINGS`, no response is sent. The listener works correctly for the current sync case, but if any future handler adds an async response, it will fail silently.
-- **Severity:** :green_circle: **Low**
-
----
-
-## Dead / Orphaned Code
-
-| Item | File | Line(s) | Evidence | Recommendation |
-|:-----|:-----|:--------|:---------|:---------------|
-| `getLabelUrl()` function | `content.ts` | 1404-1407 | Grep confirms zero callers in the entire `src/` directory | **Delete** |
-| `handleGlobalDragOver()` function | `content.ts` | 635-671 | Never registered as an event listener. `handleSmartDragOver` (line 510) superseded it. The duplicate `handleGlobalDrop` (line 673) has identical logic to `handleSmartDrop` (line 594). | **Delete** both `handleGlobalDragOver` and `handleGlobalDrop` |
-| `LabelMenuIntegration.ts` | `experimental/` | 1-313 | Entire file is wrapped in `/* ... */` comments. Not referenced in `build.js` entry points. | **Keep** (intentionally archived), but consider moving to a `docs/archived/` folder or a git branch |
-| `test/storage.test.ts` | `test/` | 1-54 | Imports non-existent functions `addLabel`, `removeLabel`. Will not compile. | **Rewrite** to test current `addTab`/`removeTab` API |
-| `defaultLabels` in `onInstalled` | `background.ts` | 90-97 | Writes legacy `labels` format that the current storage layer doesn't read directly (only via migration). | **Delete** the entire `labels` write block |
-| `currentSdk` variable | `content.ts` | 27 | Only assigned at line 129. Only used at line 141 (`currentSdk.Router`), which could use the local `sdk` variable captured in the same scope. The module-scoped `currentSdk` isn't referenced elsewhere. | **Remove** the module variable; use `sdk` locally |
-| `labels?` field on `Settings` interface | `storage.ts` | 26 | Marked as "Legacy support for migration." Only read during migration. Consider removing from the primary interface and making it part of a `LegacySettings` type. | **Refactor** into separate type |
-
----
-
-## Structural Improvements
-
-### S1. Break Up `content.ts` (2141 Lines — God Module)
-
-The single largest risk in this codebase. `content.ts` handles 8+ distinct responsibilities. Recommended decomposition:
-
-```
-src/
-├── content.ts              -> init() + orchestration only (~100 lines)
-├── tabs/
-│   ├── renderer.ts         -> createTabsBar(), renderTabs(), updateActiveTab()
-│   └── navigation.ts       -> handleUrlChange(), hash-based routing
-├── modals/
-│   ├── pinModal.ts         -> showPinModal()
-│   ├── editModal.ts        -> showEditModal()
-│   ├── deleteModal.ts      -> showDeleteModal()
-│   ├── settingsModal.ts    -> createSettingsModal(), toggleSettingsModal()
-│   ├── importModal.ts      -> showImportModal()
-│   └── uninstallModal.ts   -> showUninstallModal()
-├── dragdrop/
-│   └── tabDragDrop.ts      -> All drag handlers (currently duplicated 3x)
-├── unread/
-│   ├── atomFeed.ts         -> Atom feed fetching
-│   ├── domScraper.ts       -> getUnreadCountFromDOM()
-│   └── xhrHandler.ts       -> handleUnreadUpdates(), buildLabelMapFromDOM()
-├── export/
-│   └── exportImport.ts     -> exportSettings(), exportAllAccounts()
-└── theme.ts                -> applyTheme()
-```
-
----
-
-### S2. Add Runtime Schema Validation for Stored Data
-
-`chrome.storage.sync` can contain stale, corrupted, or manually-edited data. Add a validation layer:
-
-```typescript
-function validateSettings(raw: unknown): Settings {
-    if (!raw || typeof raw !== 'object') return DEFAULT_SETTINGS;
-    const obj = raw as Record<string, unknown>;
-    return {
-        tabs: Array.isArray(obj.tabs) ? obj.tabs.filter(isValidTab) : DEFAULT_SETTINGS.tabs,
-        theme: ['system','light','dark'].includes(obj.theme as string)
-            ? obj.theme as Settings['theme']
-            : 'system',
-        showUnreadCount: typeof obj.showUnreadCount === 'boolean'
-            ? obj.showUnreadCount
-            : true,
-    };
+// Key format
+`account_{email}` → {
+    tabs: Tab[],           // Array of {id, title, type, value}
+    rules: Rule[],         // Array of {tabId, action, daysOld, enabled, targetLabel?}
+    theme: 'system'|'light'|'dark',
+    showUnreadCount: boolean
 }
 ```
 
----
+**Defaults:** Two tabs (Inbox, Sent), system theme, unread counts enabled, no rules.
 
-### S3. Add Debouncing to MutationObserver
+**Migration:** `migrateLegacySettingsIfNeeded()` converts pre-multi-account global keys (`tabs`, `labels`, `theme`) into the account-scoped format. The welcome page theme is also migrated from a global `theme` key.
 
-```typescript
-let debounceTimer: number | null = null;
-observer = new MutationObserver(() => {
-    if (debounceTimer) return;
-    debounceTimer = window.setTimeout(() => {
-        debounceTimer = null;
-        attemptInjection();
-        updateActiveTab();
-    }, 100);
-});
+### Manifest Permissions
+
+| Permission | Used For |
+|---|---|
+| `storage` | Persisting user settings across sessions |
+| `downloads` | Exporting settings as JSON file |
+| `management` | Self-uninstall capability |
+| `host_permissions: mail.google.com` | Content script injection + Atom feed access |
+
+### Build Configuration
+
+- **esbuild** (`build.js`): Bundles 5 TypeScript entry points into `dist/js/`. Production builds are minified with `console.*` calls dropped.
+- **TypeScript** (`tsconfig.json`): ES2022 target, strict mode, Node module resolution.
+- **Copy assets** (`package.json`): CSS, HTML, icons, locales, and manifest are copied to `dist/` after bundling.
+
+### Constants and IDs
+
+| Constant | Location | Purpose |
+|---|---|---|
+| `TABS_BAR_ID` | `state.ts` | DOM ID for the injected tab bar |
+| `MODAL_ID` | `state.ts` | DOM ID for modal overlays |
+| `TOOLBAR_SELECTORS` | `state.ts` | CSS selectors for Gmail's toolbar (injection target) |
+| `APP_ID` | `content.ts` | InboxSDK application identifier |
+| `FEEDBACK_URL` | `background.ts` | Tally.so form URL for uninstall feedback |
+
+## 7. Dependency Structure
+
+### Internal Module Dependency Graph
+
+```
+content.ts ──► state, theme, unread, tabs, modals, storage
+tabs.ts ──► storage, state, unread, dragdrop
+modals.ts ──► storage, state, theme, dragdrop
+unread.ts ──► storage, state
+dragdrop.ts ──► storage, state
+rules.ts ──► storage (types only)
+options.ts ──► storage, rules
+theme.ts ──► (no internal deps)
+state.ts ──► storage (types only)
 ```
 
----
+### External Dependencies (devDependencies only)
 
-### S4. Replace `innerHTML` with Safe DOM Construction
+| Library | Version | Purpose |
+|---|---|---|
+| `@inboxsdk/core` | ^2.2.11 | Gmail SDK for route tracking and email detection. Non-fatal fallback. |
+| `esbuild` | ^0.27.0 | Fast TypeScript bundler. Replaces webpack/rollup. |
+| `typescript` | ^5.3.3 | TypeScript compiler. |
+| `jest` | ^29.7.0 | Test runner. |
+| `ts-jest` | ^29.1.2 | TypeScript transformer for Jest. |
+| `jest-environment-jsdom` | ^30.2.0 | Browser-like DOM environment for tests. |
+| `jsdom` | ^27.2.0 | JSDOM for DOM simulation in tests. |
+| `@types/chrome` | ^0.0.260 | Type definitions for Chrome Extension APIs. |
+| `eslint` | ^8.57.0 | Linting (configured but no `.eslintrc` found). |
+| `prettier` | ^3.2.5 | Code formatting (configured but no `.prettierrc` found). |
 
-All modal creation should use `document.createElement` + `textContent`. Create a small utility:
+**Key architectural note:** All dependencies are `devDependencies`. The production bundle contains only the extension's own code plus InboxSDK's bundled output. There are zero runtime NPM dependencies.
 
-```typescript
-function h(
-    tag: string,
-    attrs?: Record<string, string>,
-    text?: string
-): HTMLElement {
-    const el = document.createElement(tag);
-    if (attrs) {
-        Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
-    }
-    if (text) el.textContent = text;
-    return el;
-}
+### InboxSDK Usage
+
+InboxSDK is used for two purposes:
+1. **Email detection:** `sdk.User.getEmailAddress()` as a reliable fallback when DOM extraction fails.
+2. **Route tracking:** `sdk.Router.handleAllRoutes()` to detect Gmail navigation changes.
+
+The extension gracefully degrades if InboxSDK fails to load (non-fatal). DOM-based initialization runs in parallel.
+
+## 8. Testing Strategy
+
+### Framework: Jest + ts-jest + jsdom
+
+```
+jest.config.js
+├── preset: ts-jest          # Compile TS on the fly
+├── testEnvironment: jsdom   # Browser-like DOM
+└── moduleNameMapper: @/ → src/  # Path aliases
 ```
 
----
+### Test Coverage
 
-### S5. Add CI Test Pipeline
+| Test File | Lines | What It Tests |
+|---|---|---|
+| `test/storage.test.ts` | 413 | Multi-account CRUD (addTab, removeTab, updateTab, updateTabOrder), getAllAccounts, legacy migration, import schema validation, Rule CRUD (add, update, remove, duplicate prevention) |
+| `test/rules.test.ts` | 218 | Apps Script generation for all 4 action types, Sheet logging, edge cases (no matching tab, disabled rules), special character escaping, script structural validity |
+| `src/xhrInterceptor.test.ts` | 169 | XHR interception, Gmail JSON parsing, label validation, custom event dispatch |
 
-No CI runner is configured for tests. Add a GitHub Actions workflow:
+### Testing Approach
 
-```yaml
-# .github/workflows/test.yml
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+- **chrome.storage.sync** is fully mocked with an in-memory `Record<string, any>` store.
+- **crypto.randomUUID** is polyfilled for the test environment.
+- Tests focus on **business logic** (storage operations, script generation) rather than DOM rendering.
+- **No integration tests** for content script injection or Gmail DOM interaction.
+- **No E2E tests** for the full extension lifecycle.
+
+### CI Pipeline (`ci.yml`)
+
+1. Checkout
+2. Node.js 20 setup with npm cache
+3. `npm ci` (clean install)
+4. `npm test` (Jest)
+5. `npm run build` (esbuild + asset copy)
+6. Verify zero `console.log` in production bundle
+7. Upload `dist/` as artifact (7-day retention)
+
+## 9. Extension Points
+
+### Adding a New Tab Type
+
+Currently supports `'label'` and `'hash'` types. To add a new type (e.g., `'search'`):
+
+1. Add the type to `Tab.type` union in `storage.ts`
+2. Handle navigation in `tabs.ts::renderTabs()` click handler
+3. Handle active tab detection in `tabs.ts::updateActiveTab()`
+4. Handle unread count resolution in `unread.ts` (both `handleUnreadUpdates` and `updateUnreadCount`)
+5. Update the Pin Modal in `modals.ts::showPinModal()` for detection UI
+
+### Adding a New Rule Action
+
+Currently supports `'trash' | 'archive' | 'markRead' | 'moveToLabel'`. To add a new action:
+
+1. Add the action to `RuleAction` union in `storage.ts`
+2. Add a case in `rules.ts::buildActionSwitch()`
+3. Add UI handling in `options.ts::handleRuleChange()` and `renderRulesList()`
+4. Add a test case in `test/rules.test.ts`
+
+### Adding a New Modal Dialog
+
+Follow the pattern in `modals.ts`:
+
+1. Create a `showXxxModal()` function with DOM construction
+2. Add keyboard dismiss handler (`onKeyDown` with Escape)
+3. Add close cleanup function
+4. Export from `modals.ts` and wire through `content.ts` if needed by `tabs.ts`
+
+### Adding CSS Themes
+
+The theme system uses CSS classes `force-dark` and `force-light` on `document.body`:
+
+1. Define new theme values in `toolbar.css` under the appropriate class
+2. Update `ThemeMode` type in `theme.ts`
+3. Update theme button rendering in both `modals.ts` and `options.ts`
+
+## 10. Technical Debt and Risk Areas
+
+### High Priority
+
+| Issue | Location | Impact |
+|---|---|---|
+| **modals.ts is a 919-line monolith** | `src/modules/modals.ts` | 6 different modal types in one file. Each modal constructs DOM imperatively. Difficult to maintain or test individually. Should be split into individual modal modules. |
+| **No unit tests for content script or tab rendering** | `test/` | DOM injection, MutationObserver behavior, and tab rendering are completely untested. Regressions in Gmail DOM changes are caught only manually. |
+| **XHR interceptor uses heuristics** | `src/xhrInterceptor.ts` | Gmail's internal protocol format is undocumented and changes without notice. The label-count detection relies on array pattern matching (`[string, number]`) with limited filtering. False positives are possible. |
+
+### Medium Priority
+
+| Issue | Location | Impact |
+|---|---|---|
+| **options.ts mirrors functionality from modals.ts** | `src/options.ts` (657 lines) | Tab list rendering, drag-and-drop, and import/export logic are duplicated between the options page and the Gmail overlay modals. Changes must be made in two places. |
+| **Global mutable state** | `src/modules/state.ts` | The `AppState` singleton is mutated from multiple modules with no access control. Any module can set `currentSettings` to `null`, causing NPEs in other modules. |
+| **No ESLint or Prettier config files** | Root directory | `eslint` and `prettier` are listed as devDependencies but no `.eslintrc` or `.prettierrc` configuration files exist. The `npm run lint` command references `eslint src/**/*.ts` but may not work without config. |
+| **Gmail DOM selectors are brittle** | `TOOLBAR_SELECTORS`, various querySelector calls | Gmail uses obfuscated class names (`.G-atb`, `.aeF`, `.nH`, `.bsU`, `.aj1`, `.wT`) that can change at any Gmail update. |
+
+### Low Priority
+
+| Issue | Location | Impact |
+|---|---|---|
+| **@ts-ignore comments** | `src/xhrInterceptor.ts` (lines 48, 51, 59, 77) | XHR prototype patching requires type overrides. Acceptable for this pattern but could be improved with a typed wrapper. |
+| **Experimental code is archived in-repo** | `src/experimental/LabelMenuIntegration.ts` | 313 lines of commented-out code with restoration instructions. Better as a Git branch than dead code. |
+| **No source maps in production** | `build.js` (`sourcemap: false`) | Debugging production issues requires correlating minified code manually. |
+
+## 11. 90-Second Mental Model
+
+**What is it?** A Chrome extension that adds a tab bar to Gmail for one-click label navigation, with unread badges and email automation rules.
+
+**How does it work?** Three scripts run simultaneously:
+
+1. **Content script** (`content.ts`) coordinates everything. It finds Gmail's toolbar via CSS selectors, injects a tab bar element after it, and uses a MutationObserver to survive Gmail's SPA re-renders. User settings (tabs, theme, rules) are stored per-account in `chrome.storage.sync` and reloaded reactively on any change.
+
+2. **Page world script** (`xhrInterceptor.ts`) monkey-patches `XMLHttpRequest` inside Gmail's own JavaScript context to intercept `/sync/` responses, parse label unread counts from Gmail's obfuscated JSON protocol, and dispatch them back to the content script via `CustomEvent`.
+
+3. **Service worker** (`background.ts`) handles the extension icon click (toggles settings), opens the welcome page on install, and provides `chrome.downloads` API access for settings export.
+
+**Where do I look?**
+
+- **Tab bar UI:** `tabs.ts` (rendering) + `toolbar.css` (styling)
+- **All popups/dialogs:** `modals.ts` (the big one)
+- **Settings persistence:** `storage.ts` (the API layer)
+- **Unread counts:** `unread.ts` (3 strategies) + `xhrInterceptor.ts` (XHR source)
+- **Email rules automation:** `rules.ts` (script generator) + `options.ts` (UI)
+- **Theme switching:** `theme.ts` (detection logic) + `toolbar.css` (CSS variables)
+
+**How do I build and test?**
+
+```bash
+npm install          # Install dev dependencies
+npm test             # Run Jest tests (storage + rules)
+npm run build        # esbuild bundle + copy assets → dist/
+npm run package      # build + zip → extension.zip
 ```
 
----
-
-### S6. Strip Debug Logs in Production Build
-
-Add to `build.js`:
-
-```javascript
-drop: ['console'],  // or use a custom log level
-```
-
----
-
-## Refactoring Roadmap (Prioritized Action Plan)
-
-| Priority | Action | Effort | Impact | Files |
-|:---------|:-------|:-------|:-------|:------|
-| **P0** | Fix migration fire-and-forget bug (C1) | 15 min | Prevents data loss for upgrading users | `storage.ts` |
-| **P0** | Escape HTML in modal `innerHTML` (C3) | 30 min | Closes XSS vector | `content.ts` |
-| **P0** | Rewrite `storage.test.ts` for current API (C2) | 1 hr | Restores test coverage for data layer | `test/storage.test.ts` |
-| **P1** | Remove dead code: `getLabelUrl`, `handleGlobalDragOver/Drop`, legacy `labels` write (H2, H3) | 20 min | Reduces confusion, removes incorrect defaults | `content.ts`, `background.ts` |
-| **P1** | Add `finalizeInit` race guard (C4) | 15 min | Prevents double init | `content.ts` |
-| **P1** | Add debouncing to `MutationObserver` (H4) | 15 min | Significant perf improvement on Gmail | `content.ts` |
-| **P1** | Add `.catch()` to fire-and-forget promises (H1, H6) | 15 min | Prevents unhandled rejections | `content.ts` |
-| **P2** | Add stored data validation (H5, M4) | 45 min | Prevents crashes from corrupt data | `storage.ts`, `content.ts` |
-| **P2** | Replace `unescape()` with modern API (M1) | 10 min | Future-proofs encoding | `background.ts` |
-| **P2** | Add CI test + build workflow (S5) | 20 min | Catch regressions automatically | `.github/workflows/` |
-| **P2** | Strip console.log from prod build (M3, S6) | 5 min | Cleaner UX, no PII in console | `build.js` |
-| **P3** | Break up `content.ts` into modules (S1) | 4-6 hrs | Major maintainability improvement | `src/` restructure |
-| **P3** | Deduplicate drag-and-drop logic (3 implementations) | 2 hrs | Reduces 250+ lines of duplication | `content.ts` |
-| **P3** | Fix duplicate CSS selectors (M6) | 10 min | Cleaner stylesheet | `toolbar.css` |
-| **P3** | Remove `@ts-ignore` with proper type augmentation (M2) | 20 min | Better type safety | `xhrInterceptor.ts` |
-
----
-
-## Summary Statistics
-
-| Metric | Count |
-|:-------|------:|
-| **Critical Defects** | 4 |
-| **High Priority Issues** | 6 |
-| **Medium Issues** | 4 |
-| **Low Issues** | 3 |
-| **Dead/Orphaned Code Items** | 7 |
-| **Structural Improvements** | 6 |
-| **Total Actionable Items** | 30 |
-| **Estimated Fix Time (P0+P1)** | ~2.5 hours |
-| **Estimated Full Cleanup** | ~10-12 hours |
+**Key architectural constraint:** The content script and page world script cannot share variables. They communicate one-way via `CustomEvent` on the `document` object. All `chrome.*` API access must happen in the content script or service worker, never in the page world script.

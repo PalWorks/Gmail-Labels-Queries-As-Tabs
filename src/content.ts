@@ -11,22 +11,19 @@
  *   modules/unread.ts   – Unread count (Atom feed + DOM scraping + XHR updates)
  *   modules/dragdrop.ts – Drag-and-drop for tab bar & modal list
  *   modules/tabs.ts     – Tab rendering, navigation, dropdown menus
- *   modules/modals.ts   – All modal dialogs (pin, edit, delete, settings, import, uninstall)
+ *   modules/modals/  - All modal dialogs (pin, edit, delete, settings, import, uninstall)
  */
 
 import * as InboxSDK from '@inboxsdk/core';
 import { getSettings, migrateLegacySettingsIfNeeded } from './utils/storage';
 
 // Module imports
-import { state, TABS_BAR_ID, TOOLBAR_SELECTORS } from './modules/state';
+import { state, TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
 import { applyTheme, listenForSystemThemeChanges } from './modules/theme';
 import { saveSettings } from './utils/storage';
 import { handleUnreadUpdates } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
-import {
-    showPinModal, showEditModal, showDeleteModal,
-    toggleSettingsModal, setRenderCallback,
-} from './modules/modals';
+import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -127,7 +124,9 @@ function extractEmailFromDOM(): string | null {
         return titleMatch[1];
     }
 
-    const accountElement = document.querySelector('[aria-label*="@"][aria-label*="Google Account"], a[aria-label*="@"]');
+    const accountElement = document.querySelector(
+        '[aria-label*="@"][aria-label*="Google Account"], a[aria-label*="@"]'
+    );
     if (accountElement) {
         const label = accountElement.getAttribute('aria-label');
         console.log('Gmail Tabs: Found account element label:', label);
@@ -155,13 +154,13 @@ async function finalizeInit(email: string): Promise<void> {
         // Migrate theme from welcome page (global key) if present
         await migrateWelcomeTheme(email);
 
-        state.currentSettings = await getSettings(email);
-        console.log('Gmail Tabs: Settings loaded for', email, state.currentSettings);
+        setAppSettings(await getSettings(email));
+        console.log('Gmail Tabs: Settings loaded for', email, getAppSettings());
         renderTabs();
-        applyTheme(state.currentSettings.theme);
+        applyTheme(getAppSettings()!.theme);
 
         // Listen for OS theme changes to auto-update 'system' mode
-        listenForSystemThemeChanges(() => state.currentSettings?.theme ?? 'system');
+        listenForSystemThemeChanges(() => getAppSettings()?.theme ?? 'system');
     } catch (e) {
         console.error('Gmail Tabs: Error in finalizeInit', e);
     }
@@ -179,7 +178,10 @@ async function migrateWelcomeTheme(email: string): Promise<void> {
                     resolve();
                     return;
                 }
-                if (result.theme && (result.theme === 'light' || result.theme === 'dark' || result.theme === 'system')) {
+                if (
+                    result.theme &&
+                    (result.theme === 'light' || result.theme === 'dark' || result.theme === 'system')
+                ) {
                     console.log('Gmail Tabs: Migrating welcome theme:', result.theme);
                     await saveSettings(email, { theme: result.theme });
                     // Clean up the global key
@@ -202,8 +204,8 @@ async function initializeFromDOM(): Promise<void> {
     let email = extractEmailFromDOM();
     if (email) {
         console.log('Gmail Tabs: Email found immediately:', email);
-        if (!state.currentUserEmail) {
-            state.currentUserEmail = email;
+        if (!getUserEmail()) {
+            setUserEmail(email);
             state.initPromise = state.initPromise || finalizeInit(email);
             await state.initPromise;
         }
@@ -214,8 +216,8 @@ async function initializeFromDOM(): Promise<void> {
             if (email) {
                 console.log('Gmail Tabs: Account detected via polling:', email);
                 clearInterval(accountPoller);
-                if (!state.currentUserEmail) {
-                    state.currentUserEmail = email;
+                if (!getUserEmail()) {
+                    setUserEmail(email);
                     state.initPromise = state.initPromise || finalizeInit(email);
                     await state.initPromise;
                 }
@@ -232,18 +234,17 @@ async function loadInboxSDK(): Promise<void> {
         const sdk = await InboxSDK.load(2, APP_ID);
         console.log('Gmail Tabs: InboxSDK loaded.');
 
-        if (!state.currentUserEmail) {
+        if (!getUserEmail()) {
             const sdkEmail = sdk.User.getEmailAddress();
             console.log('Gmail Tabs: Got email from SDK:', sdkEmail);
-            state.currentUserEmail = sdkEmail;
-            state.initPromise = state.initPromise || finalizeInit(state.currentUserEmail);
+            setUserEmail(sdkEmail);
+            state.initPromise = state.initPromise || finalizeInit(getUserEmail()!);
             await state.initPromise;
         }
 
         sdk.Router.handleAllRoutes((_routeView: any) => {
             updateActiveTab();
         });
-
     } catch (err) {
         console.warn('Gmail Tabs: InboxSDK failed to load (Non-fatal):', err);
     }
@@ -281,19 +282,21 @@ async function init(): Promise<void> {
         if (area === 'sync') {
             console.log('Gmail Tabs: Storage changed', changes);
 
-            if (state.currentUserEmail) {
-                const accountKey = `account_${state.currentUserEmail}`;
+            if (getUserEmail()) {
+                const accountKey = `account_${getUserEmail()}`;
                 const relevantKeys = [accountKey, 'theme', 'tabs', 'labels'];
-                const hasRelevantChange = Object.keys(changes).some(k => relevantKeys.includes(k));
+                const hasRelevantChange = Object.keys(changes).some((k) => relevantKeys.includes(k));
 
                 if (hasRelevantChange) {
-                    getSettings(state.currentUserEmail).then(settings => {
-                        state.currentSettings = settings;
-                        console.log('Gmail Tabs: Reloaded settings for', state.currentUserEmail, state.currentSettings);
+                    getSettings(getUserEmail()!).then((settings) => {
+                        setAppSettings(settings);
+                        console.log('Gmail Tabs: Reloaded settings for', getUserEmail(), getAppSettings());
                         renderTabs();
                         if (changes.theme) {
-                            applyTheme(state.currentSettings.theme);
+                            applyTheme(getAppSettings()!.theme);
                         }
+                    }).catch((err) => {
+                        console.error('Gmail Tabs: Failed to reload settings', err);
                     });
                 }
             }
@@ -305,7 +308,7 @@ async function init(): Promise<void> {
         if (message.action === 'TOGGLE_SETTINGS') {
             toggleSettingsModal();
         } else if (message.action === 'GET_ACCOUNT_INFO') {
-            sendResponse({ account: state.currentUserEmail });
+            sendResponse({ account: getUserEmail() });
         }
         return true;
     });
