@@ -1,3 +1,4 @@
+export {};
 /**
  * rules.test.ts
  *

@@ -1,3 +1,4 @@
+export {};
 /**
  * tabs.test.ts
  *

@@ -1,3 +1,4 @@
+export {};
 /**
  * theme.test.ts
  *

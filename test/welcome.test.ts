@@ -1,3 +1,4 @@
+export {};
 /**
  * welcome.test.ts
  *

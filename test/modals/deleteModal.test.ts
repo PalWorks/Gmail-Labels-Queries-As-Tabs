@@ -1,3 +1,4 @@
+export {};
 /**
  * deleteModal.test.ts
  *

@@ -1,3 +1,4 @@
+export {};
 /**
  * dragdrop.test.ts
  *

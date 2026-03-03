@@ -1,3 +1,4 @@
+export {};
 /**
  * settingsModal.test.ts
  *

@@ -1,3 +1,4 @@
+export {};
 /**
  * background.test.ts
  *
