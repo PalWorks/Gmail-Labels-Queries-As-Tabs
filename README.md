@@ -5,30 +5,31 @@
 <h1 align="center">Gmail Labels & Queries as Tabs</h1>
 
 <p align="center">
-  <strong>A Chrome extension that injects a user-configurable tab bar into Gmail — navigate labels, searches, and views with one click.</strong>
+  <strong>A Chrome extension that injects a configurable tab bar into Gmail for one-click navigation to labels, search queries, and custom views.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml"><img src="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp"><img src="https://img.shields.io/badge/chrome%20web%20store-published-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/manifest-v3-green.svg" alt="Manifest V3">
   <img src="https://img.shields.io/badge/chrome-120%2B-yellow.svg" alt="Chrome 120+">
   <img src="https://img.shields.io/badge/privacy-zero%20external%20requests-brightgreen.svg" alt="Privacy First">
 </p>
 
----
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp">Install from Chrome Web Store</a> · 
+  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
+  <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
+</p>
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
-- [Demo](#demo)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Development](#development)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Project Structure](#project-structure)
@@ -41,126 +42,125 @@
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
----
-
 ## Overview
 
-Gmail Labels & Queries as Tabs replaces the need to dig through Gmail's sidebar by placing your most-used views — labels, search queries, and hash routes — as persistent tabs directly below the toolbar. Tabs are reorderable via drag-and-drop, support real-time unread counts, and sync across all your Chrome instances.
+Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by placing your most used views as persistent, clickable tabs directly below the toolbar. Tabs support labels, search queries, and Gmail hash routes. They are reorderable via drag and drop, show real-time unread counts, and sync across Chrome instances through `chrome.storage.sync`.
 
-**Core Value:** Instantly switch between Gmail views via a clean, native-feeling tab bar — with zero configuration friction and zero data leaving your browser.
+**Core Value:** Navigate between Gmail views instantly through a native feeling tab bar with zero configuration friction and zero data leaving your browser.
 
 ### Who Is This For?
 
-- **Power Gmail users** who rely on labels and saved searches to organize email
-- **Multi-account users** who want per-account tab configurations
-- **Privacy-conscious users** who want a purely client-side tool with no external network requests
-
----
+| Audience | Why |
+|----------|-----|
+| **Power Gmail users** | Navigate labels and saved searches without the sidebar |
+| **Multi-account users** | Independent tab configurations per Gmail account |
+| **Privacy-focused users** | Fully client-side tool with zero external network requests |
+| **Teams** | Exportable configs let you share tab setups across team members |
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Custom Tabs** | Add tabs for Gmail labels, search queries (`is:unread`), or hash views (`#starred`, `#sent`) |
-| **Drag & Drop** | Reorder tabs intuitively with full drag-and-drop support (horizontal and vertical) |
-| **Real-time Unread Counts** | Live unread badges via Atom feed + XHR interception + DOM scraping fallback |
-| **Theme Support** | System / Light / Dark themes with Gmail dark mode detection |
-| **Multi-Account** | Independent tab configurations per Gmail account |
-| **Export / Import** | Backup and restore your configuration as JSON with schema validation |
+| **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
+| **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
+| **Real-time Unread Counts** | Live badges via a three-tier strategy: Atom feed, XHR interception, and DOM scraping fallback |
+| **Theme Support** | System, Light, and Dark themes with automatic Gmail dark mode detection |
+| **Multi-Account** | Per-account tab configurations namespaced by email address |
+| **Automation Rules** | Generate Google Apps Script code for automated email cleanup (trash, archive, mark read, move) |
+| **Export / Import** | Backup and restore configuration as schema-validated JSON |
 | **Cross-Device Sync** | Settings sync across Chrome instances via `chrome.storage.sync` |
-| **Welcome Page** | Guided onboarding experience for first-time users |
-| **Keyboard Support** | Press <kbd>Esc</kbd> to close modals and exit move mode |
-| **Privacy First** | Zero external network requests — everything stays in your browser |
-
----
-
-## Demo
-
-<p align="center">
-  <em>The tab bar integrates seamlessly below Gmail's toolbar, matching both light and dark themes.</em>
-</p>
-
-1. **Inbox View** — Tabs appear below the Gmail toolbar with unread badges
-2. **Settings Modal** — Add, remove, and reorder tabs; set themes; export/import config
-3. **Drag & Drop** — Reorder tabs with smooth visual feedback
-
----
+| **Options Dashboard** | Full-featured settings page with theme control, tab management, automation rules, user guide, privacy info, and logging |
+| **Welcome Onboarding** | Guided setup for first-time users |
+| **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
+| **Privacy First** | Zero external network requests, everything stays local |
 
 ## Architecture
 
-The extension operates across three Chrome execution contexts:
+The extension operates across three Chrome execution contexts, each with a distinct responsibility:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Gmail Web Page                        │
-│                                                         │
-│  ┌───────────────────────┐  ┌────────────────────────┐  │
-│  │   Content Script       │  │   XHR Interceptor      │  │
-│  │   (Isolated World)     │  │   (Main World)         │  │
-│  │                        │  │                        │  │
-│  │  ● Tab bar rendering   │  │  ● Monkey-patches XHR  │  │
-│  │  ● Settings modal      │  │  ● Parses Gmail API    │  │
-│  │  ● Theme management    │  │  ● Extracts unread     │  │
-│  │  ● Drag & drop         │  │    counts              │  │
-│  │  ● Atom feed counts    │  │                        │  │
-│  │  ● DOM scraping        │  │  Communicates via      │  │
-│  │                        │◄─┤  window.postMessage    │  │
-│  └────────┬───────────────┘  └────────────────────────┘  │
-│           │                                              │
-└───────────┼──────────────────────────────────────────────┘
-            │ chrome.runtime.sendMessage
-            ▼
-┌─────────────────────────┐
-│   Background Service    │
-│   Worker (MV3)          │
-│                         │
-│  ● Extension lifecycle  │
-│  ● File downloads       │
-│  ● Install/update hooks │
-│  ● Action click handler │
-└─────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      Gmail Web Page                       │
+│                                                           │
+│  ┌────────────────────────┐  ┌─────────────────────────┐  │
+│  │   Content Script        │  │   XHR Interceptor       │  │
+│  │   (Isolated World)      │  │   (Main World)          │  │
+│  │                         │  │                         │  │
+│  │  ● Tab bar rendering    │  │  ● Monkey-patches XHR   │  │
+│  │  ● Settings modal       │  │  ● Parses Gmail API     │  │
+│  │  ● Theme management     │  │  ● Extracts unread      │  │
+│  │  ● Drag & drop          │  │    label counts         │  │
+│  │  ● Atom feed counts     │  │                         │  │
+│  │  ● DOM scraping counts  │  │  Communicates via       │  │
+│  │  ● Modals (pin, edit,   │◄─┤  CustomEvent dispatch   │  │
+│  │    delete, import)      │  │                         │  │
+│  └──────────┬──────────────┘  └─────────────────────────┘  │
+│             │                                              │
+└─────────────┼──────────────────────────────────────────────┘
+              │ chrome.runtime.sendMessage
+              ▼
+┌──────────────────────────┐     ┌─────────────────────────┐
+│   Background Service     │     │   Options Page           │
+│   Worker (MV3)           │     │   (options.html)         │
+│                          │     │                          │
+│  ● Extension lifecycle   │     │  ● Tab management UI     │
+│  ● File downloads        │     │  ● Theme preferences     │
+│  ● Install/update hooks  │     │  ● Automation rules      │
+│  ● Action click handler  │     │  ● Import/Export          │
+│  ● Uninstall flow        │     │  ● Privacy dashboard     │
+└──────────────────────────┘     └─────────────────────────┘
 ```
 
 ### Unread Count Strategy
 
 Unread counts use a three-tier waterfall for maximum reliability:
 
-1. **Atom Feed** — Fetches `mail.google.com/.../feed/atom/{label}` for accurate counts
-2. **XHR Interception** — Intercepts Gmail's internal API calls in the Main World for real-time updates
-3. **DOM Scraping** — Parses Gmail sidebar badges as a last resort
+1. **Atom Feed**: Fetches `mail.google.com/.../feed/atom/{label}` for accurate per-label counts
+2. **XHR Interception**: Intercepts Gmail's internal sync API calls in the Main World for real-time updates
+3. **DOM Scraping**: Parses Gmail sidebar badges as a last resort
+
+### Key Architectural Patterns
+
+| Pattern | Where | Purpose |
+|---------|-------|---------|
+| **Dual-World Injection** | content.ts + xhrInterceptor.ts | Content script cannot see Gmail XHR; a Main World script patches XMLHttpRequest and ferries data back via CustomEvent |
+| **Per-Account Namespacing** | storage.ts | Settings keyed by `account_{email}` in chrome.storage.sync |
+| **CSS Custom Properties** | toolbar.css | Full theming via CSS variables with `prefers-color-scheme` media query and force-override classes |
+| **Optimistic UI** | dragdrop.ts | UI updates immediately on drop; storage write happens asynchronously |
+| **Progressive Enhancement** | content.ts init() | DOM-based detection runs immediately; InboxSDK loads in parallel for enhanced route detection |
+| **Strategy Pattern** | unread.ts | Three unread count strategies attempted in waterfall order |
 
 ### Data Flow
 
 ```
-User clicks tab → Gmail hash navigation (#inbox, #label/Work, #search/query)
-                → URL changes → Gmail re-renders → Content script detects route
-                → Updates active tab highlight
+User clicks tab  →  window.location.hash changes (#inbox, #label/Work, #search/query)
+                 →  Gmail re-renders
+                 →  Content script detects route change
+                 →  Updates active tab highlight
 ```
-
----
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+|-------|------------|
 | **Language** | TypeScript (ES2022, strict mode) |
-| **Bundler** | esbuild (4 entry points, minified, console-stripped) |
+| **Bundler** | esbuild (5 entry points, minified, console-stripped) |
 | **Extension Platform** | Chrome Manifest V3 |
 | **Route Detection** | InboxSDK (`@inboxsdk/core`) |
 | **Storage** | `chrome.storage.sync` (cross-device, per-account namespaced) |
-| **Testing** | Jest + ts-jest + jsdom |
-| **CI/CD** | GitHub Actions (test → build → verify → artifact) |
-| **Marketing Website** | Vite + React + TypeScript |
-
----
+| **Testing** | Jest + ts-jest + jsdom (20 test files, 290+ test cases) |
+| **Linting** | ESLint + @typescript-eslint |
+| **Formatting** | Prettier (single quotes, 4-space indent, 120 char width) |
+| **CI/CD** | GitHub Actions (test, lint, build, verify, artifact) |
+| **Marketing Website** | Vite + React + TypeScript (separate project) |
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js** ≥ 20
-- **npm** ≥ 9
-- **Google Chrome** ≥ 120
+- **Node.js** >= 20
+- **npm** >= 9
+- **Google Chrome** >= 120
 
 ### Installation
 
@@ -179,33 +179,40 @@ npm run build
 ### Load in Chrome
 
 1. Open `chrome://extensions`
-2. Enable **Developer mode** (top-right toggle)
+2. Enable **Developer mode** (top right toggle)
 3. Click **Load unpacked**
 4. Select the `dist/` directory
 
 ### Development
 
 ```bash
-# Watch mode — rebuilds on file changes
+# Watch mode: rebuilds TypeScript on file changes
 npm run watch
 
-# Note: Static file changes (CSS, HTML, icons) require a manual copy
+# Copy static assets (CSS, HTML, icons, locales) after changes
 npm run copy-assets
 
-# Run tests
+# Run the full test suite
 npm test
 
-# Lint
+# Lint source and test files
 npm run lint
+
+# Auto-fix lint issues
+npm run lint:fix
+
+# Format all TypeScript files
+npm run format
 ```
 
-After making changes, click the **reload** button on `chrome://extensions` to pick up the new build.
-
----
+After making changes, click the **reload** button on `chrome://extensions` to load the updated build.
 
 ## Configuration
 
-All configuration is managed through the in-Gmail settings modal (gear icon on the tab bar). No separate options page is needed.
+All configuration is managed through two surfaces:
+
+1. **In-Gmail Settings Modal**: Click the gear icon on the tab bar for quick access to tab management, theme switching, and export/import
+2. **Options Page**: Right-click the extension icon and select "Options" for the full dashboard with automation rules, user guide, privacy info, and logging
 
 ### Storage Schema
 
@@ -216,6 +223,8 @@ interface Settings {
   tabs: Tab[];
   theme: 'system' | 'light' | 'dark';
   showUnreadCount: boolean;
+  rules: Rule[];
+  sheetUrl: string;
 }
 
 interface Tab {
@@ -223,6 +232,13 @@ interface Tab {
   title: string;    // Display name
   type: 'label' | 'hash';
   value: string;    // Gmail label name or hash route
+}
+
+interface Rule {
+  tabId: string;      // References a Tab.id
+  action: 'trash' | 'archive' | 'markRead' | 'move';
+  targetLabel?: string; // Required when action is 'move'
+  olderThanDays: number;
 }
 ```
 
@@ -234,21 +250,28 @@ interface Tab {
 | Per-item max | 8,192 bytes |
 | Max items | 512 |
 
----
+### Permissions
+
+| Permission | Purpose |
+|------------|---------|
+| `storage` | Save tab configurations and rules |
+| `downloads` | Export settings as a JSON file |
+| `management` | Enable self-uninstall from the settings page |
+| `host_permissions` (mail.google.com) | Inject the tab bar into Gmail's UI |
 
 ## Usage
 
 ### Adding a Label Tab
 
-1. Open Gmail → click the ⚙️ on the tab bar
+1. Open Gmail and click the ⚙️ icon on the tab bar (or open the Options page)
 2. Type a Gmail label name (e.g., `Work`, `Personal/Projects`)
 3. Click **Add**
 
 ### Adding a Search Query Tab
 
-1. Open Gmail → run your search (e.g., `is:unread from:boss`)
+1. Run your search in Gmail (e.g., `is:unread from:boss`)
 2. Copy the URL from the address bar
-3. Paste into the "Add tab" input → give it a custom title
+3. Paste into the "Add tab" input and provide a custom title
 
 ### Adding a Hash View Tab
 
@@ -265,56 +288,101 @@ Type any Gmail hash route directly:
 
 ### Export / Import
 
-- **Export**: Settings modal → Export → downloads `gmail-tabs-config.json`
-- **Import**: Settings modal → Import → select JSON file (schema-validated)
+- **Export**: Settings modal or Options page > Export Config > downloads `gmail-tabs-config.json`
+- **Import**: Settings modal or Options page > Import Config > select JSON file (schema validated before import)
 
----
+### Automation Rules
+
+1. Open the Options page > Automation Rules
+2. Configure per-tab actions (trash, archive, mark read, or move to another label)
+3. Set the "older than" threshold in days
+4. Click **Generate & Copy Script**
+5. Paste the generated Google Apps Script into [script.google.com](https://script.google.com)
+6. Set up a daily trigger for automated execution
 
 ## Project Structure
 
 ```
 Gmail-Labels-As-Tabs/
-├── manifest.json                 # Chrome MV3 manifest
-├── package.json                  # Dependencies & scripts
-├── tsconfig.json                 # TypeScript config (ES2022, strict)
-├── build.js                      # esbuild config (4 entry points)
-├── jest.config.js                # Test config (ts-jest, jsdom)
+├── manifest.json                     # Chrome MV3 manifest
+├── package.json                      # Dependencies & scripts
+├── tsconfig.json                     # TypeScript config (ES2022, strict)
+├── build.js                          # esbuild config (5 entry points)
+├── jest.config.js                    # Test config (ts-jest, jsdom, coverage thresholds)
+├── .eslintrc.json                    # ESLint + @typescript-eslint rules
+├── .prettierrc                       # Prettier formatting rules
 │
-├── src/                          # Extension source code
-│   ├── content.ts                # Main content script (orchestrator)
-│   ├── background.ts             # Service worker (lifecycle, downloads)
-│   ├── xhrInterceptor.ts         # Main World XHR interceptor
-│   ├── xhrInterceptor.test.ts    # Tests for XHR parsing logic
-│   ├── welcome.ts                # Onboarding page logic
-│   ├── welcome.html              # Onboarding page markup
-│   ├── welcome.css               # Onboarding page styles
-│   ├── modules/
-│   │   ├── state.ts              # Shared state & DOM selectors
-│   │   ├── tabs.ts               # Tab bar rendering & navigation
-│   │   ├── modals.ts             # Settings & manage modals
-│   │   ├── dragdrop.ts           # Drag-and-drop reordering
-│   │   ├── unread.ts             # Unread count (feed + XHR + DOM)
-│   │   └── theme.ts              # Theme management & Gmail dark detection
-│   ├── utils/
-│   │   └── storage.ts            # chrome.storage.sync wrapper
+├── src/                              # Extension source code
+│   ├── content.ts                    # Main content script (orchestrator)
+│   ├── background.ts                 # Service worker (lifecycle, downloads)
+│   ├── xhrInterceptor.ts             # Main World XHR interceptor for unread counts
+│   ├── options.ts                    # Options page logic
+│   ├── options.html                  # Options page markup (6 sections)
+│   ├── options.css                   # Options page styles
+│   ├── welcome.ts                    # Onboarding page logic
+│   ├── welcome.html / welcome.css    # Onboarding page markup & styles
+│   │
+│   ├── modules/                      # Feature modules (extracted from content.ts)
+│   │   ├── state.ts                  # Shared state & DOM selectors
+│   │   ├── tabs.ts                   # Tab bar rendering & navigation
+│   │   ├── dragdrop.ts               # Drag and drop reordering
+│   │   ├── theme.ts                  # Theme management & Gmail dark detection
+│   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
+│   │   ├── rules.ts                  # Automation rules & Apps Script generation
+│   │   └── modals/                   # Modal dialogs (7 files)
+│   │       ├── index.ts              # Barrel export
+│   │       ├── pinModal.ts           # Add/pin new tab modal
+│   │       ├── editModal.ts          # Edit tab title/value
+│   │       ├── deleteModal.ts        # Delete tab confirmation
+│   │       ├── importModal.ts        # Import configuration
+│   │       ├── settingsModal.ts      # Settings & preferences
+│   │       └── uninstallModal.ts     # Uninstall flow with data export
+│   │
+│   ├── utils/                        # Shared utilities
+│   │   ├── storage.ts                # chrome.storage.sync wrapper (CRUD, migration)
+│   │   ├── importExport.ts           # Import/Export logic with schema validation
+│   │   ├── selectors.ts              # DOM selector constants
+│   │   └── tabListRenderer.ts        # Reusable tab list rendering
+│   │
 │   ├── ui/
-│   │   └── toolbar.css           # Design system (CSS custom properties)
-│   └── icons/                    # Extension icons (16/32/48/128)
+│   │   └── toolbar.css               # Design system (CSS custom properties, theming)
+│   │
+│   └── icons/                        # Extension icons (16/32/48/128 png)
 │
-├── test/
-│   └── storage.test.ts           # Storage utility unit tests
+├── test/                             # Test suite (20 files)
+│   ├── background.test.ts            # Service worker tests
+│   ├── content.test.ts               # Content script tests
+│   ├── dragdrop.test.ts              # Drag and drop tests
+│   ├── tabs.test.ts                  # Tab rendering tests
+│   ├── theme.test.ts                 # Theme management tests
+│   ├── unread.test.ts                # Unread count tests
+│   ├── storage.test.ts               # Storage CRUD tests
+│   ├── importExport.test.ts          # Import/Export tests
+│   ├── tabListRenderer.test.ts       # Tab list renderer tests
+│   ├── state.test.ts                 # State management tests
+│   ├── rules.test.ts                 # Automation rules tests
+│   ├── options.test.ts               # Options page tests
+│   ├── settingsModal.test.ts         # Settings modal tests
+│   ├── welcome.test.ts               # Welcome page tests
+│   ├── xhrInterceptor.test.ts        # XHR interceptor tests
+│   └── modals/                       # Modal-specific tests
+│       ├── pinModal.test.ts
+│       ├── editModal.test.ts
+│       ├── deleteModal.test.ts
+│       ├── importModal.test.ts
+│       └── uninstallModal.test.ts
 │
-├── dist/                         # Built extension (load this in Chrome)
-├── website/                      # Marketing site (Vite + React)
-├── .github/workflows/ci.yml      # CI pipeline
-├── .planning/                    # Project planning docs
-│   ├── PROJECT.md                # Core requirements & decisions
-│   └── REQUIREMENTS.md           # Detailed requirement tracking
-├── ARCHITECTURE.md               # Full architecture analysis
-└── AUDIT.md                      # Code quality audit
+├── _locales/en/messages.json         # Chrome i18n strings
+├── dist/                             # Built extension (load this in Chrome)
+├── website/                          # Marketing site (Vite + React, independent project)
+├── .github/workflows/
+│   ├── ci.yml                        # CI pipeline (test, lint, build, verify)
+│   └── deploy_website.yml            # GitHub Pages deployment for website
+│
+├── ARCHITECTURE.md                   # Detailed architecture analysis
+├── AUDIT.md                          # Code quality audit
+└── LICENSE                           # MIT License
 ```
-
----
 
 ## Testing
 
@@ -322,43 +390,74 @@ Gmail-Labels-As-Tabs/
 # Run all tests
 npm test
 
-# Run with coverage
+# Run with coverage report
 npx jest --coverage
 
 # Run a specific test file
 npx jest test/storage.test.ts
+
+# Run modal tests only
+npx jest test/modals/
 ```
 
-### Test Coverage
+### Test Suite Summary
 
-| Area | Tests | Coverage |
-|------|-------|----------|
-| Storage API (`addTab`, `removeTab`, `updateTab`, etc.) | 12 | Full CRUD + edge cases |
-| Legacy migration (`migrateLegacySettingsIfNeeded`) | 4 | Three format generations |
-| Import schema validation | 7 | Invalid/valid schemas |
-| **Total** | **23** | ✅ All passing |
+| Area | Files | Focus |
+|------|-------|-------|
+| Storage API | `storage.test.ts` | Full CRUD, migration, multi-account, edge cases |
+| XHR Interceptor | `xhrInterceptor.test.ts` | Gmail JSON parsing, CustomEvent dispatch, error handling |
+| Unread Counts | `unread.test.ts` | Atom feed, XHR strategy, DOM scraping fallback |
+| Drag & Drop | `dragdrop.test.ts` | Horizontal/vertical drag, reorder logic, edge cases |
+| Tab Rendering | `tabs.test.ts` | Tab creation, active state, hash navigation |
+| Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection |
+| Options Page | `options.test.ts` | Account detection, section navigation, rule UI |
+| Import/Export | `importExport.test.ts` | Schema validation, export format, round-trip |
+| Modals | `modals/*.test.ts` | Pin, edit, delete, import, uninstall modal logic |
+| Background | `background.test.ts` | Install hooks, message handling, downloads |
+| Content Script | `content.test.ts` | Initialization, injection, observer setup |
+| Rules | `rules.test.ts` | Apps Script generation, rule validation |
+| State | `state.test.ts` | Shared state, DOM selector management |
+| Tab List Renderer | `tabListRenderer.test.ts` | Reusable rendering logic |
+| Welcome | `welcome.test.ts` | Onboarding page logic |
+| Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-Tests mock `chrome.storage.sync` and `chrome.runtime` using an in-memory store, with `crypto.randomUUID` polyfilled for the test environment.
+**Total: 20 test files, 290+ test cases.**
 
----
+The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
+
+### Coverage Thresholds
+
+Configured in `jest.config.js`:
+
+| Metric | Threshold |
+|--------|-----------|
+| Statements | 60% |
+| Branches | 45% |
+| Functions | 60% |
+| Lines | 60% |
 
 ## CI/CD
 
-The project uses GitHub Actions with the following pipeline:
+The CI pipeline runs on every push and pull request to `main`:
 
-```yaml
-Push/PR to main → Install → Test → Build → Verify → Artifact
+```
+Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifact
 ```
 
-| Step | Description |
-|------|------------|
-| **Install** | `npm ci` with npm cache |
-| **Test** | `npm test` (Jest, 23 tests) |
-| **Build** | `npm run build` (esbuild, minified) |
-| **Verify** | Asserts zero `console.log` in production bundle |
-| **Artifact** | Uploads `dist/` for 7-day retention |
+### Pipeline Steps
 
----
+| Step | What It Does |
+|------|-------------|
+| **Install** | `npm ci` with npm cache |
+| **Test** | `npm test --coverage` (Jest, 290+ tests) |
+| **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
+| **Build** | `npm run build` (esbuild, minified, console-stripped) |
+| **Console Check** | Asserts zero `console.log` in production bundle |
+| **Package** | Creates `extension.zip` and validates it is under the 5MB CWS limit |
+| **Version Parity** | Verifies `manifest.json` and `package.json` versions match |
+| **@ts-ignore Check** | Ensures zero `@ts-ignore` comments in source |
+| **Dist Verification** | Confirms all 11 required files exist in `dist/` |
+| **Artifacts** | Uploads `dist/`, `extension.zip`, and coverage report (7-day retention) |
 
 ## Deployment
 
@@ -370,109 +469,117 @@ npm run build
 
 # Package as a zip for Chrome Web Store upload
 npm run package
-# → Creates extension.zip in the project root
+# Creates extension.zip in the project root
 ```
 
 Upload `extension.zip` to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
+**Published listing:** [Gmail Labels as Tabs on Chrome Web Store](https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp)
+
 ### Marketing Website
 
-The `website/` directory contains a separate Vite + React project:
+The `website/` directory contains a separate Vite + React project deployed via GitHub Pages:
 
 ```bash
 cd website
 npm install
 npm run dev      # Local development
-npm run build    # Production build → website/dist/
+npm run build    # Production build
 ```
 
----
+Deployment is automated via `.github/workflows/deploy_website.yml` on push to `main`.
 
 ## Roadmap
 
-### v1.0 — ✅ Shipped
+### v1.0: Shipped
 
 - Custom tabs for labels, searches, and hash views
-- Drag-and-drop reordering
+- Drag and drop reordering
 - Real-time unread counts (Atom + XHR + DOM)
-- System / Light / Dark themes
+- System, Light, and Dark themes
 - Multi-account support
-- Export / Import configuration
+- Export and Import configuration
 - Cross-device sync
 - Welcome onboarding page
-- CI/CD pipeline
 
-### v2.0 — Planned
+### v1.1: Shipped
+
+- Standalone options dashboard with sidebar navigation
+- Automation rules with Google Apps Script generation
+- User guide with step by step setup instructions
+- Privacy dashboard
+- Activity logging via Google Sheets integration
+- Modular architecture (state, tabs, dragdrop, theme, unread, rules, modals)
+- CI/CD pipeline with 10 verification steps
+
+### v2.0: Planned
 
 - [ ] Keyboard shortcuts for tab switching (<kbd>Ctrl+1</kbd>, <kbd>Ctrl+2</kbd>, etc.)
 - [ ] Tab grouping and categories
 - [ ] Custom tab icons and colors
 - [ ] Nested label support (parent/child hierarchies)
-- [ ] Standalone options page
 - [ ] Firefox extension port (WebExtension APIs)
-
----
 
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
+Contributions are welcome. Here is how to get started:
 
 1. **Fork** the repository
 2. **Create a branch**: `git checkout -b feat/your-feature`
-3. **Make changes** and ensure tests pass: `npm test`
-4. **Build** to verify: `npm run build`
-5. **Submit a PR** targeting `main`
+3. **Make changes** and verify tests pass: `npm test`
+4. **Lint your code**: `npm run lint`
+5. **Build** to verify: `npm run build`
+6. **Submit a PR** targeting `main`
 
 ### Development Guidelines
 
-- TypeScript strict mode — no `any` unless absolutely necessary
-- All user-facing strings must be HTML-escaped (XSS prevention)
+- TypeScript strict mode is enforced; avoid `any` unless absolutely necessary
+- All user-facing strings must be HTML escaped (XSS prevention)
 - No external network requests (privacy-first principle)
 - Production builds strip all `console.log` via esbuild's `drop` option
-- Keep modules focused — one responsibility per file
+- Keep modules focused with a single responsibility per file
+- Format code with Prettier before committing: `npm run format`
+- Coverage thresholds are enforced in CI; new code should maintain or improve coverage
 
-### Code Quality
+### Code Quality Commands
 
 ```bash
-npm run lint      # ESLint
-npm test          # Jest (23 tests)
-npm run build     # Verify build succeeds
+npm run lint      # ESLint with @typescript-eslint
+npm run lint:fix  # Auto-fix lint issues
+npm run format    # Prettier formatting
+npm test          # Jest (290+ tests)
+npm run build     # Verify production build
 ```
-
----
 
 ## Privacy
 
 This extension is designed with privacy as a non-negotiable principle:
 
-- **Zero external requests** — No analytics, no telemetry, no third-party servers
-- **Local storage only** — All data stored in `chrome.storage.sync` (Google's infrastructure)
-- **No user data collection** — The extension has no server, no database, no tracking
-- **Minimal permissions** — Only `storage`, `downloads`, and `management`
-- **Open source** — Full codebase available for audit
+- **Zero external requests**: No analytics, no telemetry, no third-party servers
+- **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
+- **No user data collection**: The extension has no server, no database, no tracking
+- **Minimal permissions**: Only `storage`, `downloads`, and `management`
+- **Open source**: Full codebase available for audit
 
-The Atom feed used for unread counts fetches from `mail.google.com` (same origin) — no cross-origin requests are made.
+The Atom feed used for unread counts fetches from `mail.google.com` (same origin). No cross-origin requests are made.
 
----
+The automation rules feature generates Google Apps Script code that runs entirely under your own Google account. The extension has no access to your Gmail API, no OAuth tokens, and no API keys.
 
 ## License
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
----
-
 ## Acknowledgements
 
-- [InboxSDK](https://www.inboxsdk.com/) — Gmail route detection and user identity
-- [esbuild](https://esbuild.github.io/) — Lightning-fast TypeScript bundling
-- [Jest](https://jestjs.io/) — Testing framework
-- Chrome Extensions team — Manifest V3 platform
-
----
+- [InboxSDK](https://www.inboxsdk.com/) for Gmail route detection and user identity
+- [esbuild](https://esbuild.github.io/) for lightning fast TypeScript bundling
+- [Jest](https://jestjs.io/) for the testing framework
+- [Chrome Extensions team](https://developer.chrome.com/docs/extensions/) for the Manifest V3 platform
 
 <p align="center">
-  <strong>Built with ❤️ for Gmail power users</strong><br>
-  <a href="https://palworks.github.io/Gmail-Labels-Queries-As-Tabs">Website</a> · 
+  <strong>Built with care for Gmail power users</strong><br>
+  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp">Chrome Web Store</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Request Feature</a>
 </p>
