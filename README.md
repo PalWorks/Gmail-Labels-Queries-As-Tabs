@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml"><img src="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp"><img src="https://img.shields.io/badge/chrome%20web%20store-published-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde"><img src="https://img.shields.io/badge/chrome%20web%20store-published-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/manifest-v3-green.svg" alt="Manifest V3">
   <img src="https://img.shields.io/badge/chrome-120%2B-yellow.svg" alt="Chrome 120+">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp">Install from Chrome Web Store</a> · 
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Install from Chrome Web Store</a> · 
   <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
 </p>
@@ -474,7 +474,7 @@ npm run package
 
 Upload `extension.zip` to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
-**Published listing:** [Gmail Labels as Tabs on Chrome Web Store](https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp)
+**Published listing:** [Gmail Labels as Tabs on Chrome Web Store](https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde)
 
 ### Marketing Website
 
@@ -579,7 +579,7 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 <p align="center">
   <strong>Built with care for Gmail power users</strong><br>
   <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
-  <a href="https://chromewebstore.google.com/detail/gmail-labels-as-tabs/apbebbamkjknmkdpegddmfbomgjkdgjp">Chrome Web Store</a> · 
+  <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Chrome Web Store</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Request Feature</a>
 </p>
