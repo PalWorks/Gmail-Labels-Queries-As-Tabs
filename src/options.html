@@ -25,37 +25,37 @@
             <ul class="nav-list">
                 <li>
                     <a href="#settings" class="nav-item active" data-section="settings">
-                        <span class="nav-icon">⚙️</span>
+                        <span class="nav-icon" aria-hidden="true">⚙️</span>
                         <span class="nav-label">Settings</span>
                     </a>
                 </li>
                 <li>
                     <a href="#rules" class="nav-item" data-section="rules">
-                        <span class="nav-icon">⚡</span>
+                        <span class="nav-icon" aria-hidden="true">⚡</span>
                         <span class="nav-label">Automation Rules</span>
                     </a>
                 </li>
                 <li>
                     <a href="#guide" class="nav-item" data-section="guide">
-                        <span class="nav-icon">📖</span>
+                        <span class="nav-icon" aria-hidden="true">📖</span>
                         <span class="nav-label">User Guide</span>
                     </a>
                 </li>
                 <li>
                     <a href="#privacy" class="nav-item" data-section="privacy">
-                        <span class="nav-icon">🔒</span>
+                        <span class="nav-icon" aria-hidden="true">🔒</span>
                         <span class="nav-label">Privacy</span>
                     </a>
                 </li>
                 <li>
                     <a href="#contact" class="nav-item" data-section="contact">
-                        <span class="nav-icon">💬</span>
+                        <span class="nav-icon" aria-hidden="true">💬</span>
                         <span class="nav-label">Get in Touch</span>
                     </a>
                 </li>
                 <li>
                     <a href="#logs" class="nav-item" data-section="logs">
-                        <span class="nav-icon">📋</span>
+                        <span class="nav-icon" aria-hidden="true">📋</span>
                         <span class="nav-label">Logs / History</span>
                     </a>
                 </li>
@@ -63,29 +63,35 @@
 
             <div class="sidebar-footer">
                 <div class="sidebar-footer-icons">
-                    <button id="sidebar-theme-toggle" class="sidebar-icon-btn" title="Toggle theme">
-                        <svg viewBox="0 0 24 24" class="icon-moon" id="theme-icon-moon">
+                    <button id="sidebar-theme-toggle" class="sidebar-icon-btn" title="Toggle theme"
+                        aria-label="Toggle theme">
+                        <svg viewBox="0 0 24 24" class="icon-moon" id="theme-icon-moon" aria-hidden="true">
                             <path
                                 d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
                         </svg>
-                        <svg viewBox="0 0 24 24" class="icon-sun hidden" id="theme-icon-sun">
+                        <svg viewBox="0 0 24 24" class="icon-sun hidden" id="theme-icon-sun" aria-hidden="true">
                             <path
                                 d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79zM4 10.5H1v2h3zm9-9.95h-2V3.5h2zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79zM20 10.5v2h3v-2zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2zm-7.45-3.91l1.41 1.41 1.79-1.79-1.41-1.41z" />
                         </svg>
                     </button>
-                    <div class="sidebar-icon-btn extension-icon" title="Gmail Labels as Tabs">
-                        <svg viewBox="0 0 24 24" class="logo-icon-sm">
+                    <div class="sidebar-icon-btn extension-icon" title="Gmail Labels as Tabs" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" class="logo-icon-sm" aria-hidden="true">
                             <path
                                 d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
                         </svg>
                     </div>
                 </div>
-                <span class="version-tag">v1.2.0</span>
+                <span class="version-tag">v1.2.1</span>
             </div>
         </nav>
 
-        <!-- Main Content Area -->
         <main class="content" id="content">
+
+            <!-- Account Selector (visible on Settings & Automation Rules) -->
+            <div class="account-selector-bar" id="account-selector-bar">
+                <label for="account-select" class="account-selector-label">Account</label>
+                <select id="account-select" class="account-select"></select>
+            </div>
 
             <!-- Settings Section -->
             <section class="section" id="section-settings" data-section="settings">
@@ -134,9 +140,9 @@
                 <div class="card">
                     <h3>Preferences</h3>
                     <div class="pref-row">
-                        <span>Show Unread Count</span>
+                        <span id="pref-unread-label">Show Unread Count</span>
                         <label class="toggle-switch">
-                            <input type="checkbox" id="pref-unread">
+                            <input type="checkbox" id="pref-unread" aria-labelledby="pref-unread-label">
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
@@ -154,10 +160,6 @@
                     <button id="settings-uninstall-btn" class="btn-danger">Uninstall Extension</button>
                 </div>
 
-                <!-- Connected Account -->
-                <div class="card connected-card">
-                    <span class="muted">Connected as: <strong id="settings-account-email">Detecting...</strong></span>
-                </div>
             </section>
 
             <!-- Automation Rules Section -->
@@ -299,7 +301,7 @@
                 </div>
 
                 <div class="card contact-rating-card">
-                    <div class="rating-stars">⭐⭐⭐⭐⭐</div>
+                    <div class="rating-stars" aria-hidden="true">⭐⭐⭐⭐⭐</div>
                     <h3>Enjoying Gmail Labels as Tabs?</h3>
                     <p>Your rating makes a huge difference! If this extension has made your Gmail experience better,
                         please take a moment to leave us a 5-star review on the Chrome Web Store.</p>

@@ -15,13 +15,19 @@
  */
 
 import * as InboxSDK from '@inboxsdk/core';
-import { getSettings, migrateLegacySettingsIfNeeded } from './utils/storage';
+import {
+    getSettings,
+    migrateLegacySettingsIfNeeded,
+    getGlobalTheme,
+    migrateThemeToGlobalIfNeeded,
+    GLOBAL_THEME_STORAGE_KEY,
+    Theme,
+} from './utils/storage';
 
 // Module imports
-import { state, TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
+import { TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
 import { applyTheme, listenForSystemThemeChanges } from './modules/theme';
-import { saveSettings } from './utils/storage';
-import { handleUnreadUpdates } from './modules/unread';
+import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
 
@@ -30,6 +36,14 @@ import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setR
 // ---------------------------------------------------------------------------
 
 const APP_ID = 'sdk_Gmail-Tabs_2488593e74';
+
+// Cache of the browser-wide theme so the OS-theme-change listener (which needs
+// a synchronous getter) can read it without an async storage round-trip.
+let currentGlobalTheme: Theme = 'light';
+
+// Content-script lifecycle primitives (private to this module).
+let observer: MutationObserver | null = null;
+let initPromise: Promise<void> | null = null;
 
 // ---------------------------------------------------------------------------
 // Module Wiring (resolve circular deps via callbacks)
@@ -53,9 +67,9 @@ document.addEventListener('gmailTabs:rerender', () => renderTabs());
 let observerDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function startObserver(): void {
-    if (state.observer) state.observer.disconnect();
+    if (observer) observer.disconnect();
 
-    state.observer = new MutationObserver((_mutations) => {
+    observer = new MutationObserver((_mutations) => {
         if (observerDebounceTimer) return;
         observerDebounceTimer = setTimeout(() => {
             observerDebounceTimer = null;
@@ -64,7 +78,7 @@ function startObserver(): void {
         }, 100); // ≤10 calls/second
     });
 
-    state.observer.observe(document.body, {
+    observer.observe(document.body, {
         childList: true,
         subtree: true,
     });
@@ -74,9 +88,27 @@ function startObserver(): void {
 // Injection
 // ---------------------------------------------------------------------------
 
+// Bounded, single-flight retry for the initial injection. Gmail's toolbar may
+// not exist yet on first paint; we retry a bounded number of times, then defer
+// to the MutationObserver (which re-invokes attemptInjection on DOM changes).
+const INJECTION_RETRY_MS = 500;
+const MAX_INJECTION_RETRIES = 40; // ~20s of active polling before deferring to the observer
+let injectionRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let injectionRetries = 0;
+
+function scheduleInjectionRetry(): void {
+    if (injectionRetryTimer) return; // single-flight: never stack timers
+    if (injectionRetries >= MAX_INJECTION_RETRIES) return; // bounded: stop polling, rely on observer
+    injectionRetryTimer = setTimeout(() => {
+        injectionRetryTimer = null;
+        injectionRetries++;
+        attemptInjection();
+    }, INJECTION_RETRY_MS);
+}
+
 /**
  * Attempt to inject the tabs bar.
- * Retries if the insertion point isn't found yet.
+ * Retries (bounded, single-flight) if the insertion point isn't found yet.
  */
 function attemptInjection(): void {
     const existingBar = document.getElementById(TABS_BAR_ID);
@@ -102,8 +134,16 @@ function attemptInjection(): void {
             injectionPoint.insertAdjacentElement('afterend', existingBar);
         }
         updateActiveTab();
+
+        // Injection succeeded: reset the retry budget and cancel any pending
+        // timer so a later Gmail re-render can trigger a fresh round if needed.
+        injectionRetries = 0;
+        if (injectionRetryTimer) {
+            clearTimeout(injectionRetryTimer);
+            injectionRetryTimer = null;
+        }
     } else {
-        setTimeout(attemptInjection, 500);
+        scheduleInjectionRetry();
     }
 }
 
@@ -151,52 +191,24 @@ async function finalizeInit(email: string): Promise<void> {
         await migrateLegacySettingsIfNeeded(email);
         console.log('Gmail Tabs: Migration check complete');
 
-        // Migrate theme from welcome page (global key) if present
-        await migrateWelcomeTheme(email);
+        // Seed the browser-wide theme once (from legacy sync key or this
+        // account's per-account theme), then apply it. Theme is global across
+        // all accounts in the window, not per-account.
+        await migrateThemeToGlobalIfNeeded(email);
 
         setAppSettings(await getSettings(email));
         console.log('Gmail Tabs: Settings loaded for', email, getAppSettings());
         renderTabs();
-        applyTheme(getAppSettings()!.theme);
+        broadcastKnownLabels();
+
+        currentGlobalTheme = await getGlobalTheme();
+        applyTheme(currentGlobalTheme);
 
         // Listen for OS theme changes to auto-update 'system' mode
-        listenForSystemThemeChanges(() => getAppSettings()?.theme ?? 'system');
+        listenForSystemThemeChanges(() => currentGlobalTheme);
     } catch (e) {
         console.error('Gmail Tabs: Error in finalizeInit', e);
     }
-}
-
-/**
- * Migrate the global 'theme' key set by the welcome page into
- * the account-scoped settings, then clean up the global key.
- */
-async function migrateWelcomeTheme(email: string): Promise<void> {
-    return new Promise((resolve) => {
-        try {
-            chrome.storage.sync.get(['theme'], async (result) => {
-                if (chrome.runtime.lastError) {
-                    resolve();
-                    return;
-                }
-                if (
-                    result.theme &&
-                    (result.theme === 'light' || result.theme === 'dark' || result.theme === 'system')
-                ) {
-                    console.log('Gmail Tabs: Migrating welcome theme:', result.theme);
-                    await saveSettings(email, { theme: result.theme });
-                    // Clean up the global key
-                    chrome.storage.sync.remove('theme', () => {
-                        console.log('Gmail Tabs: Welcome theme key cleaned up');
-                        resolve();
-                    });
-                } else {
-                    resolve();
-                }
-            });
-        } catch {
-            resolve();
-        }
-    });
 }
 
 async function initializeFromDOM(): Promise<void> {
@@ -206,8 +218,8 @@ async function initializeFromDOM(): Promise<void> {
         console.log('Gmail Tabs: Email found immediately:', email);
         if (!getUserEmail()) {
             setUserEmail(email);
-            state.initPromise = state.initPromise || finalizeInit(email);
-            await state.initPromise;
+            initPromise = initPromise || finalizeInit(email);
+            await initPromise;
         }
     } else {
         console.log('Gmail Tabs: Email not found yet, polling DOM...');
@@ -218,8 +230,8 @@ async function initializeFromDOM(): Promise<void> {
                 clearInterval(accountPoller);
                 if (!getUserEmail()) {
                     setUserEmail(email);
-                    state.initPromise = state.initPromise || finalizeInit(email);
-                    await state.initPromise;
+                    initPromise = initPromise || finalizeInit(email);
+                    await initPromise;
                 }
             }
         }, 1000);
@@ -238,8 +250,8 @@ async function loadInboxSDK(): Promise<void> {
             const sdkEmail = sdk.User.getEmailAddress();
             console.log('Gmail Tabs: Got email from SDK:', sdkEmail);
             setUserEmail(sdkEmail);
-            state.initPromise = state.initPromise || finalizeInit(getUserEmail()!);
-            await state.initPromise;
+            initPromise = initPromise || finalizeInit(getUserEmail()!);
+            await initPromise;
         }
 
         sdk.Router.handleAllRoutes((_routeView: any) => {
@@ -255,6 +267,22 @@ function injectPageWorld(): void {
     script.src = chrome.runtime.getURL('js/xhrInterceptor.js');
     script.onload = () => script.remove();
     (document.head || document.documentElement).appendChild(script);
+}
+
+/**
+ * Tell the page-world XHR interceptor which labels the user has tabs for, so it
+ * can ignore unrelated [string, number] tuples from Gmail's sync protocol.
+ */
+function broadcastKnownLabels(): void {
+    const settings = getAppSettings();
+    if (!settings) return;
+    try {
+        document.dispatchEvent(
+            new CustomEvent('gmailTabs:setKnownLabels', { detail: computeKnownLabelTokens(settings.tabs) })
+        );
+    } catch {
+        /* non-fatal */
+    }
 }
 
 function handleUrlChange(): void {
@@ -279,12 +307,23 @@ async function init(): Promise<void> {
 
     // Storage change listener
     chrome.storage.onChanged.addListener((changes, area) => {
+        // Global theme lives in storage.local so a change in any account's tab
+        // propagates to every Gmail tab in the window.
+        if (area === 'local' && changes[GLOBAL_THEME_STORAGE_KEY]) {
+            const newTheme = changes[GLOBAL_THEME_STORAGE_KEY].newValue;
+            if (newTheme === 'light' || newTheme === 'dark' || newTheme === 'system') {
+                currentGlobalTheme = newTheme;
+                applyTheme(currentGlobalTheme);
+            }
+            return;
+        }
+
         if (area === 'sync') {
             console.log('Gmail Tabs: Storage changed', changes);
 
             if (getUserEmail()) {
                 const accountKey = `account_${getUserEmail()}`;
-                const relevantKeys = [accountKey, 'theme', 'tabs', 'labels'];
+                const relevantKeys = [accountKey, 'tabs', 'labels'];
                 const hasRelevantChange = Object.keys(changes).some((k) => relevantKeys.includes(k));
 
                 if (hasRelevantChange) {
@@ -292,9 +331,7 @@ async function init(): Promise<void> {
                         setAppSettings(settings);
                         console.log('Gmail Tabs: Reloaded settings for', getUserEmail(), getAppSettings());
                         renderTabs();
-                        if (changes.theme) {
-                            applyTheme(getAppSettings()!.theme);
-                        }
+                        broadcastKnownLabels();
                     }).catch((err) => {
                         console.error('Gmail Tabs: Failed to reload settings', err);
                     });

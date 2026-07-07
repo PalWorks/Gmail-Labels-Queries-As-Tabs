@@ -21,6 +21,8 @@ let messageListeners: Array<(message: any, sender: any, sendResponse: any) => vo
 const mockGetSettings = jest.fn();
 const mockMigrate = jest.fn().mockResolvedValue(undefined);
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
+const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
+const mockMigrateTheme = jest.fn().mockResolvedValue(undefined);
 const mockRenderTabs = jest.fn();
 const mockUpdateActiveTab = jest.fn();
 const mockApplyTheme = jest.fn();
@@ -85,6 +87,8 @@ beforeEach(() => {
     mockListenForSystemThemeChanges.mockReset();
     mockMigrate.mockReset().mockResolvedValue(undefined);
     mockSaveSettings.mockReset().mockResolvedValue(undefined);
+    mockGetGlobalTheme.mockReset().mockResolvedValue('system');
+    mockMigrateTheme.mockReset().mockResolvedValue(undefined);
     setupGlobalMocks();
 });
 
@@ -104,6 +108,9 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
                     getSettings: mockGetSettings,
                     migrateLegacySettingsIfNeeded: mockMigrate,
                     saveSettings: mockSaveSettings,
+                    getGlobalTheme: mockGetGlobalTheme,
+                    migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
                 }));
 
                 jest.doMock('../src/modules/state', () => ({
@@ -123,6 +130,7 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
 
                 jest.doMock('../src/modules/unread', () => ({
                     handleUnreadUpdates: jest.fn(),
+                    computeKnownLabelTokens: jest.fn(() => []),
                 }));
 
                 jest.doMock('../src/modules/tabs', () => ({
@@ -221,6 +229,9 @@ describe('storage change listener', () => {
                     getSettings: mockGetSettings,
                     migrateLegacySettingsIfNeeded: mockMigrate,
                     saveSettings: mockSaveSettings,
+                    getGlobalTheme: mockGetGlobalTheme,
+                    migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
                 }));
 
                 jest.doMock('../src/modules/state', () => ({
@@ -306,5 +317,152 @@ describe('storage change listener', () => {
             await new Promise((r) => setTimeout(r, 50));
             expect(mockRenderTabs).not.toHaveBeenCalled();
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Injection + global theme application
+// ---------------------------------------------------------------------------
+
+describe('injection and theme', () => {
+    function importContent(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            jest.isolateModules(() => {
+                jest.doMock('@inboxsdk/core', () => ({
+                    load: jest.fn().mockResolvedValue({
+                        User: { getEmailAddress: () => 'sdk@gmail.com' },
+                        Router: { handleAllRoutes: jest.fn() },
+                    }),
+                }));
+                jest.doMock('../src/utils/storage', () => ({
+                    getSettings: mockGetSettings,
+                    migrateLegacySettingsIfNeeded: mockMigrate,
+                    saveSettings: mockSaveSettings,
+                    getGlobalTheme: mockGetGlobalTheme,
+                    migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
+                }));
+                jest.doMock('../src/modules/state', () => ({
+                    state: mockState,
+                    TABS_BAR_ID: 'gmail-labels-as-tabs-bar',
+                    TOOLBAR_SELECTORS: ['.G-atb'],
+                    getAppSettings: () => mockState.currentSettings,
+                    setAppSettings: (s: any) => { mockState.currentSettings = s; },
+                    getUserEmail: () => mockState.currentUserEmail,
+                    setUserEmail: (e: any) => { mockState.currentUserEmail = e; },
+                }));
+                jest.doMock('../src/modules/theme', () => ({
+                    applyTheme: mockApplyTheme,
+                    listenForSystemThemeChanges: mockListenForSystemThemeChanges,
+                }));
+                jest.doMock('../src/modules/unread', () => ({
+                    handleUnreadUpdates: jest.fn(),
+                    computeKnownLabelTokens: jest.fn(() => []),
+                }));
+                jest.doMock('../src/modules/tabs', () => ({
+                    renderTabs: mockRenderTabs,
+                    createTabsBar: jest.fn(() => {
+                        const el = document.createElement('div');
+                        el.id = 'gmail-labels-as-tabs-bar';
+                        return el;
+                    }),
+                    updateActiveTab: mockUpdateActiveTab,
+                    setModalCallbacks: jest.fn(),
+                }));
+                jest.doMock('../src/modules/modals', () => ({
+                    showPinModal: jest.fn(),
+                    showEditModal: jest.fn(),
+                    showDeleteModal: jest.fn(),
+                    toggleSettingsModal: jest.fn(),
+                    setRenderCallback: jest.fn(),
+                }));
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                require('../src/content');
+                resolve();
+            });
+        });
+    }
+
+    /** jsdom returns 0-height rects; force a visible toolbar so injection proceeds. */
+    function addVisibleToolbar(): HTMLElement {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'G-atb';
+        toolbar.getBoundingClientRect = () =>
+            ({ height: 44, width: 200, top: 0, left: 0, right: 200, bottom: 44, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+        document.body.appendChild(toolbar);
+        return toolbar;
+    }
+
+    test('injects the tab bar immediately after the Gmail toolbar', async () => {
+        const toolbar = addVisibleToolbar();
+        document.title = 'Inbox - user@test.com - Gmail';
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+        await importContent();
+        await new Promise((r) => setTimeout(r, 50));
+
+        const bar = document.getElementById('gmail-labels-as-tabs-bar');
+        expect(bar).not.toBeNull();
+        expect(toolbar.nextElementSibling).toBe(bar);
+    });
+
+    test('defers injection when no toolbar exists (no crash, bar not injected)', async () => {
+        jest.useFakeTimers();
+        try {
+            document.title = 'Inbox - user@test.com - Gmail';
+            mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+            await importContent();
+
+            // No toolbar in the DOM -> bar must not be injected yet.
+            expect(document.getElementById('gmail-labels-as-tabs-bar')).toBeNull();
+
+            // Advancing time must not crash and must not inject (still no toolbar).
+            expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
+            expect(document.getElementById('gmail-labels-as-tabs-bar')).toBeNull();
+        } finally {
+            jest.clearAllTimers();
+            jest.useRealTimers();
+        }
+    });
+
+    test('applies the global theme on init', async () => {
+        addVisibleToolbar();
+        document.title = 'Inbox - user@test.com - Gmail';
+        mockGetGlobalTheme.mockResolvedValue('dark');
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+        await importContent();
+        await new Promise((r) => setTimeout(r, 100));
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('dark');
+    });
+
+    test('reapplies theme when globalTheme changes in storage.local', async () => {
+        document.title = 'Inbox - user@test.com - Gmail';
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+        await importContent();
+        await new Promise((r) => setTimeout(r, 100));
+        mockApplyTheme.mockClear();
+
+        const listener = storageChangeListeners[0];
+        listener({ globalTheme: { newValue: 'light' } }, 'local');
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('light');
+    });
+
+    test('ignores local storage changes to unrelated keys', async () => {
+        document.title = 'Inbox - user@test.com - Gmail';
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+        await importContent();
+        await new Promise((r) => setTimeout(r, 100));
+        mockApplyTheme.mockClear();
+
+        const listener = storageChangeListeners[0];
+        listener({ somethingElse: { newValue: 1 } }, 'local');
+
+        expect(mockApplyTheme).not.toHaveBeenCalled();
     });
 });

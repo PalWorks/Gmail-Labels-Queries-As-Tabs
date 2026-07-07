@@ -9,12 +9,12 @@ export {};
 import {
     getAppSettings,
     setAppSettings,
+    setAppTabs,
     getUserEmail,
     setUserEmail,
     resetState,
-    state,
 } from '../src/modules/state';
-import { Settings } from '../src/utils/storage';
+import { Settings, Tab } from '../src/utils/storage';
 
 const fakeSettings: Settings = {
     tabs: [{ id: '1', title: 'Inbox', value: '#inbox', type: 'hash' }],
@@ -60,9 +60,9 @@ describe('state module', () => {
             expect(getAppSettings()).toBe(updated);
         });
 
-        it('writes through to the raw state object', () => {
+        it('writes through so getAppSettings returns the same reference', () => {
             setAppSettings(fakeSettings);
-            expect(state.currentSettings).toBe(fakeSettings);
+            expect(getAppSettings()).toBe(fakeSettings);
         });
     });
 
@@ -97,9 +97,9 @@ describe('state module', () => {
             expect(getUserEmail()).toBe('b@gmail.com');
         });
 
-        it('writes through to the raw state object', () => {
+        it('writes through so getUserEmail returns the value', () => {
             setUserEmail('test@gmail.com');
-            expect(state.currentUserEmail).toBe('test@gmail.com');
+            expect(getUserEmail()).toBe('test@gmail.com');
         });
     });
 
@@ -107,18 +107,32 @@ describe('state module', () => {
     // resetState
     // -----------------------------------------------------------------------
 
+    describe('setAppTabs', () => {
+        it('replaces the tab array on the current settings', () => {
+            setAppSettings({ ...fakeSettings, tabs: [...fakeSettings.tabs] });
+            const newTabs: Tab[] = [
+                { id: '2', title: 'Sent', value: '#sent', type: 'hash' },
+                { id: '3', title: 'Work', value: 'Work', type: 'label' },
+            ];
+            setAppTabs(newTabs);
+            expect(getAppSettings()!.tabs).toBe(newTabs);
+        });
+
+        it('is a no-op when settings are not loaded', () => {
+            expect(() => setAppTabs([])).not.toThrow();
+            expect(getAppSettings()).toBeNull();
+        });
+    });
+
     describe('resetState', () => {
         it('clears all state properties', () => {
             setAppSettings(fakeSettings);
             setUserEmail('user@gmail.com');
-            state.initPromise = Promise.resolve();
 
             resetState();
 
             expect(getAppSettings()).toBeNull();
             expect(getUserEmail()).toBeNull();
-            expect(state.initPromise).toBeNull();
-            expect(state.observer).toBeNull();
         });
 
         it('allows setting null again after reset', () => {

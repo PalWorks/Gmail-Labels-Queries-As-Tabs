@@ -15,6 +15,10 @@ import {
     getSettings,
     getAllAccounts,
     migrateLegacySettingsIfNeeded,
+    getGlobalTheme,
+    setGlobalTheme,
+    migrateThemeToGlobalIfNeeded,
+    saveSettings,
     addRule,
     updateRule,
     removeRule,
@@ -23,33 +27,43 @@ import {
     Rule,
 } from '../src/utils/storage';
 
-// In-memory mock storage
+// In-memory mock storage (sync) + separate store for storage.local (theme).
 const mockStorage: Record<string, any> = {};
+const mockLocalStorage: Record<string, any> = {};
 
-// Mock chrome.storage.sync + chrome.runtime
+function makeArea(store: Record<string, any>) {
+    return {
+        get: jest.fn((keys: string | string[] | null, callback: (items: Record<string, any>) => void) => {
+            if (keys === null) {
+                callback({ ...store });
+            } else {
+                const keyArr = typeof keys === 'string' ? [keys] : keys;
+                const result: Record<string, any> = {};
+                keyArr.forEach((k) => {
+                    if (store[k] !== undefined) {
+                        result[k] = store[k];
+                    }
+                });
+                callback(result);
+            }
+        }),
+        set: jest.fn((items: Record<string, any>, callback: () => void) => {
+            Object.assign(store, items);
+            callback();
+        }),
+        remove: jest.fn((key: string, callback?: () => void) => {
+            delete store[key];
+            if (callback) callback();
+        }),
+    };
+}
+
+// Mock chrome.storage.sync + chrome.storage.local + chrome.runtime
 beforeAll(() => {
     (global as any).chrome = {
         storage: {
-            sync: {
-                get: jest.fn((keys: string | string[] | null, callback: (items: Record<string, any>) => void) => {
-                    if (keys === null) {
-                        callback({ ...mockStorage });
-                    } else {
-                        const keyArr = typeof keys === 'string' ? [keys] : keys;
-                        const result: Record<string, any> = {};
-                        keyArr.forEach((k) => {
-                            if (mockStorage[k] !== undefined) {
-                                result[k] = mockStorage[k];
-                            }
-                        });
-                        callback(result);
-                    }
-                }),
-                set: jest.fn((items: Record<string, any>, callback: () => void) => {
-                    Object.assign(mockStorage, items);
-                    callback();
-                }),
-            },
+            sync: makeArea(mockStorage),
+            local: makeArea(mockLocalStorage),
         },
         runtime: {
             lastError: null,
@@ -70,6 +84,7 @@ beforeAll(() => {
 beforeEach(() => {
     // Clear in-place so mock closures always reference the same object
     Object.keys(mockStorage).forEach((k) => delete mockStorage[k]);
+    Object.keys(mockLocalStorage).forEach((k) => delete mockLocalStorage[k]);
     jest.clearAllMocks();
     (global as any).chrome.runtime.lastError = null;
 });
@@ -80,7 +95,7 @@ describe('getSettings', () => {
     test('returns default settings for new account', async () => {
         const settings = await getSettings('user@gmail.com');
         expect(settings.tabs).toHaveLength(2); // Inbox + Sent defaults
-        expect(settings.theme).toBe('system');
+        expect(settings.theme).toBe('light');
         expect(settings.showUnreadCount).toBe(true);
     });
 
@@ -430,5 +445,45 @@ describe('settings backward compatibility', () => {
 
         const settings = await getSettings('compat-old@gmail.com');
         expect(settings.rules).toEqual([]);
+    });
+});
+
+// ------ Global Theme (per-window, chrome.storage.local) ------
+
+describe('global theme', () => {
+    test('defaults to light when unset', async () => {
+        expect(await getGlobalTheme()).toBe('light');
+    });
+
+    test('round-trips a set value', async () => {
+        await setGlobalTheme('dark');
+        expect(mockLocalStorage.globalTheme).toBe('dark');
+        expect(await getGlobalTheme()).toBe('dark');
+    });
+
+    test('ignores an invalid stored value and falls back to light', async () => {
+        mockLocalStorage.globalTheme = 'neon';
+        expect(await getGlobalTheme()).toBe('light');
+    });
+});
+
+describe('migrateThemeToGlobalIfNeeded', () => {
+    test('is a no-op when the global theme already exists', async () => {
+        mockLocalStorage.globalTheme = 'light';
+        await migrateThemeToGlobalIfNeeded('user@gmail.com');
+        expect(mockLocalStorage.globalTheme).toBe('light');
+    });
+
+    test('adopts the legacy sync "theme" key and cleans it up', async () => {
+        mockStorage.theme = 'dark';
+        await migrateThemeToGlobalIfNeeded('user@gmail.com');
+        expect(mockLocalStorage.globalTheme).toBe('dark');
+        expect(mockStorage.theme).toBeUndefined();
+    });
+
+    test('seeds from the account per-account theme when no legacy key', async () => {
+        await saveSettings('user@gmail.com', { theme: 'light' });
+        await migrateThemeToGlobalIfNeeded('user@gmail.com');
+        expect(mockLocalStorage.globalTheme).toBe('light');
     });
 });

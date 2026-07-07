@@ -3,6 +3,8 @@
  * Logic for the onboarding page.
  */
 
+import { getGlobalTheme, setGlobalTheme, Theme } from './utils/storage';
+
 document.addEventListener('DOMContentLoaded', () => {
     const openGmailBtn = document.getElementById('open-gmail-btn');
     const themeRadios = document.querySelectorAll('input[name="theme"]') as NodeListOf<HTMLInputElement>;
@@ -21,9 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Load saved theme
-    chrome.storage.sync.get(['theme'], (result) => {
-        const savedTheme = result.theme || 'system';
+    // Load saved theme (browser-wide, shared by all accounts)
+    getGlobalTheme().then((savedTheme) => {
         applyTheme(savedTheme);
 
         // Update radio button
@@ -38,10 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
         radio.addEventListener('change', (e) => {
             const target = e.target as HTMLInputElement;
             if (target.checked) {
-                const newTheme = target.value;
+                const newTheme = target.value as Theme;
                 applyTheme(newTheme);
-                // Save to global 'theme' key — content.ts will migrate to account-scoped on init
-                chrome.storage.sync.set({ theme: newTheme });
+                // Persist to the browser-wide theme so all Gmail tabs pick it up.
+                setGlobalTheme(newTheme);
             }
         });
     });

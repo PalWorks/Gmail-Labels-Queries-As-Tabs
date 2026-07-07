@@ -65,6 +65,19 @@ describe('buildExportPayload', () => {
         const payload = buildExportPayload('a@b.com', []);
         expect(payload.tabs).toEqual([]);
     });
+
+    it('should omit rules and theme when not supplied', () => {
+        const payload = buildExportPayload('a@b.com', validTabs);
+        expect(payload.rules).toBeUndefined();
+        expect(payload.theme).toBeUndefined();
+    });
+
+    it('should include rules and theme when supplied', () => {
+        const rules = [{ tabId: 'tab-2', action: 'archive' as const, daysOld: 30, enabled: true }];
+        const payload = buildExportPayload('a@b.com', validTabs, rules, 'dark');
+        expect(payload.rules).toEqual(rules);
+        expect(payload.theme).toBe('dark');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -156,6 +169,34 @@ describe('validateImportData', () => {
     it('should accept empty tabs array', () => {
         const result = validateImportData({ tabs: [] });
         expect(result).toEqual([]);
+    });
+
+    it('should accept valid rules when present', () => {
+        const data = {
+            tabs: validTabs,
+            rules: [{ tabId: 'tab-2', action: 'trash', daysOld: 30, enabled: true }],
+        };
+        expect(() => validateImportData(data)).not.toThrow();
+    });
+
+    it('should reject non-array rules', () => {
+        expect(() => validateImportData({ tabs: validTabs, rules: 'nope' })).toThrow('"rules" must be an array');
+    });
+
+    it('should reject a rule with an invalid action', () => {
+        const data = {
+            tabs: validTabs,
+            rules: [{ tabId: 'tab-2', action: 'nuke', daysOld: 30, enabled: true }],
+        };
+        expect(() => validateImportData(data)).toThrow('invalid "action"');
+    });
+
+    it('should reject a rule missing tabId', () => {
+        const data = {
+            tabs: validTabs,
+            rules: [{ action: 'trash', daysOld: 30, enabled: true }],
+        };
+        expect(() => validateImportData(data)).toThrow('missing or empty "tabId"');
     });
 });
 

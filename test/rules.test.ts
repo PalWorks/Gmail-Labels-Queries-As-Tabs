@@ -1,4 +1,4 @@
-export {};
+export { };
 /**
  * rules.test.ts
  *
@@ -7,7 +7,7 @@ export {};
  * edge cases, and output validity.
  */
 
-import { generateAppsScript } from '../src/modules/rules';
+import { generateAppsScript, tabToGmailLabel } from '../src/modules/rules';
 import { Tab, Rule } from '../src/utils/storage';
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ function makeRule(overrides: Partial<Rule> & Pick<Rule, 'tabId' | 'action'>): Ru
 describe('generateAppsScript', () => {
     test('generates script with trash action', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash', daysOld: 14 })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain("label: 'newsletters'");
         expect(script).toContain('daysOld: 14');
@@ -47,7 +47,7 @@ describe('generateAppsScript', () => {
 
     test('generates script with archive action', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-2', action: 'archive', daysOld: 60 })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain("action: 'archive'");
         expect(script).toContain('moveThreadsToArchive');
@@ -55,7 +55,7 @@ describe('generateAppsScript', () => {
 
     test('generates script with markRead action', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'markRead', daysOld: 45 })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain("action: 'markRead'");
         expect(script).toContain('markThreadsRead');
@@ -70,7 +70,7 @@ describe('generateAppsScript', () => {
                 targetLabel: 'Archive-Newsletters',
             }),
         ];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain("action: 'moveToLabel'");
         expect(script).toContain("targetLabel: 'Archive-Newsletters'");
@@ -88,7 +88,7 @@ describe('generateAppsScript', () => {
             makeRule({ tabId: 'tab-1', action: 'trash', enabled: false }),
             makeRule({ tabId: 'tab-2', action: 'archive', enabled: true }),
         ];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).not.toContain("label: 'newsletters'");
         expect(script).toContain("label: 'bank-notifications'");
@@ -96,7 +96,7 @@ describe('generateAppsScript', () => {
 
     test('skips rules with no matching tab', () => {
         const rules: Rule[] = [makeRule({ tabId: 'nonexistent-tab', action: 'trash' })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         // Should still produce a valid script, just with empty RULES array
         expect(script).toContain('var RULES = [');
@@ -109,7 +109,7 @@ describe('generateAppsScript', () => {
             makeRule({ tabId: 'tab-2', action: 'archive', daysOld: 60 }),
             makeRule({ tabId: 'tab-3', action: 'markRead', daysOld: 7 }),
         ];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain("label: 'newsletters'");
         expect(script).toContain("label: 'bank-notifications'");
@@ -123,7 +123,7 @@ describe('generateAppsScript', () => {
     test('escapes special characters in label names', () => {
         const tabs: Tab[] = [{ id: 'special', title: "Tab's Name", type: 'label', value: "it's-a-label" }];
         const rules: Rule[] = [makeRule({ tabId: 'special', action: 'trash' })];
-        const script = generateAppsScript(tabs, rules);
+        const script = generateAppsScript(tabs, rules, 'test@gmail.com');
 
         // Single quotes should be escaped
         expect(script).toContain("it\\'s-a-label");
@@ -137,7 +137,7 @@ describe('generateAppsScript', () => {
     test('includes Sheet logging when sheetUrl is provided', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash' })];
         const sheetUrl = 'https://docs.google.com/spreadsheets/d/abc123/edit';
-        const script = generateAppsScript(TABS, rules, sheetUrl);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com', sheetUrl);
 
         expect(script).toContain('SHEET_URL');
         expect(script).toContain('logToSheet');
@@ -147,7 +147,7 @@ describe('generateAppsScript', () => {
 
     test('omits Sheet logging when sheetUrl is not provided', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash' })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).not.toContain('SHEET_URL');
         expect(script).not.toContain('logToSheet');
@@ -163,7 +163,7 @@ describe('generateAppsScript', () => {
             makeRule({ tabId: 'tab-1', action: 'trash', daysOld: 14 }),
             makeRule({ tabId: 'tab-2', action: 'archive', daysOld: 30 }),
         ];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         // Must have function declaration
         expect(script).toContain('function autoCleanup()');
@@ -182,7 +182,7 @@ describe('generateAppsScript', () => {
 
     test('includes generation date in header', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash' })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
         const today = new Date().toISOString().split('T')[0];
 
         expect(script).toContain(`Generated on: ${today}`);
@@ -190,8 +190,70 @@ describe('generateAppsScript', () => {
 
     test('includes tab title as comment in rules array', () => {
         const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash' })];
-        const script = generateAppsScript(TABS, rules);
+        const script = generateAppsScript(TABS, rules, 'test@gmail.com');
 
         expect(script).toContain('/* Newsletters */');
+    });
+
+    test('includes account identity and runtime guard', () => {
+        const rules: Rule[] = [makeRule({ tabId: 'tab-1', action: 'trash' })];
+        const script = generateAppsScript(TABS, rules, 'work@gmail.com');
+
+        expect(script).toContain('Generated for: work@gmail.com');
+        expect(script).toContain("var EXPECTED_USER = 'work@gmail.com'");
+        expect(script).toContain('Session.getActiveUser().getEmail()');
+        expect(script).toContain('Aborting');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// tabToGmailLabel + non-label tab handling (A2)
+// ---------------------------------------------------------------------------
+
+describe('tabToGmailLabel', () => {
+    test('returns the value for label tabs', () => {
+        expect(tabToGmailLabel({ id: 'a', title: 'Work', type: 'label', value: 'Work' })).toBe('Work');
+    });
+
+    test('decodes the label name for #label/ hash tabs', () => {
+        expect(tabToGmailLabel({ id: 'b', title: 'Team', type: 'hash', value: '#label/Team+Updates' })).toBe(
+            'Team Updates'
+        );
+    });
+
+    test('returns null for system/search hash tabs', () => {
+        expect(tabToGmailLabel({ id: 'c', title: 'Inbox', type: 'hash', value: '#inbox' })).toBeNull();
+        expect(tabToGmailLabel({ id: 'd', title: 'Starred', type: 'hash', value: '#starred' })).toBeNull();
+        expect(tabToGmailLabel({ id: 'e', title: 'Unread', type: 'hash', value: '#search/is:unread' })).toBeNull();
+    });
+
+    test('returns null for empty label values', () => {
+        expect(tabToGmailLabel({ id: 'f', title: 'Blank', type: 'label', value: '   ' })).toBeNull();
+    });
+});
+
+describe('generateAppsScript with non-label tabs', () => {
+    test('skips rules whose tab does not resolve to a label', () => {
+        const tabs: Tab[] = [
+            { id: 'inbox', title: 'Inbox', type: 'hash', value: '#inbox' },
+            { id: 'work', title: 'Work', type: 'label', value: 'Work' },
+        ];
+        const rules: Rule[] = [
+            makeRule({ tabId: 'inbox', action: 'trash' }),
+            makeRule({ tabId: 'work', action: 'archive' }),
+        ];
+        const script = generateAppsScript(tabs, rules, 'test@gmail.com');
+
+        // The #inbox rule is dropped; only the real label produces a config line.
+        expect(script).not.toContain("label: '#inbox'");
+        expect(script).toContain("label: 'Work'");
+    });
+
+    test('resolves #label/ hash tabs to their label name in the query config', () => {
+        const tabs: Tab[] = [{ id: 'h', title: 'Team', type: 'hash', value: '#label/Team+Updates' }];
+        const rules: Rule[] = [makeRule({ tabId: 'h', action: 'markRead' })];
+        const script = generateAppsScript(tabs, rules, 'test@gmail.com');
+
+        expect(script).toContain("label: 'Team Updates'");
     });
 });

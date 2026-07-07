@@ -21,6 +21,8 @@ const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
 const mockAddTab = jest.fn().mockResolvedValue(undefined);
 const mockRemoveTab = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTabOrder = jest.fn().mockResolvedValue(undefined);
+const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
+const mockSetGlobalTheme = jest.fn().mockResolvedValue(undefined);
 const mockApplyTheme = jest.fn();
 
 jest.mock('../src/utils/storage', () => ({
@@ -29,6 +31,8 @@ jest.mock('../src/utils/storage', () => ({
     addTab: (...args: any[]) => mockAddTab(...args),
     removeTab: (...args: any[]) => mockRemoveTab(...args),
     updateTabOrder: (...args: any[]) => mockUpdateTabOrder(...args),
+    getGlobalTheme: (...args: any[]) => mockGetGlobalTheme(...args),
+    setGlobalTheme: (...args: any[]) => mockSetGlobalTheme(...args),
 }));
 
 jest.mock('../src/utils/tabListRenderer', () => ({
@@ -175,5 +179,54 @@ describe('toggleSettingsModal', () => {
 
         const addBtn = document.querySelector('#modal-add-btn') as HTMLButtonElement;
         expect(addBtn.disabled).toBe(true);
+    });
+});
+
+describe('settings modal behavior', () => {
+    test('clicking a theme button persists the browser-wide theme', () => {
+        toggleSettingsModal();
+
+        const darkBtn = document.querySelector('.theme-btn[data-theme="dark"]') as HTMLElement;
+        darkBtn.click();
+
+        expect(mockSetGlobalTheme).toHaveBeenCalledWith('dark');
+    });
+
+    test('adding a label tab calls addTab with the entered value', async () => {
+        toggleSettingsModal();
+
+        const input = document.querySelector('#modal-new-label') as HTMLInputElement;
+        const addBtn = document.querySelector('#modal-add-btn') as HTMLButtonElement;
+
+        input.value = 'Work';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        expect(addBtn.disabled).toBe(false);
+
+        addBtn.click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(mockAddTab).toHaveBeenCalledWith('user@gmail.com', 'Work', 'Work', 'label');
+    });
+
+    test('toggling unread checkbox persists showUnreadCount', async () => {
+        toggleSettingsModal();
+
+        const toggle = document.querySelector('#modal-unread-toggle') as HTMLInputElement;
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(mockSaveSettings).toHaveBeenCalledWith('user@gmail.com', { showUnreadCount: true });
+    });
+
+    test('Manage all accounts link opens the options page', () => {
+        (global as any).chrome = { runtime: { getURL: (p: string) => `chrome-extension://id/${p}` } };
+        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+
+        toggleSettingsModal();
+        (document.querySelector('#modal-manage-accounts') as HTMLElement).click();
+
+        expect(openSpy).toHaveBeenCalledWith('chrome-extension://id/options.html', '_blank');
+        openSpy.mockRestore();
     });
 });

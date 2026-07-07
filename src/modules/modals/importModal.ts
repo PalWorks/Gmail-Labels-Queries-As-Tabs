@@ -5,7 +5,8 @@
  * tab configurations. Also contains exportSettings() for single-account export.
  */
 
-import { getSettings, updateTabOrder } from '../../utils/storage';
+import { getSettings, saveSettings, getGlobalTheme, setGlobalTheme, Settings } from '../../utils/storage';
+import { applyTheme } from '../theme';
 import {
     buildExportPayload,
     generateExportFilename,
@@ -23,7 +24,7 @@ export async function exportSettings(): Promise<void> {
         return;
     }
     const settings = await getSettings(getUserEmail()!);
-    const payload = buildExportPayload(getUserEmail()!, settings.tabs);
+    const payload = buildExportPayload(getUserEmail()!, settings.tabs, settings.rules, await getGlobalTheme());
     const json = JSON.stringify(payload, null, 2);
     const filename = generateExportFilename(getUserEmail()!);
 
@@ -49,7 +50,7 @@ export function showImportModal(): void {
         <div class="modal-content import-modal">
             <div class="modal-header">
                 <h3>Import Configuration</h3>
-                <button class="close-btn">✕</button>
+                <button class="close-btn" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
                 <p style="margin-bottom: 8px; color: var(--modal-text);">Upload a JSON file or paste configuration below:</p>
@@ -128,8 +129,16 @@ export function showImportModal(): void {
                 return;
             }
 
-            if (getUserEmail() && confirm('This will replace your current tabs. Are you sure?')) {
-                await updateTabOrder(getUserEmail()!, data.tabs);
+            if (getUserEmail() && confirm('This will replace your current tabs and rules. Are you sure?')) {
+                const patch: Partial<Settings> = { tabs: data.tabs };
+                if (Array.isArray(data.rules)) patch.rules = data.rules;
+                await saveSettings(getUserEmail()!, patch);
+
+                if (data.theme === 'light' || data.theme === 'dark' || data.theme === 'system') {
+                    await setGlobalTheme(data.theme);
+                    applyTheme(data.theme);
+                }
+
                 setAppSettings(await getSettings(getUserEmail()!));
                 getRenderCallback()();
                 close();

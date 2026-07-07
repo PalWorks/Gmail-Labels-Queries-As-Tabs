@@ -38,6 +38,7 @@ export function showPinModal(): void {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Close');
     header.append(h3, closeBtn);
 
     const body = document.createElement('div');

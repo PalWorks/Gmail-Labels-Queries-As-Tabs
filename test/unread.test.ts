@@ -15,7 +15,15 @@ jest.mock('../src/modules/state', () => ({
     TABS_BAR_ID: 'gmail-labels-as-tabs-bar',
 }));
 
-import { normalizeLabel, buildLabelMapFromDOM, handleUnreadUpdates, getUnreadCountFromDOM } from '../src/modules/unread';
+import {
+    normalizeLabel,
+    buildLabelMapFromDOM,
+    handleUnreadUpdates,
+    getUnreadCountFromDOM,
+    updateUnreadCount,
+    clearUnreadCountCache,
+    computeKnownLabelTokens,
+} from '../src/modules/unread';
 import { Tab } from '../src/utils/storage';
 
 // ---------------------------------------------------------------------------
@@ -322,5 +330,87 @@ describe('handleUnreadUpdates', () => {
         const counts = bar.querySelectorAll('.unread-count');
         expect(counts[0].textContent).toBe('2');
         expect(counts[1].textContent).toBe('4');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// updateUnreadCount — Atom feed selection (A3)
+// ---------------------------------------------------------------------------
+
+describe('updateUnreadCount feed selection', () => {
+    function makeTabEl(): HTMLElement {
+        const el = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = 'unread-count';
+        el.appendChild(span);
+        return el;
+    }
+
+    let fetchMock: jest.Mock;
+
+    beforeEach(() => {
+        clearUnreadCountCache();
+        fetchMock = jest.fn().mockResolvedValue({
+            ok: true,
+            text: async () => '<feed><fullcount>9</fullcount></feed>',
+        });
+        (global as any).fetch = fetchMock;
+    });
+
+    test('fetches the Atom feed for the inbox tab and shows the count', async () => {
+        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        const el = makeTabEl();
+        await updateUnreadCount(tab, el);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(el.querySelector('.unread-count')!.textContent).toBe('9');
+    });
+
+    test('does not fetch (nor show inbox count) for non-label hash tabs', async () => {
+        const tab: Tab = { id: 't', title: 'Starred', type: 'hash', value: '#starred' };
+        const el = makeTabEl();
+        await updateUnreadCount(tab, el);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(el.querySelector('.unread-count')!.textContent).toBe('');
+    });
+
+    test('serves a repeated request from cache without a second fetch', async () => {
+        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        await updateUnreadCount(tab, makeTabEl());
+        await updateUnreadCount(tab, makeTabEl());
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('coalesces concurrent requests for the same label into one fetch', async () => {
+        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        await Promise.all([
+            updateUnreadCount(tab, makeTabEl()),
+            updateUnreadCount(tab, makeTabEl()),
+            updateUnreadCount(tab, makeTabEl()),
+        ]);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// computeKnownLabelTokens (A4)
+// ---------------------------------------------------------------------------
+
+describe('computeKnownLabelTokens', () => {
+    test('maps system hash tabs to internal ids and includes label names', () => {
+        const tabs: Tab[] = [
+            { id: '1', title: 'Inbox', type: 'hash', value: '#inbox' },
+            { id: '2', title: 'Work', type: 'label', value: 'Work' },
+            { id: '3', title: 'Team', type: 'hash', value: '#label/Team+Updates' },
+        ];
+        const tokens = computeKnownLabelTokens(tabs);
+        expect(tokens).toContain('^i');
+        expect(tokens).toContain('Work');
+        expect(tokens).toContain('Team Updates');
+    });
+
+    test('ignores search/system hash tabs that map to no label', () => {
+        const tabs: Tab[] = [{ id: '1', title: 'Unread', type: 'hash', value: '#search/is:unread' }];
+        expect(computeKnownLabelTokens(tabs)).toEqual([]);
     });
 });

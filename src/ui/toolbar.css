@@ -928,3 +928,16 @@ body.force-light {
     outline: 2px solid var(--primary-btn-bg);
     border-color: transparent;
 }
+
+/* ---------------------------------------------------------------------------
+   Keyboard focus indicators (accessibility)
+   Scoped to the tab bar and dropdown; visible in both light and dark themes.
+   --------------------------------------------------------------------------- */
+#gmail-labels-as-tabs-bar .tab-name:focus-visible,
+#gmail-labels-as-tabs-bar .gmail-tab-menu-btn:focus-visible,
+#gmail-labels-as-tabs-bar .gmail-tab-btn:focus-visible,
+.gmail-tab-dropdown-item:focus-visible {
+    outline: 2px solid #4285f4;
+    outline-offset: 2px;
+    border-radius: 4px;
+}

@@ -15,11 +15,13 @@ import {
     saveSettings,
     getAllAccounts,
     addTab,
-    removeTab,
-    updateTabOrder,
+    getGlobalTheme,
+    setGlobalTheme,
+    GLOBAL_THEME_STORAGE_KEY,
     Tab,
     Rule,
     Settings,
+    Theme,
 } from './utils/storage';
 import {
     buildExportPayload,
@@ -27,10 +29,10 @@ import {
     validateImportData,
     triggerDownload,
 } from './utils/importExport';
-import { renderTabListItems, escapeHtml } from './utils/tabListRenderer';
-import { generateAppsScript } from './modules/rules';
+import { escapeHtml } from './utils/tabListRenderer';
+import { generateAppsScript, tabToGmailLabel } from './modules/rules';
 import { setAppSettings, setUserEmail } from './modules/state';
-import { createModalDragHandlers } from './modules/dragdrop';
+import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
 
 // ---------------------------------------------------------------------------
 // Navigation & Routing
@@ -38,6 +40,7 @@ import { createModalDragHandlers } from './modules/dragdrop';
 
 const SECTIONS = ['settings', 'rules', 'guide', 'privacy', 'contact', 'logs'] as const;
 type SectionId = (typeof SECTIONS)[number];
+const ACCOUNT_SECTIONS: readonly SectionId[] = ['settings', 'rules'];
 
 function navigateToSection(sectionId: SectionId): void {
     document.querySelectorAll('.nav-item').forEach((item) => {
@@ -47,6 +50,10 @@ function navigateToSection(sectionId: SectionId): void {
         const el = document.getElementById(`section-${id}`);
         if (el) el.classList.toggle('hidden', id !== sectionId);
     });
+    const selectorBar = document.getElementById('account-selector-bar');
+    if (selectorBar) {
+        selectorBar.classList.toggle('hidden', !ACCOUNT_SECTIONS.includes(sectionId));
+    }
 }
 
 function handleHashChange(): void {
@@ -60,6 +67,8 @@ function handleHashChange(): void {
 
 let currentAccountId: string | null = null;
 let currentSettings: Settings | null = null;
+// Theme is browser-wide (shared by all accounts), not part of currentSettings.
+let currentTheme: Theme = 'light';
 
 // ---------------------------------------------------------------------------
 // Settings Loading
@@ -68,26 +77,29 @@ let currentSettings: Settings | null = null;
 async function loadSettings(): Promise<void> {
     try {
         const accounts = await getAllAccounts();
-        currentAccountId = accounts[0] || null;
 
-        if (!currentAccountId) {
+        if (accounts.length === 0) {
             showEmptyState('settings-tab-list', 'No accounts found. Open Gmail first to set up.');
             return;
         }
+
+        // Default to first account, or keep current selection if already set
+        if (!currentAccountId || !accounts.includes(currentAccountId)) {
+            currentAccountId = accounts[0];
+        }
+
+        populateAccountSelector(accounts);
 
         // Bridge local state into the shared state module so shared
         // drag-and-drop handlers can access the account ID.
         setUserEmail(currentAccountId);
 
-        // Show connected email
-        const emailEl = document.getElementById('settings-account-email');
-        if (emailEl) emailEl.textContent = currentAccountId;
-
         currentSettings = await getSettings(currentAccountId);
         setAppSettings(currentSettings);
 
-        renderThemeButtons(currentSettings.theme);
-        applyThemeToPage(currentSettings.theme);
+        currentTheme = await getGlobalTheme();
+        renderThemeButtons(currentTheme);
+        applyThemeToPage(currentTheme);
         renderSettingsTabList(currentSettings.tabs);
         renderPreferences(currentSettings);
         renderRulesList(currentSettings.tabs, currentSettings.rules);
@@ -130,12 +142,12 @@ function setupThemeButtons(): void {
 
     group.addEventListener('click', async (e) => {
         const btn = (e.target as HTMLElement).closest('.theme-btn') as HTMLElement | null;
-        if (!btn || !currentAccountId) return;
-        const theme = btn.getAttribute('data-theme') as Settings['theme'];
+        if (!btn) return;
+        const theme = btn.getAttribute('data-theme') as Theme;
         if (!theme) return;
 
-        await saveSettings(currentAccountId, { theme });
-        if (currentSettings) currentSettings.theme = theme;
+        await setGlobalTheme(theme);
+        currentTheme = theme;
         renderThemeButtons(theme);
         applyThemeToPage(theme);
     });
@@ -147,12 +159,10 @@ function setupSidebarThemeToggle(): void {
     if (!toggleBtn) return;
 
     toggleBtn.addEventListener('click', async () => {
-        if (!currentAccountId || !currentSettings) return;
-        const current = currentSettings.theme;
-        const next: Settings['theme'] = current === 'dark' ? 'light' : 'dark';
+        const next: Theme = currentTheme === 'dark' ? 'light' : 'dark';
 
-        await saveSettings(currentAccountId, { theme: next });
-        currentSettings.theme = next;
+        await setGlobalTheme(next);
+        currentTheme = next;
         renderThemeButtons(next);
         applyThemeToPage(next);
     });
@@ -187,19 +197,15 @@ function setupAddTab(): void {
 
     input.addEventListener('input', () => {
         const value = input.value.trim();
-        const isUrl = value.includes('http') || value.includes('mail.google.com') || value.startsWith('#');
 
-        if (isUrl) {
+        if (isUrlLikeInput(value)) {
             titleGroup.classList.remove('hidden');
             if (!titleInput.value) {
-                if (value.includes('#search/')) {
-                    titleInput.value = decodeURIComponent(value.split('#search/')[1] || '').replace(/\+/g, ' ');
-                } else if (value.includes('#label/')) {
-                    titleInput.value = decodeURIComponent(value.split('#label/')[1] || '').replace(/\+/g, ' ');
-                }
+                const derived = deriveTitleFromUrl(value);
+                if (derived) titleInput.value = derived;
             }
-        } else {
-            if (!titleInput.value) titleGroup.classList.add('hidden');
+        } else if (!titleInput.value) {
+            titleGroup.classList.add('hidden');
         }
 
         addBtn.disabled = value === '';
@@ -208,32 +214,14 @@ function setupAddTab(): void {
 
     addBtn.addEventListener('click', async () => {
         if (!currentAccountId) return;
-        const value = input.value.trim();
-        if (!value) return;
+        const raw = input.value.trim();
+        if (!raw) return;
 
-        const isUrl = value.includes('http') || value.includes('mail.google.com') || value.startsWith('#');
-
-        let tabValue: string;
-        let tabType: 'label' | 'hash';
-        let tabTitle: string;
-
-        if (isUrl) {
-            // Extract hash from URL or use directly
-            if (value.includes('#')) {
-                tabValue = '#' + value.split('#')[1];
-            } else {
-                tabValue = value;
-            }
-            tabType = 'hash';
-            tabTitle = titleInput.value.trim() || tabValue;
-        } else {
-            tabValue = value;
-            tabType = 'label';
-            tabTitle = value;
-        }
+        const { type, value } = parseTabInput(raw);
+        const title = type === 'hash' ? titleInput.value.trim() || value : value;
 
         try {
-            await addTab(currentAccountId, tabTitle, tabValue, tabType);
+            await addTab(currentAccountId, title, value, type);
             currentSettings = await getSettings(currentAccountId);
             renderSettingsTabList(currentSettings.tabs);
             renderRulesList(currentSettings.tabs, currentSettings.rules);
@@ -258,54 +246,19 @@ function renderSettingsTabList(tabs: Tab[]): void {
     const list = document.getElementById('settings-tab-list');
     if (!list) return;
 
-    renderTabListItems(list, tabs, {
-        onRemove: async (tabId) => {
+    renderManagedTabList({
+        listEl: list,
+        tabs,
+        getAccountId: () => currentAccountId,
+        // The options page has no Gmail tab bar to re-render.
+        renderTabBar: () => {},
+        reRender: async () => {
             if (!currentAccountId) return;
-            await removeTab(currentAccountId, tabId);
             currentSettings = await getSettings(currentAccountId);
+            setAppSettings(currentSettings);
             renderSettingsTabList(currentSettings.tabs);
             renderRulesList(currentSettings.tabs, currentSettings.rules);
         },
-        onMoveUp: async (index) => {
-            if (!currentAccountId || !currentSettings) return;
-            const reordered = [...currentSettings.tabs];
-            [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-            await updateTabOrder(currentAccountId, reordered);
-            currentSettings = await getSettings(currentAccountId);
-            renderSettingsTabList(currentSettings.tabs);
-        },
-        onMoveDown: async (index) => {
-            if (!currentAccountId || !currentSettings) return;
-            const reordered = [...currentSettings.tabs];
-            [reordered[index + 1], reordered[index]] = [reordered[index], reordered[index + 1]];
-            await updateTabOrder(currentAccountId, reordered);
-            currentSettings = await getSettings(currentAccountId);
-            renderSettingsTabList(currentSettings.tabs);
-        },
-    });
-
-    // Reuse shared drag-and-drop handlers from dragdrop.ts
-    const refreshAfterDrop = async () => {
-        if (!currentAccountId) return;
-        currentSettings = await getSettings(currentAccountId);
-        setAppSettings(currentSettings);
-        renderSettingsTabList(currentSettings.tabs);
-        renderRulesList(currentSettings.tabs, currentSettings.rules);
-    };
-
-    const dragHandlers = createModalDragHandlers(
-        list as HTMLUListElement,
-        refreshAfterDrop,
-        () => { } // No Gmail tab bar to re-render on the options page
-    );
-
-    list.querySelectorAll<HTMLElement>('li[draggable]').forEach((li) => {
-        li.addEventListener('dragstart', dragHandlers.handleModalDragStart as EventListener);
-        li.addEventListener('dragover', dragHandlers.handleModalDragOver as unknown as EventListener);
-        li.addEventListener('dragenter', dragHandlers.handleModalDragEnter as EventListener);
-        li.addEventListener('dragleave', dragHandlers.handleModalDragLeave as EventListener);
-        li.addEventListener('drop', dragHandlers.handleModalDrop as unknown as EventListener);
-        li.addEventListener('dragend', dragHandlers.handleModalDragEnd as EventListener);
     });
 }
 
@@ -313,15 +266,20 @@ function renderSettingsTabList(tabs: Tab[]): void {
 // Preferences
 // ---------------------------------------------------------------------------
 
+function setupPreferences(): void {
+    const unreadCheck = document.getElementById('pref-unread') as HTMLInputElement | null;
+    if (!unreadCheck) return;
+
+    unreadCheck.addEventListener('change', async () => {
+        if (!currentAccountId) return;
+        await saveSettings(currentAccountId, { showUnreadCount: unreadCheck.checked });
+    });
+}
+
 function renderPreferences(settings: Settings): void {
     const unreadCheck = document.getElementById('pref-unread') as HTMLInputElement | null;
-
     if (unreadCheck) {
         unreadCheck.checked = settings.showUnreadCount;
-        unreadCheck.addEventListener('change', async () => {
-            if (!currentAccountId) return;
-            await saveSettings(currentAccountId, { showUnreadCount: unreadCheck.checked });
-        });
     }
 }
 
@@ -334,7 +292,12 @@ function setupDataControls(): void {
     document.getElementById('settings-export-btn')?.addEventListener('click', async () => {
         if (!currentAccountId || !currentSettings) return;
 
-        const payload = buildExportPayload(currentAccountId, currentSettings.tabs);
+        const payload = buildExportPayload(
+            currentAccountId,
+            currentSettings.tabs,
+            currentSettings.rules,
+            await getGlobalTheme()
+        );
         const json = JSON.stringify(payload, null, 2);
         const filename = generateExportFilename(currentAccountId);
 
@@ -389,8 +352,24 @@ function showImportDialog(): void {
                     return;
                 }
 
-                if (confirm(`Import ${data.tabs.length} tabs? This will replace your current tabs.`)) {
-                    await updateTabOrder(currentAccountId!, data.tabs);
+                const ruleCount = Array.isArray(data.rules) ? data.rules.length : 0;
+                const summary =
+                    `Import ${data.tabs.length} tabs` +
+                    (ruleCount ? ` and ${ruleCount} rules` : '') +
+                    '? This will replace your current tabs and rules.';
+
+                if (confirm(summary)) {
+                    const patch: Partial<Settings> = { tabs: data.tabs };
+                    if (Array.isArray(data.rules)) patch.rules = data.rules;
+                    await saveSettings(currentAccountId!, patch);
+
+                    if (data.theme === 'light' || data.theme === 'dark' || data.theme === 'system') {
+                        await setGlobalTheme(data.theme);
+                        currentTheme = data.theme;
+                        renderThemeButtons(currentTheme);
+                        applyThemeToPage(currentTheme);
+                    }
+
                     currentSettings = await getSettings(currentAccountId!);
                     renderSettingsTabList(currentSettings.tabs);
                     renderRulesList(currentSettings.tabs, currentSettings.rules);
@@ -431,6 +410,21 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
         return;
     }
 
+    // Automation rules run as Gmail "label:" searches, so they only apply to
+    // tabs that resolve to a real label (label tabs and #label/ hash tabs).
+    // System/search hash tabs (#inbox, #starred, #search/...) are excluded.
+    const ruleTabs = tabs.filter((tab) => tabToGmailLabel(tab) !== null);
+
+    if (ruleTabs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">\ud83c\udff7\ufe0f</div>
+                <p>No label tabs yet. Automation rules apply to Gmail labels. Add a label tab in Settings to configure a rule.</p>
+            </div>
+        `;
+        return;
+    }
+
     const ruleMap = new Map(rules.map((r) => [r.tabId, r]));
 
     container.innerHTML = `
@@ -440,7 +434,7 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
             <span>After (days)</span>
             <span>Enabled</span>
         </div>
-        ${tabs
+        ${ruleTabs
             .map((tab) => {
                 const rule = ruleMap.get(tab.id);
                 const action = rule?.action || 'trash';
@@ -544,7 +538,7 @@ function setupScriptGeneration(): void {
             return;
         }
 
-        const script = generateAppsScript(currentSettings.tabs, currentSettings.rules, sheetUrl);
+        const script = generateAppsScript(currentSettings.tabs, currentSettings.rules, currentAccountId!, sheetUrl);
 
         try {
             await navigator.clipboard.writeText(script);
@@ -570,10 +564,64 @@ function setupScriptGeneration(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Utilities
+// Account Selector
 // ---------------------------------------------------------------------------
 
+function populateAccountSelector(accounts: string[]): void {
+    const select = document.getElementById('account-select') as HTMLSelectElement | null;
+    if (!select) return;
 
+    select.innerHTML = '';
+    accounts.forEach((email) => {
+        const option = document.createElement('option');
+        option.value = email;
+        option.textContent = email;
+        if (email === currentAccountId) option.selected = true;
+        select.appendChild(option);
+    });
+}
+
+function setupAccountSwitcher(): void {
+    const select = document.getElementById('account-select') as HTMLSelectElement | null;
+    if (!select) return;
+
+    select.addEventListener('change', async () => {
+        const newAccountId = select.value;
+        if (!newAccountId || newAccountId === currentAccountId) return;
+
+        currentAccountId = newAccountId;
+        setUserEmail(currentAccountId);
+
+        currentSettings = await getSettings(currentAccountId);
+        setAppSettings(currentSettings);
+
+        // Theme is global, so it stays put when switching accounts.
+        renderSettingsTabList(currentSettings.tabs);
+        renderPreferences(currentSettings);
+        renderRulesList(currentSettings.tabs, currentSettings.rules);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Theme Sync (react to global theme changes made elsewhere)
+// ---------------------------------------------------------------------------
+
+function setupThemeSync(): void {
+    if (!chrome.storage?.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !changes[GLOBAL_THEME_STORAGE_KEY]) return;
+        const t = changes[GLOBAL_THEME_STORAGE_KEY].newValue;
+        if (t === 'light' || t === 'dark' || t === 'system') {
+            currentTheme = t;
+            renderThemeButtons(t);
+            applyThemeToPage(t);
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
 function showEmptyState(containerId: string, message: string): void {
     const el = document.getElementById(containerId);
@@ -603,6 +651,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings controls
     setupThemeButtons();
     setupSidebarThemeToggle();
+    setupAccountSwitcher();
+    setupThemeSync();
+    setupPreferences();
     setupAddTab();
     setupDataControls();
 

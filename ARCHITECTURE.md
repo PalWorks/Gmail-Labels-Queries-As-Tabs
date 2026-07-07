@@ -207,7 +207,7 @@ Handles privileged Chrome APIs:
 |---|---|---|
 | Per-account settings | `chrome.storage.sync` | Key: `account_{email}`, Value: `Settings` object |
 | Default settings | [storage.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/utils/storage.ts#L31-L48) | Hardcoded `DEFAULT_SETTINGS` constant |
-| Theme | Stored per-account in `Settings.theme` | `'system' \| 'light' \| 'dark'` |
+| Theme | Browser-wide in `chrome.storage.local` under `globalTheme` (default `light`); `Settings.theme` kept only for migration seeding | `'system' \| 'light' \| 'dark'` |
 | InboxSDK App ID | [content.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L13) | Hardcoded constant `APP_ID` |
 | Uninstall feedback URL | [background.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/background.ts#L66) | Hardcoded Tally form URL |
 | i18n | `_locales/en/` | Chrome i18n message format |

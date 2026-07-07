@@ -20,6 +20,8 @@ interface LegacyTabLabel {
     displayName?: string;
 }
 
+export type Theme = 'system' | 'light' | 'dark';
+
 export type RuleAction = 'trash' | 'archive' | 'markRead' | 'moveToLabel';
 
 export interface Rule {
@@ -35,9 +37,15 @@ export interface Settings {
     rules: Rule[];
     // Legacy support for migration
     labels?: LegacyTabLabel[];
-    theme: 'system' | 'light' | 'dark';
+    theme: Theme;
     showUnreadCount: boolean;
 }
+
+// Theme is a browser-wide (per-window, all-accounts) preference, stored in
+// chrome.storage.local so it applies to every Gmail account in the profile
+// and does NOT sync across devices. The per-account Settings.theme field is
+// retained only for backward compatibility and one-time migration seeding.
+const GLOBAL_THEME_KEY = 'globalTheme';
 
 const DEFAULT_SETTINGS: Settings = {
     tabs: [
@@ -55,7 +63,7 @@ const DEFAULT_SETTINGS: Settings = {
         },
     ],
     rules: [],
-    theme: 'system',
+    theme: 'light',
     showUnreadCount: true,
 };
 
@@ -283,6 +291,104 @@ export async function getRulesForExport(
 }
 
 // ---------------------------------------------------------------------------
+// Global Theme (per-window, all accounts — chrome.storage.local)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the browser-wide theme preference. Falls back to 'light' if unset
+ * or unavailable. This value is shared by every Gmail account in the profile.
+ */
+export async function getGlobalTheme(): Promise<Theme> {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.get([GLOBAL_THEME_KEY], (items) => {
+                if (chrome.runtime.lastError) {
+                    resolve('light');
+                    return;
+                }
+                const t = items[GLOBAL_THEME_KEY];
+                resolve(t === 'light' || t === 'dark' || t === 'system' ? t : 'light');
+            });
+        } catch {
+            resolve('light');
+        }
+    });
+}
+
+/**
+ * Persists the browser-wide theme preference. Because it lives in
+ * chrome.storage.local, every Gmail tab's storage listener fires and
+ * re-applies the theme, keeping all accounts in sync within the window.
+ */
+export async function setGlobalTheme(theme: Theme): Promise<void> {
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.set({ [GLOBAL_THEME_KEY]: theme }, () => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                    return;
+                }
+                resolve();
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+/** The storage key used for the global theme (exported for listener checks). */
+export const GLOBAL_THEME_STORAGE_KEY = GLOBAL_THEME_KEY;
+
+/**
+ * Seeds the global theme once, on first run after the per-account → global
+ * migration. Priority: existing global value (no-op) > legacy sync 'theme'
+ * key (from old welcome page) > the account's own per-account theme.
+ * The legacy sync 'theme' key is cleaned up if consumed.
+ */
+export async function migrateThemeToGlobalIfNeeded(accountId: string): Promise<void> {
+    const alreadySet = await new Promise<boolean>((resolve) => {
+        try {
+            chrome.storage.local.get([GLOBAL_THEME_KEY], (items) => {
+                resolve(items[GLOBAL_THEME_KEY] !== undefined);
+            });
+        } catch {
+            resolve(false);
+        }
+    });
+    if (alreadySet) return;
+
+    // Legacy welcome-page theme lived under a global sync 'theme' key.
+    const legacyTheme = await new Promise<Theme | null>((resolve) => {
+        try {
+            chrome.storage.sync.get(['theme'], (items) => {
+                const t = items.theme;
+                resolve(t === 'light' || t === 'dark' || t === 'system' ? t : null);
+            });
+        } catch {
+            resolve(null);
+        }
+    });
+
+    if (legacyTheme) {
+        await setGlobalTheme(legacyTheme);
+        try {
+            chrome.storage.sync.remove('theme');
+        } catch {
+            /* best-effort cleanup */
+        }
+        return;
+    }
+
+    // Otherwise seed from the current account's per-account theme.
+    try {
+        const settings = await getSettings(accountId);
+        await setGlobalTheme(settings.theme);
+    } catch {
+        await setGlobalTheme('light');
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Legacy Migration
 // ---------------------------------------------------------------------------
 
@@ -325,7 +431,7 @@ export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<
                     const newSettings: Settings = {
                         tabs: tabs,
                         rules: [],
-                        theme: items.theme || 'system',
+                        theme: items.theme || 'light',
                         showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true,
                     };
 

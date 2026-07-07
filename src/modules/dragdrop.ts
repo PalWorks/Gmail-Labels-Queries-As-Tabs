@@ -6,7 +6,7 @@
  */
 
 import { updateTabOrder, getSettings } from '../utils/storage';
-import { getAppSettings, getUserEmail, setAppSettings } from './state';
+import { getAppSettings, getUserEmail, setAppSettings, setAppTabs } from './state';
 
 // ---------------------------------------------------------------------------
 // Tab Bar Drag State
@@ -97,7 +97,7 @@ export function createHandleDrop(renderTabs: () => void) {
 
                 tabs.splice(newIndex, 0, movedTab);
 
-                getAppSettings()!.tabs = tabs;
+                setAppTabs(tabs);
                 renderTabs();
 
                 await updateTabOrder(getUserEmail()!, tabs);
@@ -226,7 +226,7 @@ function handleSmartDrop(e: DragEvent): void {
 
             tabs.splice(newIndex, 0, movedTab);
 
-            getAppSettings()!.tabs = tabs;
+            setAppTabs(tabs);
             // We need to call renderTabs but we don't have a direct reference here.
             // The smart drop handler needs to trigger a re-render.
             // We'll dispatch a custom event that content.ts listens for.

@@ -8,7 +8,7 @@
  * the download trigger via chrome.runtime.sendMessage.
  */
 
-import { Tab } from './storage';
+import { Tab, Rule, Theme } from './storage';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +19,8 @@ export interface ExportData {
     timestamp: number;
     email: string;
     tabs: Tab[];
+    rules?: Rule[];
+    theme?: Theme;
 }
 
 export interface DownloadResult {
@@ -32,15 +34,21 @@ export interface DownloadResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a versioned export payload from the given email and tabs.
+ * Build a versioned export payload from the given email, tabs, and (optionally)
+ * automation rules and the current theme. `rules`/`theme` are omitted from the
+ * payload when not supplied, keeping backward-compatible v1 exports for callers
+ * that only pass tabs.
  */
-export function buildExportPayload(email: string, tabs: Tab[]): ExportData {
-    return {
+export function buildExportPayload(email: string, tabs: Tab[], rules?: Rule[], theme?: Theme): ExportData {
+    const payload: ExportData = {
         version: 1,
         timestamp: Date.now(),
         email,
         tabs,
     };
+    if (rules) payload.rules = rules;
+    if (theme) payload.theme = theme;
+    return payload;
 }
 
 /**
@@ -87,6 +95,34 @@ export function validateImportData(data: Record<string, unknown>): Tab[] {
         }
         if (typeof t.value !== 'string' || !(t.value as string).trim()) {
             throw new Error(`Invalid tab at index ${i}: missing or empty "value".`);
+        }
+    }
+
+    // Rules are optional. If present, validate shape so a malformed backup is
+    // rejected rather than silently importing broken automation config.
+    if (data.rules !== undefined) {
+        if (!Array.isArray(data.rules)) {
+            throw new Error('Invalid format: "rules" must be an array.');
+        }
+        const validActions = ['trash', 'archive', 'markRead', 'moveToLabel'];
+        const rules = data.rules as Record<string, unknown>[];
+        for (let i = 0; i < rules.length; i++) {
+            const r = rules[i];
+            if (!r || typeof r !== 'object') {
+                throw new Error(`Invalid rule at index ${i}: not an object.`);
+            }
+            if (typeof r.tabId !== 'string' || !(r.tabId as string).trim()) {
+                throw new Error(`Invalid rule at index ${i}: missing or empty "tabId".`);
+            }
+            if (typeof r.action !== 'string' || !validActions.includes(r.action as string)) {
+                throw new Error(`Invalid rule at index ${i}: invalid "action".`);
+            }
+            if (typeof r.daysOld !== 'number') {
+                throw new Error(`Invalid rule at index ${i}: "daysOld" must be a number.`);
+            }
+            if (typeof r.enabled !== 'boolean') {
+                throw new Error(`Invalid rule at index ${i}: "enabled" must be a boolean.`);
+            }
         }
     }
 

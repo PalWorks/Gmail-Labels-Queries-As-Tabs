@@ -188,7 +188,7 @@ a:hover {
 
 .version-tag {
     font-size: 11px;
-    color: #4a5568;
+    color: #8b95a8;
     font-weight: 500;
 }
 
@@ -198,6 +198,7 @@ a:hover {
     flex: 1;
     padding: 40px 48px;
     max-width: 1100px;
+    position: relative;
 }
 
 .section {
@@ -267,7 +268,7 @@ a:hover {
 }
 
 .muted {
-    color: #4a5568;
+    color: #8b95a8;
     font-size: 13px;
 }
 
@@ -535,7 +536,7 @@ input:checked+.toggle-slider::before {
 
 .drag-handle {
     display: flex;
-    color: #4a5568;
+    color: #8b95a8;
     cursor: grab;
     flex-shrink: 0;
 }
@@ -553,7 +554,7 @@ input:checked+.toggle-slider::before {
 }
 
 .tab-info-text .tab-type-hint {
-    color: #4a5568;
+    color: #8b95a8;
     font-size: 12px;
     margin-left: 4px;
 }
@@ -612,10 +613,46 @@ input:checked+.toggle-slider::before {
     background: rgba(245, 101, 101, 0.08);
 }
 
-.connected-card {
-    background: rgba(255, 255, 255, 0.02);
-    border-color: transparent;
-    padding: 14px 24px;
+/* ── Account Selector ──────────────────────────────────────── */
+.account-selector-bar {
+    position: absolute;
+    top: 36px;
+    right: 48px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1;
+}
+
+.account-selector-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #a0aec0;
+    white-space: nowrap;
+}
+
+.account-select {
+    min-width: 280px;
+    background: #1a1a2e;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #e0e0e0;
+    padding: 10px 14px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+    appearance: auto;
+}
+
+.account-select:focus {
+    border-color: #4fc3f7;
+}
+
+.account-select:hover {
+    border-color: rgba(79, 195, 247, 0.4);
 }
 
 /* ── Rule Row ───────────────────────────────────────────────── */
@@ -685,7 +722,7 @@ input:checked+.toggle-slider::before {
 
 .tab-chip-type {
     font-size: 11px;
-    color: #4a5568;
+    color: #8b95a8;
     font-weight: 400;
 }
 
@@ -858,7 +895,7 @@ kbd {
 .empty-state {
     text-align: center;
     padding: 32px 0;
-    color: #4a5568;
+    color: #8b95a8;
 }
 
 .empty-state .empty-icon {
@@ -895,6 +932,11 @@ kbd {
     .content {
         margin-left: 56px;
         padding: 24px;
+    }
+
+    .account-selector-bar {
+        top: 24px;
+        right: 24px;
     }
 
     .rule-row {
@@ -982,7 +1024,7 @@ body.theme-light .card p {
 }
 
 body.theme-light .muted {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .pref-row {
@@ -1102,15 +1144,29 @@ body.theme-light a {
 }
 
 body.theme-light .version-tag {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .card-divider {
     border-top-color: #e2e8f0;
 }
 
-body.theme-light .connected-card {
+body.theme-light .account-selector-label {
+    color: #4a5568;
+}
+
+body.theme-light .account-select {
     background: #f7fafc;
+    border-color: #e2e8f0;
+    color: #2d3748;
+}
+
+body.theme-light .account-select:focus {
+    border-color: #3182ce;
+}
+
+body.theme-light .account-select:hover {
+    border-color: rgba(49, 130, 206, 0.4);
 }
 
 body.theme-light .btn-primary {
@@ -1141,11 +1197,11 @@ body.theme-light .btn-danger:hover {
 }
 
 body.theme-light .drag-handle {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .tab-action-btn {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .tab-action-btn:hover {
@@ -1154,11 +1210,11 @@ body.theme-light .tab-action-btn:hover {
 }
 
 body.theme-light .empty-state {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .link-subtle {
-    color: #a0aec0;
+    color: #718096;
 }
 
 body.theme-light .link-subtle:hover {
