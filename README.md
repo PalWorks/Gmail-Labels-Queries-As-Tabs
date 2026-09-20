@@ -63,6 +63,8 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 | Feature | Description |
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
+| **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
+| **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
 | **Real-time Unread Counts** | Live badges via a three-tier strategy: Atom feed, XHR interception, and DOM scraping fallback |
 | **Theme Support** | Light (default), Dark, and System themes; browser-wide across all accounts, with automatic Gmail dark mode detection |

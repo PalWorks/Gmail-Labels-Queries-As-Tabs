@@ -27,8 +27,19 @@ interface Tab {
   title: string;              // display name shown on the tab
   type: 'label' | 'hash';     // navigation kind
   value: string;              // label name (type 'label') or raw hash (type 'hash')
+  color?: TabColor;           // optional palette token; absent = default styling
 }
+
+type TabColor =
+  | 'red' | 'orange' | 'yellow' | 'green'
+  | 'teal' | 'blue' | 'purple' | 'pink';
 ```
+
+`color` stores a named palette **token**, never a raw hex value, so the rendered
+color is owned by CSS and stays theme-safe and accessible in light and dark. It is
+always decorative (never the sole indicator of a tab). Absent means default styling.
+On import, an unknown token is stripped (falls back to default) rather than rejected.
+See [src/utils/colors.ts](src/utils/colors.ts).
 
 ### Rule
 

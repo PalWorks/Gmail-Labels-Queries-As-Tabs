@@ -4,6 +4,27 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.3.0] - 2026-07-09
+
+### Added
+
+- Custom tab colors. Assign an optional color to any tab from a fixed, theme-safe palette
+  (red, orange, yellow, green, teal, blue, purple, pink). Colors render as a leading dot on
+  the in-Gmail bar plus an active-state underline, and as a swatch on the options page and
+  in-Gmail tab lists. Available from both the in-Gmail Edit Tab modal and the options page
+  tab rows. Color is decorative only (never the sole indicator) and stored as a named token
+  ([src/utils/colors.ts](src/utils/colors.ts)), so it stays accessible in light and dark.
+- Automation rule starter templates. A gallery of one-click presets (Clean Promotions, Tidy
+  Newsletters, Quiet Social, Archive Receipts, Clear Updates) on the Automation Rules page;
+  applying one creates the matching label tab (if missing) and an enabled rule in a single
+  atomic save. The whole feature is behind a single `RULE_TEMPLATES_ENABLED` flag
+  ([src/modules/ruleTemplates.ts](src/modules/ruleTemplates.ts)).
+
+### Changed
+
+- Export/import now round-trips `Tab.color`; unknown color tokens are stripped on import
+  and fall back to default rather than failing the import.
+
 ## [1.2.1] - 2026-07-07
 
 ### Added

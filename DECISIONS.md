@@ -106,3 +106,32 @@ production bundle; strong type safety.
 
 **Consequences.** No runtime console output in production; CI enforces both. See
 [PLAYBOOK.md](PLAYBOOK.md) and [TESTING.md](TESTING.md).
+
+## ADR-010: Tab colors are named palette tokens, not raw hex
+
+**Decision.** `Tab.color` stores one of a fixed set of named tokens
+([src/utils/colors.ts](src/utils/colors.ts)); the actual color is supplied by CSS per
+token, not stored. No free-form hex input.
+
+**Context.** Arbitrary user hex breaks theme safety and accessibility (unreadable accents
+in one theme, uncontrollable contrast) and is unvalidatable on import. A small enum keeps
+stored data validatable, keeps color decorative (accent dot + active underline, never the
+sole cue), and lets each theme render an appropriate shade.
+
+**Consequences.** Adding a color means editing the palette in one util + its CSS token
+map (mirrored in [toolbar.css](src/ui/toolbar.css) and [options.css](src/options.css)).
+Imported unknown tokens fall back to default rather than erroring.
+
+## ADR-011: Rule-template library behind a single feature flag
+
+**Decision.** The one-click starter-preset feature lives entirely in
+[src/modules/ruleTemplates.ts](src/modules/ruleTemplates.ts) and is gated by the
+`RULE_TEMPLATES_ENABLED` constant. `applyRuleTemplate` ensures the label tab exists and
+upserts its enabled rule in a single atomic `saveSettings`.
+
+**Context.** The feature was requested with an explicit "make it easy to toggle OFF later"
+constraint. Isolating definitions, apply logic, and the flag in one module means flipping
+the flag removes all UI with no other code change, and the module can be deleted wholesale.
+
+**Consequences.** The options page renders the templates gallery only when the flag is on.
+Applying is atomic, so a tab is never created without its rule.
