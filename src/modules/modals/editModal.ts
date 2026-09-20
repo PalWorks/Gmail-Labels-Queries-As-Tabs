@@ -5,6 +5,8 @@
  */
 
 import { Tab, getSettings, updateTab } from '../../utils/storage';
+import { TabColor } from '../../utils/colors';
+import { createColorSwatchRow } from '../colorPicker';
 import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
 
@@ -22,6 +24,7 @@ export function showEditModal(tab: Tab): void {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Close');
     header.append(h3, closeBtn);
 
     const body = document.createElement('div');
@@ -48,6 +51,17 @@ export function showEditModal(tab: Tab): void {
     nameInput.value = tab.title;
     nameGroup.append(nameLabel, nameInput);
 
+    // Color picker: decorative accent, optional.
+    let selectedColor: TabColor | undefined = tab.color;
+    const colorGroup = document.createElement('div');
+    colorGroup.className = 'form-group';
+    const colorLabel = document.createElement('label');
+    colorLabel.textContent = 'Color:';
+    const swatchRow = createColorSwatchRow(selectedColor, (color) => {
+        selectedColor = color;
+    });
+    colorGroup.append(colorLabel, swatchRow);
+
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
     const saveBtn = document.createElement('button');
@@ -56,7 +70,7 @@ export function showEditModal(tab: Tab): void {
     saveBtn.textContent = 'Save';
     actions.appendChild(saveBtn);
 
-    body.append(valueGroup, nameGroup, actions);
+    body.append(valueGroup, nameGroup, colorGroup, actions);
     content.append(header, body);
     modal.appendChild(content);
 
@@ -82,6 +96,7 @@ export function showEditModal(tab: Tab): void {
         if (title && getUserEmail()) {
             await updateTab(getUserEmail()!, tab.id, {
                 title: title.trim(),
+                color: selectedColor,
             });
 
             close();

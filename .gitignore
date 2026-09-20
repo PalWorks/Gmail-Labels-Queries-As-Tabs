@@ -5,3 +5,4 @@ extension.zip
 *.log
 coverage/
 .env
+dist.zip

@@ -192,6 +192,34 @@ describe('renderTabListItems', () => {
         expect(container.innerHTML).toContain('&lt;script&gt;');
     });
 
+    it('should not interpolate an unknown color token into the markup', () => {
+        const container = createContainer();
+        const { cbs } = createCallbacks();
+        cbs.onColorTrigger = jest.fn();
+        const tabs: Tab[] = [
+            // Cast: only a corrupted store or a future bug could produce this,
+            // which is exactly what the guard is for.
+            { id: 't1', title: 'Broken', type: 'label', value: 'Broken', color: 'x" onload="evil()' as never },
+        ];
+
+        renderTabListItems(container, tabs, cbs);
+
+        expect(container.innerHTML).not.toContain('onload');
+        const trigger = container.querySelector('.tab-color-trigger')!;
+        expect(trigger.classList.contains('is-none')).toBe(true);
+    });
+
+    it('should render the palette class for a valid color', () => {
+        const container = createContainer();
+        const { cbs } = createCallbacks();
+        cbs.onColorTrigger = jest.fn();
+        const tabs: Tab[] = [{ id: 't1', title: 'Work', type: 'label', value: 'Work', color: 'blue' }];
+
+        renderTabListItems(container, tabs, cbs);
+
+        expect(container.querySelector('.tab-color-trigger')!.classList.contains('tab-color-blue')).toBe(true);
+    });
+
     it('should handle single tab (no up or down buttons)', () => {
         const container = createContainer();
         const { cbs } = createCallbacks();

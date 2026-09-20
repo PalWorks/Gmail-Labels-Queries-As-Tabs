@@ -80,6 +80,61 @@ export function buildLabelMapFromDOM(): Map<string, string> {
 }
 
 // ---------------------------------------------------------------------------
+// Known-label tokens (for the XHR interceptor filter)
+// ---------------------------------------------------------------------------
+
+/** Maps a system hash route to Gmail's internal label id used in sync responses. */
+const SYSTEM_HASH_TO_ID: Record<string, string> = {
+    '#inbox': '^i',
+    '#starred': '^t',
+    '#drafts': '^r',
+    '#sent': '^f',
+    '#spam': '^s',
+    '#trash': '^k',
+    '#all': '^all',
+};
+
+/**
+ * Builds the set of label tokens the user's tabs could receive unread updates
+ * for. The content script sends this to the page-world XHR interceptor so it can
+ * ignore coincidental [string, number] tuples for labels the user does not track.
+ * Includes DOM sidebar label names/ids to cover Gmail's internal id forms.
+ */
+export function computeKnownLabelTokens(tabs: Tab[]): string[] {
+    const tokens = new Set<string>();
+    const add = (s?: string | null) => {
+        if (s) tokens.add(s);
+    };
+
+    for (const tab of tabs) {
+        if (tab.type === 'label') {
+            add(tab.value);
+        } else if (tab.type === 'hash') {
+            if (SYSTEM_HASH_TO_ID[tab.value]) {
+                add(SYSTEM_HASH_TO_ID[tab.value]);
+            } else if (tab.value.startsWith('#label/')) {
+                add(decodeURIComponent(tab.value.replace('#label/', '').replace(/\+/g, ' ')));
+            } else if (tab.value.startsWith('#search/label:')) {
+                const raw = decodeURIComponent(tab.value.replace('#search/', ''));
+                if (raw.startsWith('label:')) add(raw.replace('label:', ''));
+            }
+        }
+    }
+
+    try {
+        const domMap = buildLabelMapFromDOM();
+        for (const [name, id] of domMap.entries()) {
+            add(name);
+            add(id);
+        }
+    } catch {
+        /* DOM not ready; tab-derived tokens are enough */
+    }
+
+    return Array.from(tokens);
+}
+
+// ---------------------------------------------------------------------------
 // XHR Unread Update Handler
 // ---------------------------------------------------------------------------
 
@@ -160,61 +215,114 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
 // ---------------------------------------------------------------------------
 
 /**
- * Update unread count for a single tab using Atom Feed (primary)
+ * Resolve which Atom feed label a tab maps to.
+ * Returns null when the tab has no queryable feed (e.g. #starred, #drafts,
+ * #search/...). '' is a real value meaning the Inbox feed; distinguishing it
+ * from null prevents non-label hash tabs from wrongly showing the Inbox count.
+ */
+export function resolveFeedLabel(tab: Tab): string | null {
+    if (tab.type === 'label') {
+        return tab.value.toLowerCase() === 'inbox' ? '' : tab.value;
+    }
+    if (tab.type === 'hash') {
+        if (tab.value === '#inbox') return '';
+        if (tab.value === '#sent') return '^f';
+        if (tab.value.startsWith('#label/')) return tab.value.replace('#label/', '');
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// Atom feed cache (TTL + in-flight coalescing)
+// ---------------------------------------------------------------------------
+//
+// renderTabs() runs frequently (storage changes, re-render events), and each
+// run asks every tab for its count. Without caching, that is one network fetch
+// per tab per render. We cache the parsed feed count per label for a short TTL
+// and coalesce concurrent identical requests into a single fetch.
+
+const FEED_CACHE_TTL_MS = 30_000;
+
+interface FeedCacheEntry {
+    count: number;
+    ts: number;
+}
+
+const feedCache = new Map<string, FeedCacheEntry>();
+const inFlightFeeds = new Map<string, Promise<number>>();
+
+/** Clears the Atom feed cache. Primarily used by tests and forced refreshes. */
+export function clearUnreadCountCache(): void {
+    feedCache.clear();
+    inFlightFeeds.clear();
+}
+
+/** Fetch + parse the Atom feed for a label, returning the unread count (0 on any failure). */
+async function fetchFeedCount(labelForFeed: string): Promise<number> {
+    try {
+        const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
+        const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
+
+        const response = await fetch(feedUrl);
+        if (!response.ok) return 0;
+
+        const text = await response.text();
+        const xmlDoc = new DOMParser().parseFromString(text, 'text/xml');
+        const fullcount = xmlDoc.querySelector('fullcount');
+        if (fullcount && fullcount.textContent) {
+            const count = parseInt(fullcount.textContent, 10);
+            return Number.isFinite(count) && count > 0 ? count : 0;
+        }
+        return 0;
+    } catch (e) {
+        console.warn('Gmail Tabs: Failed to fetch atom feed for', labelForFeed, e);
+        return 0;
+    }
+}
+
+/** Cached, coalesced accessor for a label's feed count. */
+async function getCachedFeedCount(labelForFeed: string): Promise<number> {
+    const cached = feedCache.get(labelForFeed);
+    if (cached && Date.now() - cached.ts < FEED_CACHE_TTL_MS) {
+        return cached.count;
+    }
+
+    const existing = inFlightFeeds.get(labelForFeed);
+    if (existing) return existing;
+
+    const promise = fetchFeedCount(labelForFeed)
+        .then((count) => {
+            feedCache.set(labelForFeed, { count, ts: Date.now() });
+            return count;
+        })
+        .finally(() => {
+            inFlightFeeds.delete(labelForFeed);
+        });
+
+    inFlightFeeds.set(labelForFeed, promise);
+    return promise;
+}
+
+/**
+ * Update unread count for a single tab using the Atom feed (primary, cached)
  * with DOM scraping as fallback.
  */
 export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<void> {
     const countSpan = tabEl.querySelector('.unread-count');
     if (!countSpan) return;
 
-    let labelForFeed = '';
+    const labelForFeed = resolveFeedLabel(tab);
 
-    if (tab.type === 'label') {
-        labelForFeed = tab.value;
-        if (labelForFeed.toLowerCase() === 'inbox') {
-            labelForFeed = '';
-        }
-    } else if (tab.type === 'hash') {
-        if (tab.value === '#inbox') {
-            labelForFeed = '';
-        } else if (tab.value === '#sent') {
-            labelForFeed = '^f';
-        } else if (tab.value.startsWith('#label/')) {
-            labelForFeed = tab.value.replace('#label/', '');
-        }
-    }
-
-    if (labelForFeed !== undefined) {
-        try {
-            const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
-            const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
-
-            const response = await fetch(feedUrl);
-            if (response.ok) {
-                const text = await response.text();
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(text, 'text/xml');
-                const fullcount = xmlDoc.querySelector('fullcount');
-
-                if (fullcount && fullcount.textContent) {
-                    const count = parseInt(fullcount.textContent, 10);
-                    if (count > 0) {
-                        countSpan.textContent = count.toString();
-                        return;
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Gmail Tabs: Failed to fetch atom feed for', labelForFeed, e);
+    if (labelForFeed !== null) {
+        const count = await getCachedFeedCount(labelForFeed);
+        if (count > 0) {
+            countSpan.textContent = count.toString();
+            return;
         }
     }
 
     const domCount = getUnreadCountFromDOM(tab);
-    if (domCount) {
-        countSpan.textContent = domCount;
-    } else {
-        countSpan.textContent = '';
-    }
+    countSpan.textContent = domCount || '';
 }
 
 /**

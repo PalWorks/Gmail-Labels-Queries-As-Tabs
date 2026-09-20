@@ -20,6 +20,30 @@ interface InstrumentedXHR extends XMLHttpRequest {
     _url: string;
 }
 
+// ---------------------------------------------------------------------------
+// Known-label filter (populated by the content script)
+// ---------------------------------------------------------------------------
+//
+// The content script knows exactly which labels the user has tabs for and
+// dispatches that set here. When populated, we only report counts for those
+// labels, which is the strongest defense against Gmail's undocumented protocol
+// yielding coincidental [string, number] tuples. Before the set arrives we fall
+// back to the structural heuristic below so counts still work on first paint.
+
+let knownLabels: Set<string> | null = null;
+
+/** Normalize a label token for set membership (case/separator-insensitive, keeps ^ for system ids). */
+function normalizeToken(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9^]/g, '');
+}
+
+document.addEventListener('gmailTabs:setKnownLabels', (e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    if (Array.isArray(detail)) {
+        knownLabels = new Set(detail.filter((t) => typeof t === 'string').map(normalizeToken));
+    }
+});
+
 // Helper to dispatch events back to the content script (isolated world)
 function dispatchUnreadUpdate(updates: UnreadUpdate[]) {
     if (!updates || updates.length === 0) return;
@@ -126,9 +150,7 @@ function findCounts(obj: any, updates: UnreadUpdate[]) {
             const labelId = obj[0];
             const count = obj[1];
 
-            // Filter out unlikely candidates (too short strings might be other flags, but labels can be short)
-            // System labels start with ^ usually.
-            if (isValidLabel(labelId)) {
+            if (isValidLabel(labelId) && isValidCount(count) && isKnownLabel(labelId)) {
                 updates.push({ label: labelId, count });
             }
         }
@@ -146,29 +168,37 @@ function findCounts(obj: any, updates: UnreadUpdate[]) {
 }
 
 function isValidLabel(label: string): boolean {
-    // Basic filter to avoid false positives
+    // Basic filter to avoid false positives.
     // Gmail system labels: ^i, ^t, ^b, ^f, ^k, ^s, ^r, ^all, ^io_im
-    // Custom labels: anything string
+    // Internal ids: Label_NN. Custom labels: human-readable text.
 
-    // Exclude obvious non-labels
     if (!label) return false;
     if (label.includes('http')) return false;
     if (label.includes('gmail/att/')) return false; // Attachment paths
-    if (label.includes('/')) {
-        // Custom labels CAN have slashes (Nested/Label), but usually not starting with gmail/
-        // Let's be careful. Real labels don't usually start with a slash.
-        if (label.startsWith('/')) return false;
-    }
-    if (label.length > 80) return false; // Unlikely to be a label if extremely long
+    if (label.startsWith('/')) return false; // Real labels do not start with a slash
+    if (label.length > 80) return false; // Too long to be a label
 
-    // Reject if it looks like a file path or ID string that isn't a label
-    // e.g. "1764..." (timestamps/IDs often appear as strings)
-    // Real labels are usually either:
-    // 1. System: ^...
-    // 2. Internal: Label_...
-    // 3. Custom: Human readable text
+    // Reject pure-digit tokens (timestamps, counters, ids) that commonly appear
+    // as [string, number] tuples in Gmail's protocol but are never labels.
+    // (Other id-shaped garbage is filtered by isValidCount + the known-label set.)
+    if (/^\d+$/.test(label)) return false;
 
     return true;
+}
+
+/** A plausible unread count: a non-negative integer within a sane bound. */
+function isValidCount(count: number): boolean {
+    return Number.isInteger(count) && count >= 0 && count <= 100000;
+}
+
+/**
+ * When the content script has told us which labels the user actually has tabs
+ * for, only those are reported. Before that set arrives, accept anything that
+ * passed the structural checks.
+ */
+function isKnownLabel(labelId: string): boolean {
+    if (!knownLabels || knownLabels.size === 0) return true;
+    return knownLabels.has(normalizeToken(labelId));
 }
 
 // Start interception

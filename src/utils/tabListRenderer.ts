@@ -10,6 +10,7 @@
  */
 
 import { Tab } from './storage';
+import { isValidTabColor, tabColorClass } from './colors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,8 @@ export interface TabListCallbacks {
     onRemove: (tabId: string, index: number) => void;
     onMoveUp?: (index: number) => void;
     onMoveDown?: (index: number) => void;
+    /** Invoked when a row's color swatch is activated; opens a color picker. */
+    onColorTrigger?: (tab: Tab, anchor: HTMLElement) => void;
 }
 
 export interface TabListOptions {
@@ -90,6 +93,13 @@ export function renderTabListItems(
         const downBtn =
             index < tabs.length - 1 ? `<button class="tab-action-btn down-btn" title="Move down">\u2193</button>` : '';
         const removeBtn = `<button class="tab-action-btn remove-btn" title="Remove">\u2715</button>`;
+        // Color trigger only rendered when a handler is supplied (options page).
+        // Validate before interpolating: the class is built into an innerHTML
+        // string, so an unknown token must never reach the markup.
+        const colorClass = isValidTabColor(tab.color) ? tabColorClass(tab.color) : 'is-none';
+        const colorBtn = callbacks.onColorTrigger
+            ? `<button class="tab-action-btn tab-color-trigger ${colorClass}" title="Set color" aria-label="Set color for ${escapeHtml(tab.title)}"><span class="tab-color-dot"></span></button>`
+            : '';
 
         li.innerHTML = `
             <div class="drag-handle" title="Drag to reorder">
@@ -97,6 +107,7 @@ export function renderTabListItems(
             </div>
             <span class="tab-info-text">${escapeHtml(tab.title)} <small class="tab-type-hint">(${tab.type === 'hash' ? 'Custom' : 'Label'})</small></span>
             <div class="tab-actions">
+                ${colorBtn}
                 ${upBtn}
                 ${downBtn}
                 ${removeBtn}
@@ -107,6 +118,11 @@ export function renderTabListItems(
         li.querySelector('.remove-btn')?.addEventListener('click', () => {
             callbacks.onRemove(tab.id, index);
         });
+
+        if (callbacks.onColorTrigger) {
+            const trigger = li.querySelector('.tab-color-trigger') as HTMLElement | null;
+            trigger?.addEventListener('click', () => callbacks.onColorTrigger!(tab, trigger));
+        }
 
         if (callbacks.onMoveUp) {
             li.querySelector('.up-btn')?.addEventListener('click', () => {

@@ -271,3 +271,177 @@ describe('tab click behavior', () => {
         expect(window.location.hash).toBe('#label/Work');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Dropdown menu
+// ---------------------------------------------------------------------------
+
+describe('tab dropdown menu', () => {
+    function renderBar() {
+        const bar = createTabsBar();
+        document.body.appendChild(bar);
+        mockState.currentSettings = { tabs: mockTabs, showUnreadCount: false, theme: 'system', rules: [] };
+        renderTabs();
+        return bar;
+    }
+
+    test('opens a dropdown when the menu button is clicked', () => {
+        const bar = renderBar();
+        const menuBtn = bar.querySelector('.gmail-tab-menu-btn') as HTMLElement;
+        menuBtn.click();
+
+        const dropdown = document.querySelector('.gmail-tab-dropdown');
+        expect(dropdown).not.toBeNull();
+        expect(dropdown!.querySelectorAll('.gmail-tab-dropdown-item').length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('Edit Tab item invokes the edit modal callback', () => {
+        const showEditModal = jest.fn();
+        setModalCallbacks({
+            showPinModal: jest.fn(),
+            showEditModal,
+            showDeleteModal: jest.fn(),
+            toggleSettingsModal: jest.fn(),
+        });
+
+        const bar = renderBar();
+        (bar.querySelector('.gmail-tab-menu-btn') as HTMLElement).click();
+
+        const items = Array.from(document.querySelectorAll('.gmail-tab-dropdown-item')) as HTMLElement[];
+        const editItem = items.find((i) => i.textContent?.includes('Edit'))!;
+        editItem.click();
+
+        expect(showEditModal).toHaveBeenCalledWith(mockTabs[0]);
+    });
+
+    test('Close Tab item invokes the delete modal callback', () => {
+        const showDeleteModal = jest.fn();
+        setModalCallbacks({
+            showPinModal: jest.fn(),
+            showEditModal: jest.fn(),
+            showDeleteModal,
+            toggleSettingsModal: jest.fn(),
+        });
+
+        const bar = renderBar();
+        (bar.querySelector('.gmail-tab-menu-btn') as HTMLElement).click();
+
+        const items = Array.from(document.querySelectorAll('.gmail-tab-dropdown-item')) as HTMLElement[];
+        const closeItem = items.find((i) => i.textContent?.includes('Close'))!;
+        closeItem.click();
+
+        expect(showDeleteModal).toHaveBeenCalledWith(mockTabs[0]);
+    });
+
+    test('Manage button invokes the settings-modal callback', () => {
+        const toggleSettingsModal = jest.fn();
+        setModalCallbacks({
+            showPinModal: jest.fn(),
+            showEditModal: jest.fn(),
+            showDeleteModal: jest.fn(),
+            toggleSettingsModal,
+        });
+
+        const bar = renderBar();
+        (bar.querySelector('.manage-btn') as HTMLElement).click();
+
+        expect(toggleSettingsModal).toHaveBeenCalled();
+    });
+
+    test('Save View button invokes the pin-modal callback', () => {
+        const showPinModal = jest.fn();
+        setModalCallbacks({
+            showPinModal,
+            showEditModal: jest.fn(),
+            showDeleteModal: jest.fn(),
+            toggleSettingsModal: jest.fn(),
+        });
+
+        const bar = renderBar();
+        (bar.querySelector('.save-view-btn') as HTMLElement).click();
+
+        expect(showPinModal).toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Accessibility
+// ---------------------------------------------------------------------------
+
+describe('accessibility', () => {
+    function renderBar() {
+        const bar = createTabsBar();
+        document.body.appendChild(bar);
+        mockState.currentSettings = { tabs: mockTabs, showUnreadCount: false, theme: 'system', rules: [] };
+        renderTabs();
+        return bar;
+    }
+
+    test('the bar is a labelled toolbar', () => {
+        const bar = renderBar();
+        expect(bar.getAttribute('role')).toBe('toolbar');
+        expect(bar.getAttribute('aria-label')).toBe('Gmail tabs');
+    });
+
+    test('tab names are focusable buttons with labels', () => {
+        const bar = renderBar();
+        const name = bar.querySelector('.tab-name') as HTMLElement;
+        expect(name.getAttribute('role')).toBe('button');
+        expect(name.getAttribute('tabindex')).toBe('0');
+        expect(name.getAttribute('aria-label')).toBe('Inbox');
+    });
+
+    test('pressing Enter on a tab name navigates', () => {
+        const bar = renderBar();
+        const name = bar.querySelectorAll('.tab-name')[1] as HTMLElement; // Work (label)
+        name.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        expect(window.location.hash).toBe('#label/Work');
+    });
+
+    test('ArrowRight moves focus to the next tab name', () => {
+        const bar = renderBar();
+        const names = bar.querySelectorAll('.tab-name');
+        (names[0] as HTMLElement).focus();
+        (names[0] as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        expect(document.activeElement).toBe(names[1]);
+    });
+
+    test('menu button exposes a collapsed popup that expands on open', () => {
+        const bar = renderBar();
+        const menuBtn = bar.querySelector('.gmail-tab-menu-btn') as HTMLElement;
+        expect(menuBtn.getAttribute('aria-haspopup')).toBe('menu');
+        expect(menuBtn.getAttribute('aria-expanded')).toBe('false');
+
+        menuBtn.click();
+        expect(menuBtn.getAttribute('aria-expanded')).toBe('true');
+
+        const menu = document.querySelector('.gmail-tab-dropdown');
+        expect(menu?.getAttribute('role')).toBe('menu');
+        expect(menu?.querySelectorAll('[role="menuitem"]').length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('Escape closes an open menu', () => {
+        const bar = renderBar();
+        (bar.querySelector('.gmail-tab-menu-btn') as HTMLElement).click();
+        const menu = document.querySelector('.gmail-tab-dropdown') as HTMLElement;
+        menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(document.querySelector('.gmail-tab-dropdown')).toBeNull();
+    });
+
+    test('the active tab name is marked aria-current', () => {
+        window.location.hash = '#inbox';
+        const bar = renderBar();
+        const inboxName = bar.querySelector('.tab-name') as HTMLElement;
+        expect(inboxName.getAttribute('aria-current')).toBe('page');
+    });
+
+    test('toolbar action buttons are labelled buttons', () => {
+        const bar = renderBar();
+        const manage = bar.querySelector('.manage-btn') as HTMLElement;
+        const save = bar.querySelector('.save-view-btn') as HTMLElement;
+        expect(manage.getAttribute('role')).toBe('button');
+        expect(manage.getAttribute('aria-label')).toBeTruthy();
+        expect(save.getAttribute('role')).toBe('button');
+        expect(save.getAttribute('aria-label')).toBeTruthy();
+    });
+});

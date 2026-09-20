@@ -928,3 +928,126 @@ body.force-light {
     outline: 2px solid var(--primary-btn-bg);
     border-color: transparent;
 }
+
+/* ---------------------------------------------------------------------------
+   Keyboard focus indicators (accessibility)
+   Scoped to the tab bar and dropdown; visible in both light and dark themes.
+   --------------------------------------------------------------------------- */
+#gmail-labels-as-tabs-bar .tab-name:focus-visible,
+#gmail-labels-as-tabs-bar .gmail-tab-menu-btn:focus-visible,
+#gmail-labels-as-tabs-bar .gmail-tab-btn:focus-visible,
+.gmail-tab-dropdown-item:focus-visible {
+    outline: 2px solid #4285f4;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* ===================================================================
+   Tab Colors (palette tokens): decorative accents, never sole cue
+   =================================================================== */
+
+/* Token -> accent color mapping. Mid-tones chosen to read on both
+   light and dark tab-bar backgrounds. Applied to tabs, swatches, and
+   trigger dots alike via the shared --tab-accent custom property. */
+.tab-color-red { --tab-accent: #d93025; }
+.tab-color-orange { --tab-accent: #e8710a; }
+.tab-color-yellow { --tab-accent: #f9ab00; }
+.tab-color-green { --tab-accent: #1e8e3e; }
+.tab-color-teal { --tab-accent: #12a4af; }
+.tab-color-blue { --tab-accent: #1a73e8; }
+.tab-color-purple { --tab-accent: #9334e6; }
+.tab-color-pink { --tab-accent: #d01884; }
+
+/* In-bar tab accent: a small leading dot plus an active underline. */
+.gmail-tab[class*="tab-color-"] .tab-name::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--tab-accent);
+    vertical-align: middle;
+    flex: none;
+}
+
+.gmail-tab.active[class*="tab-color-"] {
+    box-shadow: inset 0 -3px 0 var(--tab-accent);
+}
+
+/* Swatch picker (edit modal + settings list popover) */
+.color-swatch-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    background: var(--tab-accent, #dadce0);
+    box-sizing: border-box;
+}
+
+.color-swatch.is-none {
+    background: transparent;
+    border: 2px dashed var(--input-border, #dadce0);
+    position: relative;
+}
+
+.color-swatch.is-none::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: var(--input-border, #dadce0);
+    transform: rotate(45deg);
+}
+
+.color-swatch.selected {
+    outline: 2px solid var(--primary-btn-bg, #1a73e8);
+    outline-offset: 2px;
+}
+
+.color-swatch:focus-visible {
+    outline: 2px solid var(--primary-btn-bg, #1a73e8);
+    outline-offset: 2px;
+}
+
+/* Row color trigger (settings-modal tab list) */
+.tab-color-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tab-color-trigger .tab-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--tab-accent, transparent);
+    border: 1px solid var(--input-border, #dadce0);
+    box-sizing: border-box;
+}
+
+.tab-color-trigger.is-none .tab-color-dot {
+    background: transparent;
+    border-style: dashed;
+}
+
+/* Floating popover */
+.color-popover {
+    position: absolute;
+    z-index: 2147483647;
+    background: var(--modal-bg, #fff);
+    border: 1px solid var(--input-border, #dadce0);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}

@@ -43,7 +43,15 @@ jest.mock('../../src/utils/storage', () => ({
         theme: 'system',
         showUnreadCount: true,
     }),
+    saveSettings: jest.fn().mockResolvedValue(undefined),
     updateTabOrder: jest.fn().mockResolvedValue(undefined),
+    getGlobalTheme: jest.fn().mockResolvedValue('system'),
+    setGlobalTheme: jest.fn().mockResolvedValue(undefined),
+}));
+
+// Mock theme (applyTheme is invoked on import)
+jest.mock('../../src/modules/theme', () => ({
+    applyTheme: jest.fn(),
 }));
 
 // Mock importExport
@@ -147,7 +155,9 @@ describe('exportSettings', () => {
 
         expect(buildExportPayload).toHaveBeenCalledWith(
             'test@gmail.com',
-            [{ id: '1', title: 'Inbox', type: 'hash', value: '#inbox' }]
+            [{ id: '1', title: 'Inbox', type: 'hash', value: '#inbox' }],
+            [],
+            'system'
         );
         expect(generateExportFilename).toHaveBeenCalledWith('test@gmail.com');
         expect(triggerDownload).toHaveBeenCalled();

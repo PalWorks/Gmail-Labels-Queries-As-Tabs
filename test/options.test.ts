@@ -18,6 +18,8 @@
 const mockGetSettings = jest.fn();
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
 const mockGetAllAccounts = jest.fn();
+const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
+const mockSetGlobalTheme = jest.fn().mockResolvedValue(undefined);
 const mockAddTab = jest.fn().mockResolvedValue(undefined);
 const mockRemoveTab = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTabOrder = jest.fn().mockResolvedValue(undefined);
@@ -35,6 +37,9 @@ jest.mock('../src/utils/storage', () => ({
     addTab: (...args: any[]) => mockAddTab(...args),
     removeTab: (...args: any[]) => mockRemoveTab(...args),
     updateTabOrder: (...args: any[]) => mockUpdateTabOrder(...args),
+    getGlobalTheme: (...args: any[]) => mockGetGlobalTheme(...args),
+    setGlobalTheme: (...args: any[]) => mockSetGlobalTheme(...args),
+    GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
 }));
 
 jest.mock('../src/utils/importExport', () => ({
@@ -51,6 +56,13 @@ jest.mock('../src/utils/tabListRenderer', () => ({
 
 jest.mock('../src/modules/rules', () => ({
     generateAppsScript: (...args: any[]) => mockGenerateAppsScript(...args),
+    tabToGmailLabel: (tab: any) => {
+        if (tab.type === 'label') return tab.value.trim() || null;
+        if (tab.type === 'hash' && tab.value.startsWith('#label/')) {
+            return decodeURIComponent(tab.value.slice('#label/'.length).replace(/\+/g, ' ')).trim() || null;
+        }
+        return null;
+    },
 }));
 
 jest.mock('../src/modules/state', () => {
@@ -128,6 +140,8 @@ function buildOptionsDOM(): void {
             <a class="nav-item" data-section="logs" href="#">Logs</a>
         </nav>
 
+        <select id="account-select"></select>
+
         <section id="section-settings">
             <div id="settings-theme-group">
                 <button class="theme-btn" data-theme="system">System</button>
@@ -150,8 +164,6 @@ function buildOptionsDOM(): void {
             <button id="settings-export-btn">Export Config</button>
             <button id="settings-import-btn">Import Config</button>
             <button id="settings-uninstall-btn">Uninstall Extension</button>
-
-            <span id="settings-account-email">Detecting...</span>
 
             <button id="sidebar-theme-toggle">Toggle Theme</button>
             <span id="theme-icon-moon"></span>
@@ -217,6 +229,7 @@ beforeEach(() => {
 
     mockGetAllAccounts.mockResolvedValue(['user@gmail.com']);
     mockGetSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    mockGetGlobalTheme.mockResolvedValue('system');
 });
 
 // ---------------------------------------------------------------------------
@@ -270,12 +283,14 @@ describe('navigation and routing', () => {
 // ---------------------------------------------------------------------------
 
 describe('loadSettings', () => {
-    test('displays connected account email', async () => {
+    test('populates account selector with detected account', async () => {
         buildOptionsDOM();
         await loadOptionsPage();
 
-        const emailSpan = document.getElementById('settings-account-email');
-        expect(emailSpan?.textContent).toBe('user@gmail.com');
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        expect(select.options.length).toBe(1);
+        expect(select.options[0].value).toBe('user@gmail.com');
+        expect(select.value).toBe('user@gmail.com');
     });
 
     test('calls renderTabListItems after loading settings', async () => {
@@ -299,15 +314,77 @@ describe('loadSettings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Account Switching
+// ---------------------------------------------------------------------------
+
+describe('account switching', () => {
+    test('populates account selector with all accounts', async () => {
+        mockGetAllAccounts.mockResolvedValue(['work@gmail.com', 'personal@gmail.com']);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        expect(select.options.length).toBe(2);
+        expect(select.options[0].value).toBe('work@gmail.com');
+        expect(select.options[1].value).toBe('personal@gmail.com');
+    });
+
+    test('reloads settings when account is switched', async () => {
+        mockGetAllAccounts.mockResolvedValue(['work@gmail.com', 'personal@gmail.com']);
+        const personalSettings = {
+            ...DEFAULT_SETTINGS,
+            theme: 'dark' as const,
+            tabs: [{ id: '3', title: 'Projects', value: 'Projects', type: 'label' as const }],
+        };
+        mockGetSettings
+            .mockResolvedValueOnce({ ...DEFAULT_SETTINGS })
+            .mockResolvedValueOnce(personalSettings);
+
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'personal@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+
+        expect(mockGetSettings).toHaveBeenCalledWith('personal@gmail.com');
+    });
+
+    test('does not reload when same account is selected', async () => {
+        mockGetAllAccounts.mockResolvedValue(['work@gmail.com']);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        mockGetSettings.mockClear();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'work@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+
+        expect(mockGetSettings).not.toHaveBeenCalled();
+    });
+
+    test('shows single account without issues', async () => {
+        mockGetAllAccounts.mockResolvedValue(['only@gmail.com']);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        expect(select.options.length).toBe(1);
+        expect(select.value).toBe('only@gmail.com');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------
 
 describe('theme rendering', () => {
     test('marks the active theme button', async () => {
-        mockGetSettings.mockResolvedValue({
-            ...DEFAULT_SETTINGS,
-            theme: 'dark',
-        });
+        // Theme is a browser-wide preference read from getGlobalTheme.
+        mockGetGlobalTheme.mockResolvedValue('dark');
         buildOptionsDOM();
         await loadOptionsPage();
 
@@ -319,10 +396,7 @@ describe('theme rendering', () => {
     });
 
     test('applies theme-dark class to body for dark theme', async () => {
-        mockGetSettings.mockResolvedValue({
-            ...DEFAULT_SETTINGS,
-            theme: 'dark',
-        });
+        mockGetGlobalTheme.mockResolvedValue('dark');
         buildOptionsDOM();
         await loadOptionsPage();
 
@@ -330,10 +404,7 @@ describe('theme rendering', () => {
     });
 
     test('applies theme-light class to body for light theme', async () => {
-        mockGetSettings.mockResolvedValue({
-            ...DEFAULT_SETTINGS,
-            theme: 'light',
-        });
+        mockGetGlobalTheme.mockResolvedValue('light');
         buildOptionsDOM();
         await loadOptionsPage();
 

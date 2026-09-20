@@ -28,15 +28,36 @@ function parseGmailJson(text: string): any {
     }
 }
 
+// Mirrors src/xhrInterceptor.ts (module has import-time side effects, so its
+// pure logic is reimplemented here per the strategy noted above).
+
+let knownLabels: Set<string> | null = null;
+
+function normalizeToken(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9^]/g, '');
+}
+
+function setKnownLabels(tokens: string[] | null): void {
+    knownLabels = tokens ? new Set(tokens.map(normalizeToken)) : null;
+}
+
 function isValidLabel(label: string): boolean {
     if (!label) return false;
     if (label.includes('http')) return false;
     if (label.includes('gmail/att/')) return false;
-    if (label.includes('/')) {
-        if (label.startsWith('/')) return false;
-    }
+    if (label.startsWith('/')) return false;
     if (label.length > 80) return false;
+    if (/^\d+$/.test(label)) return false;
     return true;
+}
+
+function isValidCount(count: number): boolean {
+    return Number.isInteger(count) && count >= 0 && count <= 100000;
+}
+
+function isKnownLabel(labelId: string): boolean {
+    if (!knownLabels || knownLabels.size === 0) return true;
+    return knownLabels.has(normalizeToken(labelId));
 }
 
 function findCounts(obj: any, updates: UnreadUpdate[]): void {
@@ -46,7 +67,7 @@ function findCounts(obj: any, updates: UnreadUpdate[]): void {
         if (obj.length >= 2 && typeof obj[0] === 'string' && typeof obj[1] === 'number') {
             const labelId = obj[0];
             const count = obj[1];
-            if (isValidLabel(labelId)) {
+            if (isValidLabel(labelId) && isValidCount(count) && isKnownLabel(labelId)) {
                 updates.push({ label: labelId, count });
             }
         }
@@ -69,6 +90,8 @@ function dispatchUnreadUpdate(updates: UnreadUpdate[]): void {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+beforeEach(() => setKnownLabels(null));
 
 describe('parseGmailJson', () => {
     test('parses valid JSON', () => {
@@ -129,6 +152,66 @@ describe('isValidLabel', () => {
 
     test('accepts labels at the 80 char boundary', () => {
         expect(isValidLabel('a'.repeat(80))).toBe(true);
+    });
+
+    test('accepts internal Label_N ids', () => {
+        expect(isValidLabel('Label_4')).toBe(true);
+    });
+
+    test('rejects pure-digit tokens (timestamps/ids)', () => {
+        expect(isValidLabel('1764523423000')).toBe(false);
+        expect(isValidLabel('42')).toBe(false);
+    });
+
+    test('still accepts hex-like label names (protected by the known-label set instead)', () => {
+        expect(isValidLabel('deadbeef')).toBe(true);
+    });
+});
+
+describe('isValidCount', () => {
+    test('accepts non-negative integers within bound', () => {
+        expect(isValidCount(0)).toBe(true);
+        expect(isValidCount(5)).toBe(true);
+        expect(isValidCount(100000)).toBe(true);
+    });
+
+    test('rejects negatives, floats, and out-of-bound values', () => {
+        expect(isValidCount(-1)).toBe(false);
+        expect(isValidCount(3.5)).toBe(false);
+        expect(isValidCount(100001)).toBe(false);
+        expect(isValidCount(NaN)).toBe(false);
+    });
+});
+
+describe('findCounts count validation', () => {
+    test('skips tuples with implausible counts', () => {
+        const updates: UnreadUpdate[] = [];
+        findCounts([['^i', 3.5], ['^t', -2], ['Work', 999999]], updates);
+        expect(updates).toHaveLength(0);
+    });
+});
+
+describe('findCounts known-label filter', () => {
+    test('accepts all valid labels when the known set is unset', () => {
+        const updates: UnreadUpdate[] = [];
+        findCounts([['^i', 3], ['Random', 9]], updates);
+        expect(updates).toHaveLength(2);
+    });
+
+    test('reports only known labels when the set is populated', () => {
+        setKnownLabels(['^i', 'Work']);
+        const updates: UnreadUpdate[] = [];
+        findCounts([['^i', 3], ['Random', 9], ['Work', 2]], updates);
+        expect(updates).toContainEqual({ label: '^i', count: 3 });
+        expect(updates).toContainEqual({ label: 'Work', count: 2 });
+        expect(updates.find((u) => u.label === 'Random')).toBeUndefined();
+    });
+
+    test('matches known labels case/separator-insensitively', () => {
+        setKnownLabels(['Team Updates']);
+        const updates: UnreadUpdate[] = [];
+        findCounts([['team-updates', 4]], updates);
+        expect(updates).toContainEqual({ label: 'team-updates', count: 4 });
     });
 });
 

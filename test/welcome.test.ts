@@ -19,12 +19,14 @@ const mockTabsReload = jest.fn();
 
 beforeAll(() => {
     (global as any).chrome = {
+        // Theme is now a browser-wide preference in chrome.storage.local.
         storage: {
-            sync: {
+            local: {
                 get: mockStorageGet,
                 set: mockStorageSet,
             },
         },
+        runtime: {},
         tabs: {
             query: mockTabsQuery,
             create: mockTabsCreate,
@@ -40,8 +42,8 @@ beforeAll(() => {
 
 function setupWelcomeDOM(): void {
     document.body.innerHTML = `
-        <input type="radio" name="theme" value="system" checked>
-        <input type="radio" name="theme" value="light">
+        <input type="radio" name="theme" value="system">
+        <input type="radio" name="theme" value="light" checked>
         <input type="radio" name="theme" value="dark">
         <button id="open-gmail-btn">Open Gmail</button>
     `;
@@ -73,26 +75,28 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('welcome page theme', () => {
-    test('loads saved theme from storage and applies it', () => {
+    test('loads saved theme from storage and applies it', async () => {
         setupWelcomeDOM();
         mockStorageGet.mockImplementation((_keys: any, cb: (result: any) => void) =>
-            cb({ theme: 'dark' })
+            cb({ globalTheme: 'dark' })
         );
 
         loadWelcome();
+        await new Promise((r) => setTimeout(r, 0));
 
         expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     });
 
-    test('defaults to system theme when none saved', () => {
+    test('defaults to light theme when none saved', async () => {
         setupWelcomeDOM();
         mockStorageGet.mockImplementation((_keys: any, cb: (result: any) => void) =>
             cb({})
         );
 
         loadWelcome();
+        await new Promise((r) => setTimeout(r, 0));
 
-        expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     });
 
     test('saves theme to storage when radio is changed', () => {
@@ -103,7 +107,7 @@ describe('welcome page theme', () => {
         lightRadio.checked = true;
         lightRadio.dispatchEvent(new Event('change', { bubbles: true }));
 
-        expect(mockStorageSet).toHaveBeenCalledWith({ theme: 'light' });
+        expect(mockStorageSet).toHaveBeenCalledWith({ globalTheme: 'light' }, expect.any(Function));
         expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     });
 

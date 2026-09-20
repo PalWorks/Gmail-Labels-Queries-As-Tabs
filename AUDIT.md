@@ -1,8 +1,22 @@
 # Gmail Labels as Tabs: Repository Audit
 
-> **Version Analyzed:** 1.1.0 (Manifest V3)
+> **Version Analyzed:** 1.2.1 (Manifest V3)
 > **Stack:** TypeScript, esbuild, Chrome Extension APIs, InboxSDK
 > **License:** MIT
+>
+> **Refresh note (v1.2.1):** `modals.ts` has been decomposed into `src/modules/modals/*`;
+> `src/utils/` now holds `storage.ts`, `importExport.ts`, `selectors.ts`, and `tabListRenderer.ts`;
+> ESLint (`.eslintrc.json`) and Prettier (`.prettierrc`) config files exist; the test suite is
+> 21 files (365 tests). Theme is a browser-wide preference in `chrome.storage.local` (`globalTheme`),
+> while per-account settings remain in `chrome.storage.sync`. Sections below have been corrected to match.
+>
+> **Post-plan polish (2026-07-07):** All Table A/B/C improvements shipped (see
+> `.planning/IMPROVEMENTS-PLAN.md`). The shared tab-manager (`src/modules/tabManager.ts`) and
+> encapsulated state accessors landed. The default theme is now `light`. The tab bar is fully
+> keyboard and screen-reader accessible, modal close buttons and the unread toggle have accessible
+> names, and options-page text meets WCAG AA contrast in both themes. Agent-oriented docs were added
+> (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
+> CHANGELOG).
 
 ## 1. High Level Overview
 
@@ -36,18 +50,29 @@ gmail-labels-as-tabs/
 │   │   ├── theme.ts         # Theme detection + CSS class switching
 │   │   ├── tabs.ts          # Tab bar rendering, navigation, dropdowns
 │   │   ├── unread.ts        # Unread count (Atom feed + DOM scraping + XHR)
-│   │   ├── modals.ts        # All modal dialogs (Pin, Edit, Delete, Settings, Import, Uninstall)
 │   │   ├── dragdrop.ts      # Drag-and-drop (tab bar + modal list reordering)
-│   │   └── rules.ts         # Google Apps Script code generator
+│   │   ├── rules.ts         # Google Apps Script code generator
+│   │   └── modals/          # One file per dialog + index barrel
+│   │       ├── index.ts     # Barrel export + render callback wiring
+│   │       ├── pinModal.ts  # Add/pin new tab
+│   │       ├── editModal.ts # Edit tab title/value
+│   │       ├── deleteModal.ts   # Delete confirmation
+│   │       ├── importModal.ts   # Import + exportSettings
+│   │       ├── settingsModal.ts # Settings overlay
+│   │       └── uninstallModal.ts # Uninstall flow
 │   ├── utils/
-│   │   └── storage.ts       # chrome.storage.sync wrapper (multi-account CRUD)
+│   │   ├── storage.ts       # chrome.storage.sync (per-account) + storage.local (theme)
+│   │   ├── importExport.ts  # Export payload, validation, download trigger
+│   │   ├── selectors.ts     # Gmail DOM selector constants
+│   │   └── tabListRenderer.ts   # Shared tab-list rendering + escapeHtml
 │   ├── ui/
 │   │   └── toolbar.css      # Tab bar + modal styles injected into Gmail
-│   └── experimental/
-│       └── LabelMenuIntegration.ts  # Archived feature (commented out)
-├── test/                    # Unit tests
-│   ├── rules.test.ts        # Tests for Apps Script generation
-│   └── storage.test.ts      # Tests for storage CRUD + migration
+├── test/                    # Unit tests (20 files, mirrors src/)
+│   ├── content.test.ts, tabs.test.ts, unread.test.ts, dragdrop.test.ts, theme.test.ts,
+│   ├── storage.test.ts, importExport.test.ts, tabListRenderer.test.ts, state.test.ts,
+│   ├── rules.test.ts, options.test.ts, settingsModal.test.ts, welcome.test.ts,
+│   ├── background.test.ts, xhrInterceptor.test.ts
+│   └── modals/              # pin, edit, delete, import, uninstall modal tests
 ├── website/                 # Marketing/landing page (React, separate build)
 ├── build.js                 # esbuild configuration (5 entry points)
 ├── manifest.json            # Chrome Extension Manifest V3
@@ -146,7 +171,7 @@ The content script uses a **feature-sliced module pattern** rather than classes.
 - **theme.ts:** Pure functions for Gmail dark mode detection and CSS class toggling.
 - **tabs.ts:** Imperative DOM construction for the tab bar. Re-renders by clearing `innerHTML` and rebuilding.
 - **unread.ts:** Three-strategy unread count resolution (Atom feed > DOM scraping > XHR updates).
-- **modals.ts:** Six modal types, all constructed via imperative DOM APIs. The largest module (919 lines).
+- **modules/modals/:** Six modal types, one file per dialog plus an `index.ts` barrel, all constructed via imperative DOM APIs.
 - **dragdrop.ts:** HTML5 Drag and Drop API handlers for both the tab bar and the settings modal list.
 - **rules.ts:** Pure function that generates Google Apps Script source code from user rules. No side effects.
 
@@ -197,7 +222,7 @@ Storage changes trigger a listener in `content.ts` that reloads settings and re-
 
 | Module | Lines | Complexity Notes |
 |---|---|---|
-| `modals.ts` | 919 | Largest module. 6 modal types with full DOM construction. Settings modal alone is 335 lines. |
+| `modules/modals/*` | ~900 total | Split across 7 files (one per dialog + `index.ts`). Settings modal (~350 lines) is the largest. |
 | `content.ts` | 333 | Coordinator with initialization, observer, and event wiring. |
 | `storage.ts` | 331 | Multi-account CRUD with legacy migration. Well-structured. |
 | `unread.ts` | 323 | Three unread strategies with label normalization and fuzzy matching. |
@@ -217,18 +242,21 @@ Storage changes trigger a listener in `content.ts` that reloads settings and re-
 All user settings are persisted via `chrome.storage.sync` with a multi-account key scheme:
 
 ```typescript
-// Key format
+// Per-account settings — chrome.storage.sync
 `account_{email}` → {
     tabs: Tab[],           // Array of {id, title, type, value}
     rules: Rule[],         // Array of {tabId, action, daysOld, enabled, targetLabel?}
-    theme: 'system'|'light'|'dark',
+    theme: 'system'|'light'|'dark', // retained for migration; live theme is global (below)
     showUnreadCount: boolean
 }
+
+// Browser-wide theme — chrome.storage.local (shared by all accounts, not device-synced)
+`globalTheme` → 'system' | 'light' | 'dark'
 ```
 
 **Defaults:** Two tabs (Inbox, Sent), system theme, unread counts enabled, no rules.
 
-**Migration:** `migrateLegacySettingsIfNeeded()` converts pre-multi-account global keys (`tabs`, `labels`, `theme`) into the account-scoped format. The welcome page theme is also migrated from a global `theme` key.
+**Migration:** `migrateLegacySettingsIfNeeded()` converts pre-multi-account global keys (`tabs`, `labels`) into the account-scoped format. `migrateThemeToGlobalIfNeeded()` seeds the browser-wide `globalTheme` once from the legacy sync `theme` key (set by older welcome pages) or, failing that, from the account's per-account theme.
 
 ### Manifest Permissions
 
@@ -377,8 +405,8 @@ The theme system uses CSS classes `force-dark` and `force-light` on `document.bo
 
 | Issue | Location | Impact |
 |---|---|---|
-| **modals.ts is a 919-line monolith** | `src/modules/modals.ts` | 6 different modal types in one file. Each modal constructs DOM imperatively. Difficult to maintain or test individually. Should be split into individual modal modules. |
-| **No unit tests for content script or tab rendering** | `test/` | DOM injection, MutationObserver behavior, and tab rendering are completely untested. Regressions in Gmail DOM changes are caught only manually. |
+| **~~modals.ts is a 919-line monolith~~ (RESOLVED v1.2.x)** | `src/modules/modals/*` | Split into one file per dialog plus an `index.ts` barrel; each modal is independently testable. |
+| **Content script / tab rendering test coverage** | `test/content.test.ts`, `test/tabs.test.ts` | Content-script init, injection, and tab rendering now have unit tests; DOM-injection edge cases and observer behavior remain lighter than the pure-logic modules. |
 | **XHR interceptor uses heuristics** | `src/xhrInterceptor.ts` | Gmail's internal protocol format is undocumented and changes without notice. The label-count detection relies on array pattern matching (`[string, number]`) with limited filtering. False positives are possible. |
 
 ### Medium Priority
@@ -387,7 +415,7 @@ The theme system uses CSS classes `force-dark` and `force-light` on `document.bo
 |---|---|---|
 | **options.ts mirrors functionality from modals.ts** | `src/options.ts` (657 lines) | Tab list rendering, drag-and-drop, and import/export logic are duplicated between the options page and the Gmail overlay modals. Changes must be made in two places. |
 | **Global mutable state** | `src/modules/state.ts` | The `AppState` singleton is mutated from multiple modules with no access control. Any module can set `currentSettings` to `null`, causing NPEs in other modules. |
-| **No ESLint or Prettier config files** | Root directory | `eslint` and `prettier` are listed as devDependencies but no `.eslintrc` or `.prettierrc` configuration files exist. The `npm run lint` command references `eslint src/**/*.ts` but may not work without config. |
+| **~~No ESLint or Prettier config files~~ (RESOLVED)** | Root directory | `.eslintrc.json` and `.prettierrc` now exist; `npm run lint` runs clean with only warnings. |
 | **Gmail DOM selectors are brittle** | `TOOLBAR_SELECTORS`, various querySelector calls | Gmail uses obfuscated class names (`.G-atb`, `.aeF`, `.nH`, `.bsU`, `.aj1`, `.wT`) that can change at any Gmail update. |
 
 ### Low Priority

@@ -37,6 +37,7 @@
 - [CI/CD](#cicd)
 - [Deployment](#deployment)
 - [Roadmap](#roadmap)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 - [Privacy](#privacy)
 - [License](#license)
@@ -62,9 +63,11 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 | Feature | Description |
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
+| **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
+| **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
 | **Real-time Unread Counts** | Live badges via a three-tier strategy: Atom feed, XHR interception, and DOM scraping fallback |
-| **Theme Support** | System, Light, and Dark themes with automatic Gmail dark mode detection |
+| **Theme Support** | Light (default), Dark, and System themes; browser-wide across all accounts, with automatic Gmail dark mode detection |
 | **Multi-Account** | Per-account tab configurations namespaced by email address |
 | **Automation Rules** | Generate Google Apps Script code for automated email cleanup (trash, archive, mark read, move) |
 | **Export / Import** | Backup and restore configuration as schema-validated JSON |
@@ -148,7 +151,7 @@ User clicks tab  →  window.location.hash changes (#inbox, #label/Work, #search
 | **Extension Platform** | Chrome Manifest V3 |
 | **Route Detection** | InboxSDK (`@inboxsdk/core`) |
 | **Storage** | `chrome.storage.sync` (cross-device, per-account namespaced) |
-| **Testing** | Jest + ts-jest + jsdom (20 test files, 290+ test cases) |
+| **Testing** | Jest + ts-jest + jsdom (21 test suites, 365 test cases) |
 | **Linting** | ESLint + @typescript-eslint |
 | **Formatting** | Prettier (single quotes, 4-space indent, 120 char width) |
 | **CI/CD** | GitHub Actions (test, lint, build, verify, artifact) |
@@ -216,15 +219,14 @@ All configuration is managed through two surfaces:
 
 ### Storage Schema
 
-Settings are stored per-account in `chrome.storage.sync` under the key `account_{email}`:
+Per-account settings are stored in `chrome.storage.sync` under the key `account_{email}`:
 
 ```typescript
 interface Settings {
   tabs: Tab[];
-  theme: 'system' | 'light' | 'dark';
-  showUnreadCount: boolean;
   rules: Rule[];
-  sheetUrl: string;
+  theme: 'system' | 'light' | 'dark'; // retained for migration; the live theme is global (see below)
+  showUnreadCount: boolean;
 }
 
 interface Tab {
@@ -235,12 +237,21 @@ interface Tab {
 }
 
 interface Rule {
-  tabId: string;      // References a Tab.id
-  action: 'trash' | 'archive' | 'markRead' | 'move';
-  targetLabel?: string; // Required when action is 'move'
-  olderThanDays: number;
+  tabId: string;                                          // References a Tab.id
+  action: 'trash' | 'archive' | 'markRead' | 'moveToLabel';
+  daysOld: number;                                        // "older than" threshold in days
+  enabled: boolean;
+  targetLabel?: string;                                   // Required when action is 'moveToLabel'
 }
 ```
+
+Theme is a **browser-wide** preference (shared by every Gmail account in the profile) stored
+separately in `chrome.storage.local` under the `globalTheme` key. Because it uses local storage it
+applies to all accounts in the window but does not sync across devices. Changing the theme in any
+account, in the Gmail modal, the options page, or onboarding, updates all open Gmail tabs live.
+
+The Google Sheet URL used for activity logging is not persisted in settings; it is entered on the
+Options page and passed directly to the Apps Script generator.
 
 ### Storage Limits
 
@@ -512,6 +523,21 @@ Deployment is automated via `.github/workflows/deploy_website.yml` on push to `m
 - Modular architecture (state, tabs, dragdrop, theme, unread, rules, modals)
 - CI/CD pipeline with 10 verification steps
 
+### v1.2: Shipped
+
+- Browser-wide theme propagation across all accounts in a window (`chrome.storage.local`)
+- Default theme changed to Light for fresh installs
+- Settings gear icon replacing the pencil icon
+- Rules limited to label-backed tabs; hash-view unread counts fixed
+- Export and Import extended to include rules and theme
+- XHR interceptor hardening against false-positive counts
+- Bounded single-flight injection and cached unread fetches
+- Full keyboard and screen-reader accessibility for the tab bar
+- WCAG AA text contrast fixes across light and dark themes
+- Shared tab-manager module; encapsulated state accessors
+- Expanded test suite to 365 tests across 21 suites
+- Agent-oriented documentation set (see Documentation)
+
 ### v2.0: Planned
 
 - [ ] Keyboard shortcuts for tab switching (<kbd>Ctrl+1</kbd>, <kbd>Ctrl+2</kbd>, etc.)
@@ -520,9 +546,30 @@ Deployment is automated via `.github/workflows/deploy_website.yml` on push to `m
 - [ ] Nested label support (parent/child hierarchies)
 - [ ] Firefox extension port (WebExtension APIs)
 
+## Documentation
+
+This repository is documented for both humans and LLM-driven agents. Start with
+[CONTEXT_MAP.md](CONTEXT_MAP.md) to find the right file for a question.
+
+| Document | Purpose |
+|----------|---------|
+| [AGENTS.md](AGENTS.md) | Agent behavior contract and hard constraints |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System design reference |
+| [CONTEXT_MAP.md](CONTEXT_MAP.md) | Where knowledge lives |
+| [DOMAIN.md](DOMAIN.md) | Concepts, terminology, and domain rules |
+| [DATA_MODEL.md](DATA_MODEL.md) | Storage schema and data shapes |
+| [DECISIONS.md](DECISIONS.md) | Architecture Decision Records |
+| [TESTING.md](TESTING.md) | Testing philosophy, commands, thresholds |
+| [SECURITY.md](SECURITY.md) | Privacy and security policy |
+| [PLAYBOOK.md](PLAYBOOK.md) | Build, release, rollback, troubleshooting |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution workflow |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [AUDIT.md](AUDIT.md) | Deep repository audit and risk areas |
+
 ## Contributing
 
-Contributions are welcome. Here is how to get started:
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
+Quick start:
 
 1. **Fork** the repository
 2. **Create a branch**: `git checkout -b feat/your-feature`
@@ -547,7 +594,7 @@ Contributions are welcome. Here is how to get started:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (290+ tests)
+npm test          # Jest (365 tests across 21 suites)
 npm run build     # Verify production build
 ```
 
