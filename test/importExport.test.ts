@@ -171,6 +171,18 @@ describe('validateImportData', () => {
         expect(result).toEqual([]);
     });
 
+    it('should keep a valid tab color', () => {
+        const data = { tabs: [{ id: 't1', title: 'A', type: 'label', value: 'A', color: 'blue' }] };
+        validateImportData(data);
+        expect((data.tabs[0] as any).color).toBe('blue');
+    });
+
+    it('should strip an invalid tab color, falling back to default', () => {
+        const data = { tabs: [{ id: 't1', title: 'A', type: 'label', value: 'A', color: 'chartreuse' }] };
+        expect(() => validateImportData(data)).not.toThrow();
+        expect('color' in (data.tabs[0] as any)).toBe(false);
+    });
+
     it('should accept valid rules when present', () => {
         const data = {
             tabs: validTabs,

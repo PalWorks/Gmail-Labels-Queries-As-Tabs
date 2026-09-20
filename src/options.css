@@ -1235,3 +1235,146 @@ body.theme-light .contact-rating-card {
     border-color: rgba(255, 193, 7, 0.35);
     background: linear-gradient(135deg, rgba(255, 193, 7, 0.06) 0%, rgba(255, 255, 255, 0) 60%);
 }
+/* ===================================================================
+   Tab Colors (palette tokens): options page
+   =================================================================== */
+
+.tab-color-red { --tab-accent: #d93025; }
+.tab-color-orange { --tab-accent: #e8710a; }
+.tab-color-yellow { --tab-accent: #f9ab00; }
+.tab-color-green { --tab-accent: #1e8e3e; }
+.tab-color-teal { --tab-accent: #12a4af; }
+.tab-color-blue { --tab-accent: #1a73e8; }
+.tab-color-purple { --tab-accent: #9334e6; }
+.tab-color-pink { --tab-accent: #d01884; }
+
+.color-swatch-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    background: var(--tab-accent, #5f6368);
+    box-sizing: border-box;
+}
+
+.color-swatch.is-none {
+    background: transparent;
+    border: 2px dashed #9aa0a6;
+    position: relative;
+}
+
+.color-swatch.is-none::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: #9aa0a6;
+    transform: rotate(45deg);
+}
+
+.color-swatch.selected,
+.color-swatch:focus-visible {
+    outline: 2px solid #1a73e8;
+    outline-offset: 2px;
+}
+
+.tab-color-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tab-color-trigger .tab-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--tab-accent, transparent);
+    border: 1px solid #9aa0a6;
+    box-sizing: border-box;
+}
+
+.tab-color-trigger.is-none .tab-color-dot {
+    background: transparent;
+    border-style: dashed;
+}
+
+.color-popover {
+    position: absolute;
+    z-index: 10000;
+    background: #2d2d3a;
+    border: 1px solid #44465a;
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-light .color-popover {
+    background: #fff;
+    border-color: #dadce0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* ===================================================================
+   Rule Templates gallery (one-click starter presets)
+   =================================================================== */
+
+.rule-templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.rule-template-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid #44465a;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+body.theme-light .rule-template-card {
+    border-color: #e2e4ea;
+    background: #fafbfc;
+}
+
+.rule-template-card .rt-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rule-template-card .rt-desc {
+    font-size: 13px;
+    opacity: 0.75;
+}
+
+.rule-template-card .rt-meta {
+    font-size: 12px;
+    opacity: 0.6;
+    font-family: monospace;
+}
+
+.rule-template-card .rt-apply {
+    align-self: flex-start;
+}
+
+.rule-template-card .rt-apply.applied {
+    background: #1e8e3e;
+    border-color: #1e8e3e;
+    color: #fff;
+}

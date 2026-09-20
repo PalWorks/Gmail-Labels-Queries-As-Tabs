@@ -31,6 +31,7 @@ import {
 } from './utils/importExport';
 import { escapeHtml } from './utils/tabListRenderer';
 import { generateAppsScript, tabToGmailLabel } from './modules/rules';
+import { RULE_TEMPLATES, RULE_TEMPLATES_ENABLED, RuleTemplate, applyRuleTemplate } from './modules/ruleTemplates';
 import { setAppSettings, setUserEmail } from './modules/state';
 import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
 
@@ -250,6 +251,7 @@ function renderSettingsTabList(tabs: Tab[]): void {
         listEl: list,
         tabs,
         getAccountId: () => currentAccountId,
+        enableColorPicker: true,
         // The options page has no Gmail tab bar to re-render.
         renderTabBar: () => {},
         reRender: async () => {
@@ -390,6 +392,66 @@ function showImportDialog(): void {
     });
 
     fileInput.click();
+}
+
+// ---------------------------------------------------------------------------
+// Rule Templates (one-click starter presets, feature-flagged)
+// ---------------------------------------------------------------------------
+
+function renderRuleTemplates(): void {
+    const card = document.getElementById('rule-templates-card');
+    const grid = document.getElementById('rule-templates-grid');
+    if (!card || !grid) return;
+
+    // Feature flag off → keep the card hidden and render nothing.
+    if (!RULE_TEMPLATES_ENABLED) {
+        card.classList.add('hidden');
+        return;
+    }
+    card.classList.remove('hidden');
+
+    grid.innerHTML = RULE_TEMPLATES.map(
+        (t) => `
+        <div class="rule-template-card" data-template-id="${t.id}">
+            <span class="rt-title">${t.icon} ${escapeHtml(t.name)}</span>
+            <span class="rt-desc">${escapeHtml(t.description)}</span>
+            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${t.action} · ${t.daysOld}d</span>
+            <button class="btn-secondary rt-apply" data-template-id="${t.id}">Apply</button>
+        </div>
+    `
+    ).join('');
+
+    grid.querySelectorAll<HTMLButtonElement>('.rt-apply').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-template-id');
+            const template = RULE_TEMPLATES.find((t) => t.id === id);
+            if (template) applyTemplate(template, btn);
+        });
+    });
+}
+
+async function applyTemplate(template: RuleTemplate, btn: HTMLButtonElement): Promise<void> {
+    if (!currentAccountId) return;
+    try {
+        await applyRuleTemplate(currentAccountId, template);
+        currentSettings = await getSettings(currentAccountId);
+        setAppSettings(currentSettings);
+        renderSettingsTabList(currentSettings.tabs);
+        renderRulesList(currentSettings.tabs, currentSettings.rules);
+
+        btn.textContent = '✅ Applied';
+        btn.classList.add('applied');
+        setTimeout(() => {
+            btn.textContent = 'Apply';
+            btn.classList.remove('applied');
+        }, 2000);
+    } catch (e) {
+        console.error('Options: Failed to apply template', e);
+        btn.textContent = '⚠️ Failed';
+        setTimeout(() => {
+            btn.textContent = 'Apply';
+        }, 2000);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -658,6 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDataControls();
 
     // Load data
+    renderRuleTemplates();
     loadSettings();
     setupScriptGeneration();
 });

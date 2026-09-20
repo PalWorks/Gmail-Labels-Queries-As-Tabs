@@ -6,6 +6,7 @@
  */
 
 import { Tab } from '../utils/storage';
+import { tabColorClass } from '../utils/colors';
 import { TABS_BAR_ID, getAppSettings } from './state';
 import { updateUnreadCount } from './unread';
 import {
@@ -128,6 +129,7 @@ export function renderTabs(): void {
     getAppSettings()!.tabs.forEach((tab, index) => {
         const tabEl = document.createElement('div');
         tabEl.className = 'gmail-tab';
+        if (tab.color) tabEl.classList.add(tabColorClass(tab.color));
         tabEl.setAttribute('draggable', isMoveMode ? 'true' : 'false');
         tabEl.dataset.index = index.toString();
         tabEl.dataset.value = tab.value;

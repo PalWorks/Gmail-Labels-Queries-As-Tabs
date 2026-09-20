@@ -10,8 +10,9 @@
  * behavior lives here.
  */
 
-import { Tab, removeTab, updateTabOrder } from '../utils/storage';
-import { renderTabListItems, TabListOptions } from '../utils/tabListRenderer';
+import { Tab, removeTab, updateTab, updateTabOrder } from '../utils/storage';
+import { renderTabListItems, TabListCallbacks, TabListOptions } from '../utils/tabListRenderer';
+import { openColorPopover } from './colorPicker';
 import { createModalDragHandlers, ModalDragHandlers } from './dragdrop';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,13 @@ export interface ManagedTabListDeps {
     reRender: () => void | Promise<void>;
     /** Re-render the Gmail tab bar (no-op on the options page). */
     renderTabBar: () => void;
+    /**
+     * Render a per-row color picker trigger. Only the options page opts in; the
+     * in-Gmail overlay exposes color editing through the Edit Tab modal instead,
+     * so it leaves this off to avoid a redundant surface (and the popover's
+     * window-scroll positioning, which is only correct outside Gmail's overlay).
+     */
+    enableColorPicker?: boolean;
     listOptions?: TabListOptions;
 }
 
@@ -88,37 +96,45 @@ export function wireTabListDragListeners(listEl: HTMLElement, handlers: ModalDra
  * function with fresh tabs).
  */
 export function renderManagedTabList(deps: ManagedTabListDeps): void {
-    const { listEl, tabs, getAccountId, reRender, renderTabBar, listOptions } = deps;
+    const { listEl, tabs, getAccountId, reRender, renderTabBar, enableColorPicker, listOptions } = deps;
 
-    renderTabListItems(
-        listEl,
-        tabs,
-        {
-            onRemove: async (tabId) => {
+    const callbacks: TabListCallbacks = {
+        onRemove: async (tabId) => {
+            const account = getAccountId();
+            if (!account) return;
+            await removeTab(account, tabId);
+            await reRender();
+        },
+        onMoveUp: async (index) => {
+            const account = getAccountId();
+            if (!account || index <= 0) return;
+            const reordered = [...tabs];
+            [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+            await updateTabOrder(account, reordered);
+            await reRender();
+        },
+        onMoveDown: async (index) => {
+            const account = getAccountId();
+            if (!account || index >= tabs.length - 1) return;
+            const reordered = [...tabs];
+            [reordered[index + 1], reordered[index]] = [reordered[index], reordered[index + 1]];
+            await updateTabOrder(account, reordered);
+            await reRender();
+        },
+    };
+
+    if (enableColorPicker) {
+        callbacks.onColorTrigger = (tab, anchor) => {
+            openColorPopover(anchor, tab.color, async (color) => {
                 const account = getAccountId();
                 if (!account) return;
-                await removeTab(account, tabId);
+                await updateTab(account, tab.id, { color });
                 await reRender();
-            },
-            onMoveUp: async (index) => {
-                const account = getAccountId();
-                if (!account || index <= 0) return;
-                const reordered = [...tabs];
-                [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-                await updateTabOrder(account, reordered);
-                await reRender();
-            },
-            onMoveDown: async (index) => {
-                const account = getAccountId();
-                if (!account || index >= tabs.length - 1) return;
-                const reordered = [...tabs];
-                [reordered[index + 1], reordered[index]] = [reordered[index], reordered[index + 1]];
-                await updateTabOrder(account, reordered);
-                await reRender();
-            },
-        },
-        listOptions
-    );
+            });
+        };
+    }
+
+    renderTabListItems(listEl, tabs, callbacks, listOptions);
 
     const dragHandlers = createModalDragHandlers(listEl as HTMLUListElement, () => reRender(), renderTabBar);
     wireTabListDragListeners(listEl, dragHandlers);

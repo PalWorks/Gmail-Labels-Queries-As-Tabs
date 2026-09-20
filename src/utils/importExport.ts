@@ -9,6 +9,7 @@
  */
 
 import { Tab, Rule, Theme } from './storage';
+import { isValidTabColor } from './colors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +96,11 @@ export function validateImportData(data: Record<string, unknown>): Tab[] {
         }
         if (typeof t.value !== 'string' || !(t.value as string).trim()) {
             throw new Error(`Invalid tab at index ${i}: missing or empty "value".`);
+        }
+        // `color` is optional. An unknown/malformed color silently falls back to
+        // default (stripped) rather than rejecting an otherwise valid backup.
+        if (t.color !== undefined && !isValidTabColor(t.color)) {
+            delete t.color;
         }
     }
 

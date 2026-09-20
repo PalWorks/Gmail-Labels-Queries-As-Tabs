@@ -6,11 +6,14 @@
  * Now supports multi-account storage.
  */
 
+import { TabColor } from './colors';
+
 export interface Tab {
     id: string;
     title: string; // Display Name
     type: 'label' | 'hash'; // 'label' for legacy/simple, 'hash' for custom views
     value: string; // The label name or full hash string
+    color?: TabColor; // Optional palette token; absent = default styling
 }
 
 // Legacy interface for migration
