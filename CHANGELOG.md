@@ -38,6 +38,10 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 - The options page sidebar showed a hardcoded version (`v1.2.1`) that never tracked
   releases; it now reads the version from the manifest.
+- Tab colors are sanitized where they are read from storage, so an unknown token can no
+  longer reach a render path. Previously such a token became a dead CSS class, was
+  interpolated unescaped into the options-page markup, and left the color picker with
+  nothing selected, which stranded keyboard focus on the trigger button.
 
 ## [1.2.1] - 2026-07-07
 

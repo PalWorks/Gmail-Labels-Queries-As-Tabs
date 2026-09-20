@@ -114,6 +114,36 @@ describe('getSettings', () => {
         expect(settings.theme).toBe('dark');
         expect(settings.showUnreadCount).toBe(false);
     });
+
+    test('keeps a valid color token', async () => {
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [{ id: 'tab1', title: 'Work', type: 'label', value: 'Work', color: 'teal' }],
+            rules: [],
+            theme: 'light',
+            showUnreadCount: true,
+        };
+
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.tabs[0].color).toBe('teal');
+    });
+
+    test('strips an unknown color token on read', async () => {
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [
+                { id: 'tab1', title: 'Work', type: 'label', value: 'Work', color: 'not-a-color' },
+                { id: 'tab2', title: 'Hack', type: 'label', value: 'Hack', color: 'x" onload="evil()' },
+            ],
+            rules: [],
+            theme: 'light',
+            showUnreadCount: true,
+        };
+
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.tabs[0]).not.toHaveProperty('color');
+        expect(settings.tabs[1]).not.toHaveProperty('color');
+        // The rest of the tab survives untouched.
+        expect(settings.tabs[0].title).toBe('Work');
+    });
 });
 
 // ------ addTab ------

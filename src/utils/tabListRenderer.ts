@@ -10,7 +10,7 @@
  */
 
 import { Tab } from './storage';
-import { tabColorClass } from './colors';
+import { isValidTabColor, tabColorClass } from './colors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,7 +94,9 @@ export function renderTabListItems(
             index < tabs.length - 1 ? `<button class="tab-action-btn down-btn" title="Move down">\u2193</button>` : '';
         const removeBtn = `<button class="tab-action-btn remove-btn" title="Remove">\u2715</button>`;
         // Color trigger only rendered when a handler is supplied (options page).
-        const colorClass = tab.color ? tabColorClass(tab.color) : 'is-none';
+        // Validate before interpolating: the class is built into an innerHTML
+        // string, so an unknown token must never reach the markup.
+        const colorClass = isValidTabColor(tab.color) ? tabColorClass(tab.color) : 'is-none';
         const colorBtn = callbacks.onColorTrigger
             ? `<button class="tab-action-btn tab-color-trigger ${colorClass}" title="Set color" aria-label="Set color for ${escapeHtml(tab.title)}"><span class="tab-color-dot"></span></button>`
             : '';

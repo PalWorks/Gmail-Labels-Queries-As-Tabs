@@ -6,7 +6,7 @@
  * Now supports multi-account storage.
  */
 
-import { TabColor } from './colors';
+import { TabColor, normalizeTabColor } from './colors';
 
 export interface Tab {
     id: string;
@@ -70,6 +70,20 @@ const DEFAULT_SETTINGS: Settings = {
     showUnreadCount: true,
 };
 
+/**
+ * Drop a tab's color unless it is a known palette token. Storage is the trust
+ * boundary: sanitizing on read means no render path has to reason about a junk
+ * token (which would otherwise become a dead CSS class, or worse, be
+ * interpolated into markup).
+ */
+function sanitizeTabColor(tab: Tab): Tab {
+    const color = normalizeTabColor(tab.color);
+    if (color) return { ...tab, color };
+    const cleaned = { ...tab };
+    delete cleaned.color;
+    return cleaned;
+}
+
 function getAccountKey(accountId: string): string {
     return `account_${accountId}`;
 }
@@ -115,6 +129,10 @@ export async function getSettings(accountId: string): Promise<Settings> {
                     showUnreadCount: DEFAULT_SETTINGS.showUnreadCount,
                 };
                 const settings = { ...defaults, ...stored } as Settings;
+                // Storage is the trust boundary for colors: anything that is
+                // not a known palette token becomes "no color" here, so no
+                // render path ever has to reason about a junk token.
+                settings.tabs = settings.tabs.map(sanitizeTabColor);
                 resolve(settings);
             });
         } catch (e) {

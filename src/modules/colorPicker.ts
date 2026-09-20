@@ -9,7 +9,7 @@
  * color) option first, then one swatch per palette token.
  */
 
-import { TAB_COLORS, TAB_COLOR_LABELS, TabColor, tabColorClass } from '../utils/colors';
+import { TAB_COLORS, TAB_COLOR_LABELS, TabColor, normalizeTabColor, tabColorClass } from '../utils/colors';
 
 export type ColorSelectHandler = (color: TabColor | undefined) => void;
 
@@ -18,6 +18,11 @@ export type ColorSelectHandler = (color: TabColor | undefined) => void;
  * token (or `undefined` for default) and updates the visual/aria selection state.
  */
 export function createColorSwatchRow(current: TabColor | undefined, onSelect: ColorSelectHandler): HTMLElement {
+    // An unknown token would match no swatch, leaving nothing selected and
+    // nothing in the tab order — keyboard users would be stranded on the
+    // trigger. Treat it as "no color" so Default is selected and focusable.
+    current = normalizeTabColor(current);
+
     const row = document.createElement('div');
     row.className = 'color-swatch-row';
     row.setAttribute('role', 'radiogroup');

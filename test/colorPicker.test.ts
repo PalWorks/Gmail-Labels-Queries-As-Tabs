@@ -123,4 +123,15 @@ describe('openColorPopover', () => {
         addSpy.mockRestore();
         removeSpy.mockRestore();
     });
+
+    test('an unknown current color selects Default, keeping a swatch focusable', () => {
+        // Cast: guards against a corrupted store leaving nothing in the tab order.
+        const row = createColorSwatchRow('not-a-color' as never, () => {});
+        document.body.appendChild(row);
+
+        const selected = row.querySelectorAll('.color-swatch[aria-checked="true"]');
+        expect(selected).toHaveLength(1);
+        expect(selected[0].getAttribute('aria-label')).toBe('Default (no color)');
+        expect((selected[0] as HTMLButtonElement).tabIndex).toBe(0);
+    });
 });
