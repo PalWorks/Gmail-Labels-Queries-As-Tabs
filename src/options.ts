@@ -34,6 +34,13 @@ import { generateAppsScript, tabToGmailLabel } from './modules/rules';
 import { RULE_TEMPLATES, RULE_TEMPLATES_ENABLED, RuleTemplate, applyRuleTemplate } from './modules/ruleTemplates';
 import { setAppSettings, setUserEmail } from './modules/state';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
+import {
+    FeedbackCategory,
+    MAX_MESSAGE_CHARS,
+    buildDiagnostics,
+    submitFeedback,
+    validateFeedback,
+} from './modules/feedback';
 import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
 
 // ---------------------------------------------------------------------------
@@ -71,6 +78,8 @@ let currentAccountId: string | null = null;
 let currentSettings: Settings | null = null;
 // Theme is browser-wide (shared by all accounts), not part of currentSettings.
 let currentTheme: Theme = 'light';
+// Count only, for opt-in feedback diagnostics; addresses never leave the page.
+let knownAccountCount = 0;
 
 // ---------------------------------------------------------------------------
 // Settings Loading
@@ -90,6 +99,7 @@ async function loadSettings(): Promise<void> {
             currentAccountId = accounts[0];
         }
 
+        knownAccountCount = accounts.length;
         populateAccountSelector(accounts);
 
         // Bridge local state into the shared state module so shared
@@ -718,6 +728,82 @@ function setupAccountSwitcher(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Feedback form (Get in Touch)
+// ---------------------------------------------------------------------------
+
+function setStatus(el: HTMLElement, message: string, kind: 'error' | 'success' | 'none'): void {
+    el.textContent = message;
+    el.classList.remove('is-error', 'is-success');
+    if (kind !== 'none') el.classList.add(kind === 'error' ? 'is-error' : 'is-success');
+}
+
+function setupFeedbackForm(): void {
+    const form = document.getElementById('feedback-form') as HTMLFormElement | null;
+    if (!form) return;
+
+    const categoryEl = document.getElementById('feedback-category') as HTMLSelectElement;
+    const messageEl = document.getElementById('feedback-message') as HTMLTextAreaElement;
+    const emailEl = document.getElementById('feedback-email') as HTMLInputElement;
+    const diagnosticsEl = document.getElementById('feedback-diagnostics') as HTMLInputElement;
+    const honeypotEl = document.getElementById('feedback-website') as HTMLInputElement;
+    const submitBtn = document.getElementById('feedback-submit') as HTMLButtonElement;
+    const statusEl = document.getElementById('feedback-status') as HTMLElement;
+    const countEl = document.getElementById('feedback-count') as HTMLElement;
+
+    messageEl.addEventListener('input', () => {
+        countEl.textContent = `${messageEl.value.length} / ${MAX_MESSAGE_CHARS}`;
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // A bot filled the honeypot: accept visually, send nothing.
+        if (honeypotEl.value.trim()) {
+            setStatus(statusEl, 'Thanks, your feedback is on its way.', 'success');
+            form.reset();
+            return;
+        }
+
+        const input = {
+            category: categoryEl.value as FeedbackCategory,
+            message: messageEl.value,
+            replyTo: emailEl.value,
+        };
+
+        const problem = validateFeedback(input);
+        if (problem) {
+            setStatus(statusEl, problem, 'error');
+            (problem.includes('email') ? emailEl : messageEl).focus();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        setStatus(statusEl, 'Sending…', 'none');
+
+        const result = await submitFeedback({
+            ...input,
+            diagnostics: diagnosticsEl.checked
+                ? buildDiagnostics({
+                      tabCount: currentSettings?.tabs.length ?? 0,
+                      ruleCount: currentSettings?.rules.length ?? 0,
+                      accountCount: knownAccountCount,
+                  })
+                : undefined,
+        });
+
+        submitBtn.disabled = false;
+
+        if (result.ok) {
+            setStatus(statusEl, 'Thanks. Your feedback is on its way.', 'success');
+            messageEl.value = '';
+            countEl.textContent = `0 / ${MAX_MESSAGE_CHARS}`;
+        } else {
+            setStatus(statusEl, result.error, 'error');
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Theme Sync (react to global theme changes made elsewhere)
 // ---------------------------------------------------------------------------
 
@@ -781,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPreferences();
     setupAddTab();
     setupDataControls();
+    setupFeedbackForm();
 
     // Page chrome that must render even with no Gmail account set up yet.
     renderVersionTag();

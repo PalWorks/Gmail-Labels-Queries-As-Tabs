@@ -1378,3 +1378,129 @@ body.theme-light .rule-template-card {
     border-color: #1e8e3e;
     color: #fff;
 }
+
+/* ---------------------------------------------------------------------------
+   Feedback form (Get in Touch)
+   --------------------------------------------------------------------------- */
+
+#feedback-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 14px;
+}
+
+.feedback-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.feedback-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.feedback-optional {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.feedback-select,
+.feedback-input,
+.feedback-textarea {
+    background: #1a1a2e;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.feedback-textarea {
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.5;
+}
+
+.feedback-select:focus,
+.feedback-input:focus,
+.feedback-textarea:focus {
+    border-color: #4fc3f7;
+}
+
+body.theme-light .feedback-select,
+body.theme-light .feedback-input,
+body.theme-light .feedback-textarea {
+    background: #fff;
+    border-color: #d7dae2;
+    color: #202124;
+}
+
+.feedback-hint {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.feedback-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.feedback-diagnostics-row {
+    gap: 4px;
+}
+
+/* Off-screen rather than display:none, so bots that skip hidden fields still
+   fill it, while assistive tech ignores the aria-hidden wrapper. */
+.feedback-honeypot {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.feedback-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.feedback-status {
+    font-size: 13px;
+}
+
+.feedback-status.is-error {
+    color: #f28b82;
+}
+
+.feedback-status.is-success {
+    color: #81c995;
+}
+
+body.theme-light .feedback-status.is-error {
+    color: #c5221f;
+}
+
+body.theme-light .feedback-status.is-success {
+    color: #188038;
+}
+
+.feedback-footnote {
+    margin-top: 14px;
+    font-size: 12px;
+    opacity: 0.65;
+}
+
+#feedback-submit[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
