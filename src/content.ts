@@ -26,7 +26,7 @@ import {
 
 // Module imports
 import { TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
-import { applyTheme, listenForSystemThemeChanges } from './modules/theme';
+import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modules/theme';
 import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
@@ -206,6 +206,11 @@ async function finalizeInit(email: string): Promise<void> {
 
         // Listen for OS theme changes to auto-update 'system' mode
         listenForSystemThemeChanges(() => currentGlobalTheme);
+
+        // Gmail paints its own background late and the user can switch Gmail's
+        // theme without reloading, so keep 'system' mode following Gmail itself
+        // rather than the OS.
+        watchGmailTheme(() => currentGlobalTheme);
     } catch (e) {
         console.error('Gmail Tabs: Error in finalizeInit', e);
     }

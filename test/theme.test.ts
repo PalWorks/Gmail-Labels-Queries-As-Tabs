@@ -6,7 +6,15 @@ export {};
  * Covers detectGmailDarkMode(), applyTheme(), and listenForSystemThemeChanges().
  */
 
-import { detectGmailDarkMode, applyTheme, listenForSystemThemeChanges, ThemeMode } from '../src/modules/theme';
+import {
+    detectGmailDarkMode,
+    detectGmailTheme,
+    resolveSystemTheme,
+    applyTheme,
+    listenForSystemThemeChanges,
+    watchGmailTheme,
+    ThemeMode,
+} from '../src/modules/theme';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -209,5 +217,120 @@ describe('listenForSystemThemeChanges', () => {
         listenForSystemThemeChanges(() => currentTheme);
 
         expect(mql.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// detectGmailTheme — Gmail's own theme wins over the OS preference
+// ---------------------------------------------------------------------------
+
+describe('detectGmailTheme', () => {
+    test('reports light for a light Gmail background even when the OS is dark', () => {
+        const map = new Map<Element, string>();
+        // Gmail's real light surface, which is not pure white.
+        map.set(document.body, 'rgb(248, 250, 253)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(true);
+
+        expect(detectGmailTheme()).toBe('light');
+        expect(detectGmailDarkMode()).toBe(false);
+    });
+
+    test('reports dark for a dark Gmail background even when the OS is light', () => {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(32, 33, 36)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        expect(detectGmailTheme()).toBe('dark');
+    });
+
+    test('skips transparent surfaces and reads the next candidate', () => {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'transparent');
+        map.set(document.documentElement, 'rgb(26, 26, 26)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        expect(detectGmailTheme()).toBe('dark');
+    });
+
+    test('returns null when nothing readable has painted yet', () => {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgba(0, 0, 0, 0)');
+        map.set(document.documentElement, 'transparent');
+        mockComputedStyle(map);
+        mockMatchMedia(true);
+
+        expect(detectGmailTheme()).toBeNull();
+    });
+
+    test('resolveSystemTheme uses the OS only when Gmail is unreadable', () => {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'transparent');
+        map.set(document.documentElement, 'transparent');
+        mockComputedStyle(map);
+        mockMatchMedia(true);
+
+        expect(resolveSystemTheme()).toBe('dark');
+    });
+
+    test('system mode follows Gmail light while the OS asks for dark', () => {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(248, 250, 253)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(true);
+
+        applyTheme('system');
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains('force-dark')).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// watchGmailTheme
+// ---------------------------------------------------------------------------
+
+describe('watchGmailTheme', () => {
+    test('re-applies the theme when Gmail switches from light to dark', () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(255, 255, 255)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        const stop = watchGmailTheme(() => 'system');
+        expect(document.body.classList.contains('force-light')).toBe(true);
+
+        // Gmail repaints dark; the settling ladder picks it up.
+        map.set(document.body, 'rgb(32, 33, 36)');
+        jest.advanceTimersByTime(1000);
+
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+        stop();
+        jest.useRealTimers();
+    });
+
+    test('leaves an explicit light/dark preference alone', () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(32, 33, 36)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        document.body.classList.add('force-light');
+        const stop = watchGmailTheme(() => 'light');
+        jest.advanceTimersByTime(6000);
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains('force-dark')).toBe(false);
+        stop();
+        jest.useRealTimers();
     });
 });

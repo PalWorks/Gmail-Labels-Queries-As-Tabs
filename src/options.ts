@@ -33,6 +33,7 @@ import { escapeHtml } from './utils/tabListRenderer';
 import { generateAppsScript, tabToGmailLabel } from './modules/rules';
 import { RULE_TEMPLATES, RULE_TEMPLATES_ENABLED, RuleTemplate, applyRuleTemplate } from './modules/ruleTemplates';
 import { setAppSettings, setUserEmail } from './modules/state';
+import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,7 @@ async function loadSettings(): Promise<void> {
         setAppSettings(currentSettings);
 
         currentTheme = await getGlobalTheme();
+        await loadDetectedGmailTheme();
         renderThemeButtons(currentTheme);
         applyThemeToPage(currentTheme);
         renderSettingsTabList(currentSettings.tabs);
@@ -123,17 +125,43 @@ function renderThemeButtons(activeTheme: string): void {
     });
 }
 
+// Last theme Gmail reported for this profile. The options page has no Gmail
+// DOM to sample, so in 'system' mode it mirrors what the content script saw
+// rather than the OS, which can disagree with the user's Gmail theme.
+let detectedGmailTheme: ResolvedTheme | null = null;
+
+/** Load the theme Gmail last reported. Safe when storage is unavailable. */
+async function loadDetectedGmailTheme(): Promise<void> {
+    detectedGmailTheme = await new Promise<ResolvedTheme | null>((resolve) => {
+        try {
+            chrome.storage.local.get([DETECTED_GMAIL_THEME_KEY], (items) => {
+                if (chrome.runtime.lastError) {
+                    resolve(null);
+                    return;
+                }
+                const t = items[DETECTED_GMAIL_THEME_KEY];
+                resolve(t === 'light' || t === 'dark' ? t : null);
+            });
+        } catch {
+            resolve(null);
+        }
+    });
+}
+
+/** Resolve 'system' for this page: Gmail's theme first, OS only as fallback. */
+function resolveSystemThemeForPage(): ResolvedTheme {
+    if (detectedGmailTheme) return detectedGmailTheme;
+    try {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch {
+        return 'light';
+    }
+}
+
 function applyThemeToPage(theme: string): void {
     document.body.classList.remove('theme-light', 'theme-dark');
-    if (theme === 'light') {
-        document.body.classList.add('theme-light');
-    } else if (theme === 'dark') {
-        document.body.classList.add('theme-dark');
-    } else {
-        // System: check OS preference
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (!prefersDark) document.body.classList.add('theme-light');
-    }
+    const resolved = theme === 'light' || theme === 'dark' ? theme : resolveSystemThemeForPage();
+    document.body.classList.add(resolved === 'dark' ? 'theme-dark' : 'theme-light');
     updateSidebarThemeIcon(theme);
 }
 
@@ -167,6 +195,31 @@ function setupSidebarThemeToggle(): void {
         renderThemeButtons(next);
         applyThemeToPage(next);
     });
+}
+
+/**
+ * Apply the stored theme before account data loads, so the page never flashes
+ * the wrong mode (and is themed at all when no account exists yet).
+ */
+async function applyStoredThemeEarly(): Promise<void> {
+    currentTheme = await getGlobalTheme();
+    await loadDetectedGmailTheme();
+    renderThemeButtons(currentTheme);
+    applyThemeToPage(currentTheme);
+}
+
+/**
+ * Stamp the sidebar version from the manifest. Hardcoding it here meant the
+ * page kept claiming an old version after every release bump.
+ */
+function renderVersionTag(): void {
+    const el = document.getElementById('version-tag');
+    if (!el) return;
+    try {
+        el.textContent = 'v' + chrome.runtime.getManifest().version;
+    } catch {
+        el.textContent = '';
+    }
 }
 
 function updateSidebarThemeIcon(theme: string): void {
@@ -671,7 +724,17 @@ function setupAccountSwitcher(): void {
 function setupThemeSync(): void {
     if (!chrome.storage?.onChanged) return;
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== 'local' || !changes[GLOBAL_THEME_STORAGE_KEY]) return;
+        if (area !== 'local') return;
+
+        // Gmail reported a different rendered theme: follow it while the
+        // preference is 'system'.
+        if (changes[DETECTED_GMAIL_THEME_KEY]) {
+            const d = changes[DETECTED_GMAIL_THEME_KEY].newValue;
+            detectedGmailTheme = d === 'light' || d === 'dark' ? d : null;
+            if (currentTheme === 'system') applyThemeToPage('system');
+        }
+
+        if (!changes[GLOBAL_THEME_STORAGE_KEY]) return;
         const t = changes[GLOBAL_THEME_STORAGE_KEY].newValue;
         if (t === 'light' || t === 'dark' || t === 'system') {
             currentTheme = t;
@@ -718,6 +781,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPreferences();
     setupAddTab();
     setupDataControls();
+
+    // Page chrome that must render even with no Gmail account set up yet.
+    renderVersionTag();
+    applyStoredThemeEarly();
 
     // Load data
     renderRuleTemplates();

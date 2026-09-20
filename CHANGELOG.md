@@ -24,6 +24,20 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 - Export/import now round-trips `Tab.color`; unknown color tokens are stripped on import
   and fall back to default rather than failing the import.
+- Theme "System" now follows **Gmail's own theme**, not the OS setting. Gmail's theme is an
+  account preference, so a dark desktop with a light Gmail used to render the tab bar dark
+  against a light inbox. Detection reads Gmail's painted background, re-checks while the
+  page settles, and tracks a Gmail theme switch without a reload
+  ([src/modules/theme.ts](src/modules/theme.ts)). The OS media query is now only a last
+  resort, used when Gmail's background cannot be read yet.
+- The options page mirrors the theme Gmail last reported when the preference is "System",
+  instead of consulting the OS, and applies it before account data loads so it no longer
+  flashes the wrong mode.
+
+### Fixed
+
+- The options page sidebar showed a hardcoded version (`v1.2.1`) that never tracked
+  releases; it now reads the version from the manifest.
 
 ## [1.2.1] - 2026-07-07
 
