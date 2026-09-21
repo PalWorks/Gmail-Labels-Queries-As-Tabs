@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans', Ubuntu, 'Liberation Sans', sans-serif; overflow: hidden; }
+
+  /* ── Marquee 1400x560 ─────────────────────────────────────── */
+  .marquee {
+    width: 1400px; height: 560px; display: flex; align-items: center; gap: 56px;
+    padding: 0 72px;
+    background: linear-gradient(135deg, #0b3d91 0%, #1558c0 48%, #1967d2 100%);
+    color: #fff; position: relative; overflow: hidden;
+  }
+  .marquee::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(900px 420px at 88% 12%, rgba(255,255,255,0.16), transparent 70%);
+  }
+  .m-copy { width: 560px; position: relative; z-index: 1; }
+  .m-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  .m-brand img { width: 52px; height: 52px; border-radius: 12px; background: #fff; padding: 4px; }
+  .m-brand span { font-size: 20px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.92; }
+  .m-copy h1 { font-size: 54px; line-height: 1.08; font-weight: 800; letter-spacing: -0.8px; }
+  .m-copy p { margin-top: 20px; font-size: 24px; line-height: 1.45; opacity: 0.92; font-weight: 500; }
+  .m-points { margin-top: 30px; display: flex; flex-direction: column; gap: 12px; font-size: 19px; opacity: 0.95; }
+  .m-points div { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  /* Crop the real Gmail capture so the tab bar leads, with the blurred list
+     below it for context. */
+  .m-shot {
+    position: relative; z-index: 1; width: 660px; height: 404px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 30px 70px rgba(0,0,0,0.42); border: 1px solid rgba(255,255,255,0.25); background: #fff;
+  }
+  .m-shot img { width: 1000px; display: block; margin-left: -228px; margin-top: -52px; }
+
+  /* ── Small tile 440x280 ───────────────────────────────────── */
+  .small {
+    width: 440px; height: 280px; padding: 30px 32px;
+    background: linear-gradient(140deg, #0b3d91 0%, #1558c0 55%, #1967d2 100%);
+    color: #fff; display: flex; flex-direction: column; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .small::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(360px 200px at 90% 6%, rgba(255,255,255,0.18), transparent 70%);
+  }
+  .s-brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+  .s-brand img { width: 42px; height: 42px; border-radius: 10px; background: #fff; padding: 3px; }
+  .s-brand span { font-size: 17px; font-weight: 700; line-height: 1.2; }
+  .small h2 { position: relative; z-index: 1; font-size: 31px; line-height: 1.15; font-weight: 800; letter-spacing: -0.4px; }
+  .s-foot { position: relative; z-index: 1; font-size: 15px; opacity: 0.92; font-weight: 500; }
+  .s-tabs { position: relative; z-index: 1; display: flex; gap: 8px; }
+  .chip {
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 999px; padding: 5px 13px; font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 7px;
+  }
+</style></head>
+<body>
+  <div class="marquee" id="marquee">
+    <div class="m-copy">
+      <div class="m-brand"><img class="logo"><span>Gmail Labels as Tabs</span></div>
+      <h1>Your Gmail labels, across the top</h1>
+      <p>Labels and saved searches become tabs. One click per view.</p>
+      <div class="m-points">
+        <div><span class="dot" style="background:#5bb974"></span>Live unread counts and custom colours</div>
+        <div><span class="dot" style="background:#fcc934"></span>One-click cleanup rules, run in your account</div>
+        <div><span class="dot" style="background:#8ab4f8"></span>No analytics, no telemetry, no servers</div>
+      </div>
+    </div>
+    <div class="m-shot"><img class="shot"></div>
+  </div>
+
+  <div class="small" id="small">
+    <div class="s-brand"><img class="logo"><span>Gmail Labels<br>as Tabs</span></div>
+    <h2>Labels and searches, as tabs</h2>
+    <div class="s-tabs">
+      <span class="chip"><span class="dot" style="background:#8ab4f8"></span>Clients</span>
+      <span class="chip"><span class="dot" style="background:#5bb974"></span>Invoices</span>
+      <span class="chip"><span class="dot" style="background:#fcc934"></span>Newsletters</span>
+    </div>
+    <div class="s-foot">Unread counts · colours · cleanup rules</div>
+  </div>
+</body></html>
