@@ -37,8 +37,10 @@ export const Privacy: React.FC = () => {
             <p className="mb-4">
               Gmail Labels &amp; Queries as Tabs ("the extension") reads your Gmail page to draw a
               tab bar and to count unread messages. It does that entirely inside your browser. It
-              has no server, no database, no account, no analytics and no advertising, and it never
-              sends your mail, your contacts, your label names or your tab names anywhere.
+              has no database, no account, no analytics and no advertising, and it never sends your
+              mail, your contacts, your label names or your tab names anywhere. The one server we
+              run is the feedback relay described in section 4, which is reached only when you
+              press Send and which stores nothing.
             </p>
             <p className="mb-4">
               Exactly two things ever leave your browser, and both are listed in full in section 4.

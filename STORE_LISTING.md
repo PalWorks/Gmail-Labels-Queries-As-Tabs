@@ -53,7 +53,7 @@ WHAT YOU GET
 
 AUTOMATION THAT RUNS UNDER YOUR OWN ACCOUNT
 
-The cleanup rules do not run on our servers, because we do not have any. The extension
+The cleanup rules never touch us. The extension
 generates a Google Apps Script that you paste into your own account and schedule yourself.
 You can read every line before you run it, and you can stop it whenever you like. Emails
 are moved to Trash, where Gmail keeps them for 30 days. Nothing is permanently deleted.

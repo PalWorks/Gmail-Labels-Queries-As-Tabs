@@ -607,7 +607,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **No background requests**: No analytics, no telemetry, no remote config
 - **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
-- **No user data collection**: The extension has no server, no database, no tracking
+- **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send, and it stores nothing
 - **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
 - **Minimal permissions**: Only `storage`, `downloads`, and `management`
 - **Open source**: Full codebase available for audit
