@@ -162,19 +162,43 @@ export function listenForSystemThemeChanges(getCurrentTheme: () => ThemeMode): v
 
 // Gmail paints its real background well after injection, and the user can flip
 // the Gmail theme without a reload, so 'system' mode re-checks on a short
-// settling ladder and then on DOM attribute changes.
+// settling ladder and then on anything that could repaint the page.
+//
+// The ladder always runs all five steps. Stopping early once two consecutive
+// detections agree was considered and rejected: five timers over ten seconds
+// cost nothing measurable, and an early stop trades real robustness on a slow
+// connection for an imaginary saving. See ADR-015.
 const SETTLE_DELAYS_MS = [250, 750, 2000, 5000, 10000];
 
+/** Debounce for observer-driven re-checks, so a burst of DOM churn costs one check. */
+const RECHECK_DEBOUNCE_MS = 150;
+
 /**
- * Keep 'system' mode in step with Gmail's own theme: re-detect while the page
- * settles, then whenever Gmail mutates the attributes that carry its theme.
+ * Keep 'system' mode in step with Gmail's own theme.
+ *
+ * Three sources, because no one of them is sufficient:
+ *
+ *  - a settling ladder, for the common case where Gmail simply has not painted
+ *    yet when the content script runs;
+ *  - attribute mutations on <html> and <body>, for a theme switch that Gmail
+ *    applies by swapping a class;
+ *  - stylesheet arrivals in <head>, because Gmail's background usually comes
+ *    from a stylesheet, and a stylesheet loading changes no attribute the
+ *    observer above would ever see. On a slow connection that stylesheet can
+ *    land after the ladder has run out.
+ *
+ * Plus `load`, and `visibilitychange` for a tab that was restored from the
+ * background and only painted when it was shown.
+ *
  * Returns a teardown function (used by tests; the content script runs for the
  * life of the tab).
  */
 export function watchGmailTheme(getCurrentTheme: () => ThemeMode): () => void {
     let lastResolved: ResolvedTheme | null = null;
+    let disposed = false;
 
     const check = (): void => {
+        if (disposed) return;
         if (getCurrentTheme() !== 'system') return;
         const detected = detectGmailTheme();
         if (!detected || detected === lastResolved) return;
@@ -184,31 +208,64 @@ export function watchGmailTheme(getCurrentTheme: () => ThemeMode): () => void {
 
     const timers = SETTLE_DELAYS_MS.map((ms) => setTimeout(check, ms));
 
-    let scheduled = false;
-    const observer = new MutationObserver(() => {
-        if (scheduled) return;
-        scheduled = true;
-        setTimeout(() => {
-            scheduled = false;
+    let scheduled: ReturnType<typeof setTimeout> | null = null;
+    const scheduleCheck = (): void => {
+        if (scheduled !== null || disposed) return;
+        scheduled = setTimeout(() => {
+            scheduled = null;
             check();
-        }, 150);
+        }, RECHECK_DEBOUNCE_MS);
+    };
+
+    // Note: applying a theme rewrites body's class list, which this observer
+    // watches, so every change we make schedules one more check. That is
+    // deliberate rather than guarded: the check is idempotent and returns
+    // immediately when the detected theme already matches, so the loop settles
+    // after exactly one extra pass. Suppressing it would need shared mutable
+    // state between the writer and the observer for no measurable gain.
+    const attributeObserver = new MutationObserver(scheduleCheck);
+    const attributeOptions: MutationObserverInit = { attributes: true, attributeFilter: ['class', 'style'] };
+    attributeObserver.observe(document.documentElement, attributeOptions);
+    if (document.body) attributeObserver.observe(document.body, attributeOptions);
+
+    // Gmail churns <head> constantly, so only a stylesheet is worth a re-check.
+    const isStyleNode = (node: Node): boolean =>
+        node.nodeType === Node.ELEMENT_NODE &&
+        ((node as Element).tagName === 'STYLE' || (node as Element).tagName === 'LINK');
+
+    const styleObserver = new MutationObserver((records) => {
+        for (const record of records) {
+            if (Array.from(record.addedNodes).some(isStyleNode)) {
+                scheduleCheck();
+                return;
+            }
+        }
     });
-    const options: MutationObserverInit = { attributes: true, attributeFilter: ['class', 'style'] };
-    observer.observe(document.documentElement, options);
-    if (document.body) observer.observe(document.body, options);
+    if (document.head) styleObserver.observe(document.head, { childList: true, subtree: true });
 
     // On a slow connection Gmail can still be painting when the ladder runs
     // out, and its background often arrives via a stylesheet rather than an
-    // attribute the observer watches. `load` is the backstop.
+    // attribute. `load` is the backstop.
+    const onLoad = (): void => check();
     if (document.readyState !== 'complete') {
-        window.addEventListener('load', check, { once: true });
+        window.addEventListener('load', onLoad, { once: true });
     }
+
+    // A tab restored from the background may not have painted while hidden.
+    const onVisibility = (): void => {
+        if (document.visibilityState === 'visible') scheduleCheck();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     check();
 
     return () => {
+        disposed = true;
         timers.forEach(clearTimeout);
-        observer.disconnect();
-        window.removeEventListener('load', check);
+        if (scheduled !== null) clearTimeout(scheduled);
+        attributeObserver.disconnect();
+        styleObserver.disconnect();
+        window.removeEventListener('load', onLoad);
+        document.removeEventListener('visibilitychange', onVisibility);
     };
 }

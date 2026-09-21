@@ -754,6 +754,18 @@ body.theme-light .account-selector-bar.is-empty {
     background: rgba(255, 255, 255, 0.025);
 }
 
+/* Column headings for the rules table. This lived as an inline style in
+ * options.ts with a hardcoded #718096, which failed AA on all four
+ * surface/theme combinations and was invisible to both contrast guards
+ * because neither reads colors out of TypeScript. */
+.rule-row-header {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .rule-tab-name {
     font-weight: 500;
     color: #e0e0e0;

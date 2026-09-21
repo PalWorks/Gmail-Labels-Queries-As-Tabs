@@ -20,6 +20,8 @@ import { flush } from './helpers/async';
 
 const mockGetSettings = jest.fn();
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
+const mockSavePreferences = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
+const mockUpsertRule = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
 const mockGetAllAccounts = jest.fn();
 const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
 const mockSetGlobalTheme = jest.fn().mockResolvedValue(undefined);
@@ -36,6 +38,9 @@ const mockGenerateAppsScript = jest.fn().mockReturnValue('// generated script');
 jest.mock('../src/utils/storage', () => ({
     getSettings: (...args: any[]) => mockGetSettings(...args),
     saveSettings: (...args: any[]) => mockSaveSettings(...args),
+    savePreferences: (...args: any[]) => mockSavePreferences(...args),
+    upsertRule: (...args: any[]) => mockUpsertRule(...args),
+    accountStorageKey: (id: string) => `account_${id}`,
     getAllAccounts: (...args: any[]) => mockGetAllAccounts(...args),
     addTab: (...args: any[]) => mockAddTab(...args),
     removeTab: (...args: any[]) => mockRemoveTab(...args),
@@ -219,6 +224,15 @@ async function loadOptionsPage(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
+
+// Pay the ts-jest compile cost for the whole options module graph once, here,
+// rather than inside whichever test happens to run first.
+beforeAll(() => {
+    jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../src/options');
+    });
+});
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -597,7 +611,7 @@ describe('preferences', () => {
 
         await flush(30);
 
-        expect(mockSaveSettings).toHaveBeenCalledWith(
+        expect(mockSavePreferences).toHaveBeenCalledWith(
             'user@gmail.com',
             expect.objectContaining({ showUnreadCount: true })
         );

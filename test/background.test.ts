@@ -7,6 +7,9 @@ export {};
  * the install hook, and action click handler.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+
 // ---------------------------------------------------------------------------
 // Mock InboxSDK background import (no-op)
 // ---------------------------------------------------------------------------
@@ -24,6 +27,38 @@ if (typeof global.TextEncoder === 'undefined') {
 // Mock chrome APIs
 // ---------------------------------------------------------------------------
 
+const syncStore: Record<string, any> = {};
+const localStore: Record<string, any> = {};
+
+/** Minimal async chrome.storage area, so the mutation queue has somewhere to write. */
+function makeArea(store: Record<string, any>) {
+    return {
+        get: jest.fn((keys: any, cb: any) => {
+            void Promise.resolve().then(() => {
+                if (keys === null) return cb({ ...store });
+                const arr = typeof keys === 'string' ? [keys] : keys;
+                const out: Record<string, any> = {};
+                arr.forEach((k: string) => {
+                    if (store[k] !== undefined) out[k] = store[k];
+                });
+                cb(out);
+            });
+        }),
+        set: jest.fn((items: Record<string, any>, cb?: any) => {
+            void Promise.resolve().then(() => {
+                Object.assign(store, items);
+                if (cb) cb();
+            });
+        }),
+        remove: jest.fn((k: string, cb?: any) => {
+            void Promise.resolve().then(() => {
+                delete store[k];
+                if (cb) cb();
+            });
+        }),
+    };
+}
+
 let messageListeners: Array<(message: any, sender: any, sendResponse: any) => boolean> = [];
 let installedListeners: Array<(details: any) => void> = [];
 let actionClickListeners: Array<(tab: any) => void> = [];
@@ -37,6 +72,8 @@ const mockTabsSendMessage = jest.fn().mockResolvedValue(undefined);
 const mockSetUninstallURL = jest.fn();
 
 function setupChromeMocks(): void {
+    Object.keys(syncStore).forEach((k) => delete syncStore[k]);
+    Object.keys(localStore).forEach((k) => delete localStore[k]);
     messageListeners = [];
     installedListeners = [];
     actionClickListeners = [];
@@ -51,6 +88,7 @@ function setupChromeMocks(): void {
         downloads: { download: mockDownload },
         management: { uninstallSelf: mockUninstallSelf },
         action: { onClicked: { addListener: jest.fn((cb: any) => actionClickListeners.push(cb)) } },
+        storage: { sync: makeArea(syncStore), local: makeArea(localStore) },
         tabs: {
             create: mockTabsCreate,
             query: mockTabsQuery,
@@ -211,10 +249,99 @@ describe('action click handler', () => {
 // ---------------------------------------------------------------------------
 
 describe('uninstall URL', () => {
-    test('sets feedback URL on startup', () => {
-        expect(mockSetUninstallURL).toHaveBeenCalledWith(
-            expect.stringContaining('tally.so'),
-            expect.any(Function)
-        );
+    test('is set, so uninstalling can ask why', () => {
+        expect(mockSetUninstallURL).toHaveBeenCalledTimes(1);
+        expect(mockSetUninstallURL.mock.calls[0][0]).toMatch(/^https:\/\//);
+    });
+
+    test('carries no account address, settings or identifier in the URL', () => {
+        // Chrome appends nothing of its own, so whatever is in this string is
+        // the entire payload. It must stay a bare form link: the host is
+        // entitled to learn that someone uninstalled, not who.
+        const url = new URL(mockSetUninstallURL.mock.calls[0][0]);
+        for (const [key, value] of url.searchParams) {
+            expect(value).not.toMatch(/@/); // no email
+            expect(key).not.toMatch(/mail|user|account|id$|token/i);
+        }
+        expect(url.pathname + url.search).not.toMatch(/@/);
+    });
+
+    test('is the only third-party host the service worker names', () => {
+        // `mail.google.com` is the extension's own operating origin, declared
+        // in the manifest. Anything else is a third party and must be here on
+        // purpose, not by accident.
+        const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'background.ts'), 'utf8');
+        const urls = source.match(/https?:\/\/[^\s'"`)]+/g) ?? [];
+        const hosts = new Set(urls.map((u) => new URL(u).host));
+        hosts.delete('mail.google.com');
+        expect([...hosts]).toEqual([new URL(mockSetUninstallURL.mock.calls[0][0]).host]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// MUTATE_SETTINGS handler: the single writer for account settings
+// ---------------------------------------------------------------------------
+
+describe('MUTATE_SETTINGS handler', () => {
+    function send(message: any): Promise<any> {
+        return new Promise((resolve) => {
+            const held = messageListeners[0](message, {}, resolve);
+            expect(held).toBe(true); // must hold the channel open for the async reply
+        });
+    }
+
+    const tab = (id: string) => ({ id, title: id, type: 'label' as const, value: id });
+
+    test('applies an op and answers with the written settings', async () => {
+        const response = await send({
+            action: 'MUTATE_SETTINGS',
+            accountId: 'user@gmail.com',
+            op: { kind: 'addTab', tab: tab('work') },
+        });
+
+        expect(response.ok).toBe(true);
+        expect(response.settings.tabs.map((t: any) => t.id)).toContain('work');
+        expect(response.settings.rev).toBe(1);
+        expect(syncStore['account_user@gmail.com']).toBeDefined();
+    });
+
+    test('serializes concurrent mutations for the same account', async () => {
+        const responses = await Promise.all([
+            send({ action: 'MUTATE_SETTINGS', accountId: 'a@b.com', op: { kind: 'addTab', tab: tab('one') } }),
+            send({ action: 'MUTATE_SETTINGS', accountId: 'a@b.com', op: { kind: 'addTab', tab: tab('two') } }),
+            send({ action: 'MUTATE_SETTINGS', accountId: 'a@b.com', op: { kind: 'addTab', tab: tab('three') } }),
+        ]);
+
+        expect(responses.every((r) => r.ok)).toBe(true);
+        const ids = syncStore['account_a@b.com'].tabs.map((t: any) => t.id);
+        expect(ids).toEqual(expect.arrayContaining(['one', 'two', 'three']));
+        expect(syncStore['account_a@b.com'].rev).toBe(3);
+    });
+
+    test('reports failure rather than throwing', async () => {
+        const response = await send({
+            action: 'MUTATE_SETTINGS',
+            accountId: 'user@gmail.com',
+            op: { kind: 'nonsense' } as any,
+        });
+        // An unknown op reduces to undefined, which cannot be written.
+        expect(response.ok).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Message channel discipline
+// ---------------------------------------------------------------------------
+
+describe('message channel', () => {
+    test('does not hold the channel open for messages it does not handle', () => {
+        const held = messageListeners[0]({ action: 'SOMETHING_ELSE' }, {}, jest.fn());
+        expect(held).toBe(false);
+    });
+
+    test('does not hold the channel open for UNINSTALL_SELF', () => {
+        const held = messageListeners[0]({ action: 'UNINSTALL_SELF' }, {}, jest.fn());
+        expect(held).toBe(false);
     });
 });

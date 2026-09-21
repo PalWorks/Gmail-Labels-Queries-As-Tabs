@@ -4,7 +4,7 @@ Everything the CWS Dashboard asks for, in the order the dashboard asks for it. C
 block verbatim. Character counts are the store's limits, and the counts shown are what the
 text below actually uses.
 
-**Version this listing describes:** 1.4.0
+**Version this listing describes:** 1.5.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Last updated:** 2026-09-21
 
@@ -70,6 +70,10 @@ your message, your optional reply address, and (if you leave the box ticked) the
 version, your browser build, and how many tabs, rules and accounts you have. Never your
 label names, tab names, contacts or mail.
 
+One page opens after you have already left: uninstalling opens a short feedback form at
+tally.so, so we can learn why. The link carries no email address, no settings and no
+identifier, nothing is sent from the extension, and closing the tab answers nothing.
+
 We ask for three permissions and use each for one thing: storage to save your tabs,
 downloads to let you export a backup file, and management so the uninstall button in
 Settings can remove the extension cleanly.
@@ -82,7 +86,7 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 479 automated tests covering storage,
+The full source is public and auditable, with 571 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs
@@ -206,9 +210,17 @@ Certifications to tick:
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose
 - I do not use or transfer user data to determine creditworthiness or for lending purposes
 
-**Important:** these answers changed in 1.4.0. Earlier versions transmitted nothing at all.
+**Important:** these answers changed in 1.4.0, when the feedback form shipped. Earlier
+versions transmitted nothing at all. They are unchanged in 1.5.0, which adds no permission
+and no new outbound request.
 The in-product feedback form is the reason "Personally identifiable information" is now
 Yes. If the form is ever removed, the answer goes back to No.
+
+The uninstall URL (`tally.so`, ADR-014) does not change any answer above. Chrome navigates
+to it after removal and the extension attaches nothing to it, so no user data is collected
+or transferred by us. It is listed here because a reviewer will see
+`chrome.runtime.setUninstallURL` in the service worker and is entitled to an explanation
+without having to ask.
 
 ### Privacy policy URL
 
@@ -226,8 +238,13 @@ extension's own Privacy tab. A mismatch between the two is a common rejection re
 | Field | Value |
 |---|---|
 | Homepage URL | `https://palworks.github.io/Gmail-Labels-As-Tabs` |
-| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/#/#contact` |
+| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs` |
 | Support email | `support@palworks.ai` |
+
+The site has four routes (`/`, `/privacy`, `/terms`, `/changelog`) and no contact page, so
+the Support URL is the homepage. An earlier draft of this file gave
+`.../#/#contact`, which is not a route and resolves to the homepage anyway with a
+malformed fragment. Add a `/contact` route before pointing at one.
 
 ---
 
@@ -258,29 +275,48 @@ Screenshot captions, in upload order:
 
 ---
 
-## 6. Release notes for 1.4.0
+## 6. Release notes for 1.5.0
 
 ```
-New: send feedback without leaving the extension. The Support & Feedback page now has a
-form; diagnostics are opt-in and never include your labels, tab names or mail.
+Important fix for automation rules: a label whose name contains a space, such as "Old
+Stuff", was being searched as two separate words, so a rule could act on mail that was
+never in that label. Labels are now matched exactly, each run is capped, and every
+conversation is re-checked against the label before anything happens to it. If you use
+automation rules, regenerate your script from the Rules page.
 
-Accessibility: every text color in the options page and the tab bar now meets WCAG AA
-contrast in both light and dark themes.
+Fixed: settings no longer get lost when you change them in two places at once. Editing
+tabs in Gmail while the options page is open used to be able to overwrite one change with
+the other; every change is now applied in order. The options page also updates itself
+immediately when you change something in a Gmail tab.
 
-Fixed: System theme now follows Gmail's own theme rather than your operating system, so a
-light Gmail on a dark desktop no longer gets a dark tab bar. Your account now appears in
-Settings as soon as you open Gmail, even before you change anything. Unread counts recover
-from a stalled network instead of freezing.
+Fixed: unread counts no longer read as zero after a dropped request. A failed check keeps
+the last known count and retries with a growing delay instead of showing nothing.
+
+Fixed: the tab bar picks the right theme on a slow connection, where Gmail's own styling
+can arrive after the extension has already drawn.
+
+Accessibility: two remaining colors now meet WCAG AA contrast.
+
+Privacy: the privacy page now spells out exactly what the uninstall feedback form is and
+what it does not carry.
 ```
+
+Regenerating the Apps Script is worth calling out in the listing text as well as here: an
+existing script on someone's account keeps the old, unquoted query until they replace it.
 
 ---
 
 ## 7. Pre-submission checklist
 
 - [ ] `npm run package` produces `extension.zip` from a clean `main`
-- [ ] `manifest.json` and `package.json` both read 1.4.0
+- [ ] `manifest.json` and `package.json` both read 1.5.0
 - [ ] Privacy policy page updated with the feedback exception before submitting
 - [ ] Data usage answers updated (PII: Yes, because of the feedback form)
 - [ ] Screenshots contain no real inbox content, sender names or subject lines
 - [ ] Feedback relay reachable: `curl https://gmail-tabs-feedback.sunmooncal.workers.dev/health`
 - [ ] Test the packaged zip in a clean Chrome profile before uploading
+- [ ] Confirm the permissions list still reads storage, downloads, management and
+      `https://mail.google.com/*` only. 1.5.0 adds none.
+- [ ] Confirm the uninstall URL still opens the feedback form and carries no query
+      parameter identifying the user (ADR-014); the disclosure guard in
+      `test/repoConsistency.test.ts` covers the documents, not the live behaviour.

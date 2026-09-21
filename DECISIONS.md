@@ -159,3 +159,94 @@ version and the browser build only: never label names, tab titles, addresses or 
 content. The relay validates hard, rate limits per IP, and stores nothing. If the Worker is
 ever taken down, the form degrades to an error message and the `mailto:` fallback beneath
 it still works.
+
+## ADR-013: Serialize settings writes through the service worker
+
+**Decision.** A change to an account's settings is described as a serializable `SettingsOp`
+and applied by the service worker, which keeps one promise chain per account. When the
+worker cannot be reached the same op is applied in the calling context, guarded by a `rev`
+token and a bounded retry. `applyOp` is pure and does the work on both paths.
+
+**Context.** Every surface writes: the options page, and the modals, drag handlers and tab
+manager inside *every open Gmail tab*. Each did a read-modify-write against one storage key
+and merged shallowly, so `tabs` and `rules` were replaced wholesale and two writers touching
+unrelated tabs still clobbered each other.
+
+The worst case needed no timing skill at all. The options page listened only for theme
+changes, so its in-memory settings went stale the moment anything changed elsewhere and
+stayed stale; meanwhile the reorder paths built a tab array from the rendered DOM and wrote
+it whole. Open the options page with five tabs, add a sixth in Gmail, drag to reorder in the
+options page, and the sixth is gone.
+
+Three approaches were considered. A `rev` counter with read-verify-write narrows the window
+to a microtask but never closes it, because `chrome.storage` has no compare-and-swap. Web
+Locks cannot span the two contexts that matter: a content script's lock scope is the page's
+origin, an extension page's is `chrome-extension://`. The service worker is a single
+JavaScript context, so a per-account promise chain serializes every writer in the profile by
+construction, with no lock and no window.
+
+**Consequences.** Ops must be plain data and must be idempotent, because a lost worker reply
+makes the caller fall back and apply the same op a second time. `reorderTabs` carries ids
+rather than tab objects, which is what makes a stale drag safe rather than merely unlikely.
+
+`applyOp` throws on an op kind it does not recognise. Without that it returned `undefined`
+and the write path spread it over the account, erasing every tab and rule. A Gmail tab
+running an older build against a just-updated worker reaches that path, so it is real.
+
+This does not fix cross-device conflicts. Chrome Sync resolves per key as last-writer-wins
+and gives us no hook. Shrinking the conflict unit would mean one key per tab, trading a
+data-loss risk for a 120-writes-per-minute quota risk; not done, and recorded in
+[DATA_MODEL.md](DATA_MODEL.md) rather than pretended away.
+
+## ADR-014: Keep the uninstall URL, and make its disclosure a build gate
+
+**Decision.** `chrome.runtime.setUninstallURL` stays, pointing at the Tally feedback form.
+Its host is disclosed in SECURITY.md, on the in-extension privacy page, in STORE_LISTING.md
+and in the Web Store data declaration, and a test fails the build if any of those omits an
+outbound host the service worker names.
+
+**Context.** During v1.5.0 this was removed on privacy grounds: it pointed at a third party
+and was disclosed in no document, no privacy page and no store declaration. That reasoning
+was half right. The undisclosed part was the defect; the URL itself is not, and uninstall is
+the single moment the in-product feedback form cannot reach, because the extension is gone
+by then. Losing that signal loses the only evidence of why people leave.
+
+So the fix is disclosure, not deletion. Three things make the disclosure real rather than a
+promise. The link is a bare form URL, so no address, settings or identifier travels with it,
+and a test asserts that. The extension sends nothing itself: Chrome navigates the user, and
+they decide whether to answer. And the disclosure is enforced by
+`test/repoConsistency.test.ts`, which reads every `http(s)` host in `src/background.ts` and
+fails if it is absent from any of the three documents, with a mutation test proving the
+detector works. That is what stops it going quiet again, which is the failure that actually
+happened.
+
+**Consequences.** The product now has two outbound origins to explain instead of one: our
+own relay, contacted only on Send, and the Tally form, opened by Chrome only after removal.
+The Web Store answers do not change, because we collect and transfer nothing, but a reviewer
+who greps the service worker will find the call, so the listing explains it unprompted.
+
+The residual objection stands and is recorded: the form is hosted by a company we have no
+relationship with, and moving it to our own domain would remove the third party entirely.
+That is a follow-up, not a blocker, and it is the right shape for the next release.
+
+## ADR-015: The theme settling ladder always runs all five steps
+
+**Decision.** `SETTLE_DELAYS_MS` in [src/modules/theme.ts](src/modules/theme.ts) stays a
+fixed ladder of five re-checks at 250ms, 750ms, 2s, 5s and 10s. It does not stop early.
+
+**Context.** The v1.5.0 plan proposed cancelling the remaining timers once two consecutive
+detections agreed. The appeal is tidiness, not performance: each step is one `matchMedia`
+read and a class comparison, which is unmeasurable against a Gmail page load.
+
+Against that, the whole reason the ladder exists is that Gmail's real background can arrive
+very late. Two early detections agreeing proves only that Gmail had not repainted yet, which
+is exactly the case where the 5s and 10s steps are the ones that do the work. Stopping early
+would trade real robustness on a slow connection for an imaginary saving, and it would fail
+in precisely the conditions that are hardest to reproduce and to report.
+
+**Consequences.** A `system`-mode tab performs five cheap checks in its first ten seconds,
+whether or not it needs them. The ladder is not the only source of truth in any case: the
+attribute observer, the `<head>` stylesheet observer, `load` and `visibilitychange` all feed
+the same `check()`, and `check()` is idempotent, so a redundant step costs a comparison and
+nothing else. Recorded as a decision rather than an omission, and cross-referenced from the
+constant so the next reader does not re-propose it.

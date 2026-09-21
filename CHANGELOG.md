@@ -4,6 +4,104 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.5.0] - 2026-09-21
+
+A hardening release. No new features; the changes are correctness, safety and the
+guards that stop each defect coming back.
+
+### Fixed
+
+- **Automation rules could act on the wrong mail.** The generated Apps Script put the label
+  into the Gmail search unquoted, so a label named `Old Stuff` produced a query Gmail reads
+  as `label:Old AND Stuff` and matched threads that were never in the label. With a trash
+  rule that deletes the wrong mail, unattended, and no unusual input was needed. The label is
+  now quoted, each rule is capped at 200 threads per run, and every thread is checked for the
+  exact label name before anything touches it ([src/modules/rules.ts](src/modules/rules.ts)).
+- **A second script-injection path.** The account id was escaped for a JavaScript string and
+  then dropped into the block comment in the generated script's header, which needs a
+  different escaper. A close-comment sequence in that value ended the comment and turned what
+  followed into live top-level code in a script the user runs under their own Google account.
+  Found by the new property test, not by review.
+- **Settings could be lost when two surfaces wrote at once.** Every write was a
+  read-modify-write against one storage key with a shallow merge, so two writers touching
+  unrelated tabs still clobbered each other. The worst case needed no timing skill: the
+  options page rendered five tabs, a Gmail tab added a sixth, and a drag in the options page
+  wrote the five-tab array straight over the top. See ADR-013.
+- **An unrecognised mutation could erase an account.** Uncovered while testing the above.
+  See ADR-013.
+- **Stored XSS via an imported backup.** A tab id went unescaped into a `data-tab-id`
+  attribute in the options page, and import validation checked that an id was a non-empty
+  string but never what was in it. Fixed at the sink and at the boundary: unsafe ids are
+  replaced with fresh UUIDs and the rules that referenced them are repointed, so a legacy
+  export still restores ([src/utils/importExport.ts](src/utils/importExport.ts)).
+- **A failed unread fetch looked like an empty label.** Failure was stored as the number 0 and
+  served for the full 30s cache window, which blocked the retry that would have corrected it.
+  Failures are now tracked separately, keep the last known count on screen, and back off from
+  5s to a 5 minute ceiling ([src/modules/unread.ts](src/modules/unread.ts)).
+- **Deleting a tab left its rule behind** in sync storage forever, unreachable because rules
+  are keyed by a tab id that is never reused.
+- **Two colours failed WCAG AA.** The rules table header (3.72 to 4.25:1 across all four
+  surface and theme combinations) and the in-Gmail modal help icon (2.66:1 in dark mode,
+  below even the non-text threshold). Both were hex values inside TypeScript template
+  strings, where neither contrast guard could see them.
+- **The theme could stay wrong on a slow connection.** The watcher observed class and style
+  attributes, but Gmail's background usually arrives via a stylesheet, which changes no
+  attribute. It now also watches for stylesheets and re-checks when a background tab is shown
+  ([src/modules/theme.ts](src/modules/theme.ts)).
+- Neither the service worker nor the content script returns `true` for messages it does not
+  answer, which used to hold the sender's message channel open so a promise-form
+  `sendMessage` never settled.
+
+### Changed
+
+- **All settings writes are serialized.** A change is now described as a `SettingsOp` and
+  applied in the service worker, which is a single JavaScript context running one promise
+  chain per account. When the worker cannot be reached, the write falls back to an optimistic
+  `rev`-checked retry in the calling context. See ADR-013 and
+  [DATA_MODEL.md](DATA_MODEL.md).
+- **The options page follows changes made in Gmail.** It previously listened only for theme
+  changes, so its state went stale the moment anything changed elsewhere and stayed stale.
+  It now reloads on its own account's changes, skips its own writes, restores focus and caret
+  afterwards, and defers a redraw while a drag is in progress.
+- Unread feed fetches are capped at four at a time, so a tab bar with many labels on a slow
+  link no longer competes with Gmail's own requests.
+- Rule fields that accept free text coalesce their writes over 250ms and flush when the page
+  is hidden.
+
+### Disclosed
+
+- **The uninstall URL.** Uninstalling opens a third-party feedback form, and until now that
+  was disclosed nowhere: not in SECURITY.md, not on the privacy page, not in the store
+  listing, and not in the Web Store data declaration. It is kept, because uninstall is the
+  one moment the in-product form cannot reach, and it is now stated in all four places. The
+  link carries no address, no settings and no identifier. A guard fails the build if the
+  service worker names an outbound host that any of those documents omits. See ADR-014.
+
+### Added (tests and guards)
+
+- Property tests for the Apps Script generator: 1,000 generated inputs drawn from an alphabet
+  of everything that has ever broken one of its four output languages, each evaluated and
+  checked for parse failure, lossless round trip, a single quoted label term, and three
+  canary globals ([test/rulesProperty.test.ts](test/rulesProperty.test.ts)).
+- A guard that walks the TypeScript AST and fails on any unescaped interpolation into
+  `innerHTML` ([test/htmlSinks.test.ts](test/htmlSinks.test.ts)).
+- A guard that fails on any colour literal in `.ts` or `.html`, because both previous
+  contrast guards only read `.css` ([test/contrast.test.ts](test/contrast.test.ts)).
+- Guards against documentation drift and dead CSS: no live document may repeat the network
+  claim the feedback relay retired, every repo path named in a document must resolve, every
+  module must appear in CONTEXT_MAP, and no stylesheet may style a class the code never uses
+  ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
+- Concurrency tests covering the reducer, the queue under ten interleaved writers, and every
+  service-worker fallback path ([test/settingsOps.test.ts](test/settingsOps.test.ts)).
+- CI now runs the suite a second time serially. Both intermittent failures this suite has had
+  appeared only when timing shifted, so one green run was never evidence of a stable suite.
+- A guard that fails the build if the service worker names an outbound host that is missing
+  from SECURITY.md, the in-extension privacy page or STORE_LISTING.md. The uninstall URL went
+  four versions undisclosed; a promise not to repeat that is worth less than a failing test
+  ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
+- A guard that fails when live documents disagree about how many tests there are. Four of them
+  stated four different totals within this release, each correct when written.
+
 ## [1.4.0] - 2026-09-21
 
 ### Added

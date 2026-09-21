@@ -11,7 +11,7 @@
  * feature is ever dropped.
  */
 
-import { getSettings, saveSettings, Rule, RuleAction, Tab } from '../utils/storage';
+import { getSettings, mutateSettings, Rule, RuleAction, Tab } from '../utils/storage';
 import { TabColor } from '../utils/colors';
 import { tabToGmailLabel } from './rules';
 
@@ -112,31 +112,27 @@ export interface ApplyTemplateResult {
 
 /**
  * Apply a template to an account: ensure a label tab for `template.labelName`
- * exists, then upsert an enabled rule on it. All changes are written in a single
- * saveSettings call so a tab is never created without its rule.
+ * exists, then upsert an enabled rule on it.
+ *
+ * The whole change goes through a single `applyTemplate` op, so a tab is never
+ * created without its rule, and a concurrent edit from a Gmail tab cannot be
+ * overwritten by the tab and rule arrays this function read a moment ago.
  */
 export async function applyRuleTemplate(accountId: string, template: RuleTemplate): Promise<ApplyTemplateResult> {
     const settings = await getSettings(accountId);
-    const tabs: Tab[] = [...settings.tabs];
-    const rules: Rule[] = [...settings.rules];
 
-    // Reuse an existing tab that already maps to this Gmail label.
-    let tab = tabs.find((t) => tabToGmailLabel(t) === template.labelName);
-    let createdTab = false;
+    // Resolving which tab maps to a Gmail label needs the label grammar, which
+    // lives in rules.ts. Do it here and hand the reducer a concrete tab.
+    const existing = settings.tabs.find((t) => tabToGmailLabel(t) === template.labelName);
 
-    if (!tab) {
-        tab = {
-            id: crypto.randomUUID(),
-            title: template.labelName,
-            type: 'label',
-            value: template.labelName,
-            color: template.color,
-        };
-        tabs.push(tab);
-        createdTab = true;
-    }
+    const tab: Tab = existing ?? {
+        id: crypto.randomUUID(),
+        title: template.labelName,
+        type: 'label',
+        value: template.labelName,
+        color: template.color,
+    };
 
-    const existingRuleIndex = rules.findIndex((r) => r.tabId === tab!.id);
     const rule: Rule = {
         tabId: tab.id,
         action: template.action,
@@ -144,17 +140,9 @@ export async function applyRuleTemplate(accountId: string, template: RuleTemplat
         enabled: true,
     };
 
-    let createdRule = false;
-    if (existingRuleIndex === -1) {
-        rules.push(rule);
-        createdRule = true;
-    } else {
-        // Replace wholesale rather than merge: applying a template resets the
-        // tab's rule, so a stale `targetLabel` from a prior 'moveToLabel' rule
-        // must not linger on a now non-'moveToLabel' action.
-        rules[existingRuleIndex] = rule;
-    }
+    const createdRule = !settings.rules.some((r) => r.tabId === tab.id);
 
-    await saveSettings(accountId, { tabs, rules });
-    return { tabId: tab.id, createdTab, createdRule };
+    await mutateSettings(accountId, { kind: 'applyTemplate', tab, rule });
+
+    return { tabId: tab.id, createdTab: !existing, createdRule };
 }

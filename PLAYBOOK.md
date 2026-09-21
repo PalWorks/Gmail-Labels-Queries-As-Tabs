@@ -27,6 +27,7 @@ Use `npm run watch` to rebuild on change; click the reload icon on the extension
 ```
 npx tsc --noEmit          # 0 errors
 npx jest                  # all suites pass
+npx jest --runInBand      # passes serially too
 npx jest --coverage       # meets thresholds
 npm run lint              # 0 errors
 npm run build             # succeeds; then confirm no console.log in dist/js
@@ -55,8 +56,13 @@ Confirm `manifest.json` and `package.json` carry the same version.
    ```
    npm run package        # produces extension.zip from a clean build
    ```
-5. Upload `extension.zip` to the Chrome Web Store Developer Dashboard.
-6. Tag the release in git and push the tag.
+5. Re-read [STORE_LISTING.md](STORE_LISTING.md) and update the release notes, the version
+   line and the pre-submission checklist. If permissions or outbound requests changed, the
+   data-usage answers in the dashboard must change with them.
+6. Upload `extension.zip` to the Chrome Web Store Developer Dashboard.
+7. Tag the release in git and push the tag.
+8. Dispatch CI on `main` (`gh workflow run ci.yml --ref main`). It is manual-trigger only,
+   so nothing runs on the merge itself.
 
 ## Roll back a release
 
@@ -65,6 +71,22 @@ Confirm `manifest.json` and `package.json` carry the same version.
   number). Never re-use a shipped version string.
 - **Store:** if a bad build is live, upload a corrected higher-versioned package. Users
   auto-update; there is no per-user rollback.
+
+## When a guard suite fails
+
+Four suites assert things about the repository rather than about a function. Read the
+failure message before changing the test: each one names the file and line, and the fix is
+almost always in the code or the document it points at.
+
+| Failure | Usual fix |
+|---|---|
+| `htmlSinks` | Wrap the value in `escapeHtml`. Do not add user data to its allowlist |
+| `contrast` colour literal | Move the value into a CSS token |
+| `repoConsistency` claim | Correct the document; if the code genuinely changed, relax the claim and say so in an ADR |
+| `repoConsistency` path | Fix the link, or the file moved and the doc did not follow |
+| `repoConsistency` CONTEXT_MAP | Add the new module to the source map |
+| `repoConsistency` dead CSS | Delete the rule |
+| `rulesProperty` | The escaping is wrong for one of the generator's four output languages. The failure prints the seed case |
 
 ## Troubleshooting (production symptoms)
 

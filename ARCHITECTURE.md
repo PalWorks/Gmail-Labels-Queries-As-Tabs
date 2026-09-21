@@ -55,9 +55,8 @@ Gmail-Labels-As-Tabs/
 │   ├── ui/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
-│   └── experimental/          # Archived code, excluded from build and coverage
 │
-├── test/                      # 26 suites, mirroring src/ one file per module
+├── test/                      # 30 suites: one per module, plus four repo-wide guards
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -175,15 +174,33 @@ owned centrally:
 Everything else lives in `src/modules/`: rendering in `tabs.ts`, counts in `unread.ts`,
 reordering in `dragdrop.ts`, dialogs in `modals/`, theme resolution in `theme.ts`.
 
-### `storage.ts` — Data Layer (518 lines)
+### `storage.ts` — Data Layer and the only write path
 
-Provides a typed CRUD API over `chrome.storage.sync`:
+Reads are ordinary:
 
-- `getSettings(accountId)` — Reads per-account settings with defaults
-- `saveSettings(accountId, partial)` — Merge-saves settings
-- `addTab / removeTab / updateTab / updateTabOrder` — Tab mutations
-- `migrateLegacySettingsIfNeeded` — One-time migration from v0 global format
-- `getAllAccounts()` — Enumerates all stored account keys
+- `getSettings(accountId)` — per-account settings with defaults, arrays and colours
+  normalised on the way out, because storage is the trust boundary
+- `getAllAccounts()` — enumerates stored account keys
+- `migrateLegacySettingsIfNeeded` — one-time migration from the v0 global format
+
+Writes are not. Since v1.5.0 a change is **described, not performed**:
+
+```
+caller → SettingsOp ─┬─ service worker → per-account promise chain → applyOp → set
+                     └─ (worker unreachable) → local rev-checked retry → applyOp → set
+```
+
+`applyOp(current, op)` is pure, total and idempotent, and is the only code that decides
+what a change means, so the two paths cannot disagree. `mutateSettings` picks the path.
+`addTab`, `removeTab`, `updateTab`, `updateTabOrder`, `savePreferences`, `addRule`,
+`upsertRule`, `updateRule` and `removeRule` are thin wrappers that build an op, and each
+returns the settings as written, including the new `rev`, so a caller can recognise its own
+change when `chrome.storage.onChanged` fires.
+
+Why the service worker rather than a lock: it is a single JavaScript context, so a promise
+chain per account serializes every writer in the profile by construction. Web Locks cannot
+help, because a content script's lock scope is `mail.google.com` and an extension page's is
+`chrome-extension://`. See ADR-013 and [DATA_MODEL.md](DATA_MODEL.md).
 
 ### `xhrInterceptor.ts` — Passive Listener (206 lines)
 
@@ -195,13 +212,22 @@ Runs in Gmail's **MAIN world** (same JS context as Gmail):
 - Recursively searches response arrays for `[labelId, count]` tuples
 - Dispatches results as `CustomEvent` back to the content script
 
-### `background.ts` — Service Worker (104 lines)
+### `background.ts` — Service Worker
 
-Handles privileged Chrome APIs:
+Handles privileged Chrome APIs, and is the serialization point for settings:
+
+- `MUTATE_SETTINGS` — applies a `SettingsOp` on a per-account promise chain. This is the
+  single writer for everything the user configures.
 - `chrome.downloads.download()` for config export
 - `chrome.management.uninstallSelf()` for clean uninstall
 - `chrome.runtime.onInstalled` for onboarding
 - `chrome.action.onClicked` forwards to content script
+
+It sets **no uninstall URL**: see ADR-014.
+
+The message listener returns `true` only for the two messages it answers asynchronously.
+Returning `true` for anything else holds the sender's channel open forever, so a
+promise-form `sendMessage` never settles, which is how a stale worker can hang a caller.
 
 ---
 
@@ -237,7 +263,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Package | Purpose | Why |
 |---|---|---|
-| `@inboxsdk/core` | Gmail SDK for route detection and user identity | Provides `Router.handleAllRoutes` and `User.getEmailAddress` as enhancement (non-critical) |
+| `@inboxsdk/core` | Gmail SDK for route detection and user identity | Intended as a non-critical enhancement; in practice inert, because its page world is never injected. See section 10 |
 | `esbuild` | Build tool | Fast TypeScript bundling (4 entry points → `dist/js/`) |
 | `typescript` | Language | Strict-mode TypeScript compilation |
 | `jest` + `ts-jest` + `jest-environment-jsdom` | Testing | Unit tests with JSDOM for browser APIs |
@@ -255,8 +281,12 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 26 suites, 478 tests: storage and migrations, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
-| Palette guard | [test/contrast.test.ts](test/contrast.test.ts) | Reads the CSS tokens and fails if any text color drops below WCAG AA, if a retired low-contrast value returns, or if helper text goes back to fading with opacity |
+| Unit suites | `test/*.test.ts`, one per module | 30 suites, 571 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
+| Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
+| Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
+| Palette guard | [test/contrast.test.ts](test/contrast.test.ts) | Reads the CSS tokens and fails if any text color drops below WCAG AA, if a retired low-contrast value returns, if helper text fades with opacity, or if any colour literal appears in a `.ts` or `.html` file |
+| Repo consistency | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | Documentation claims, path references, CONTEXT_MAP coverage, and dead CSS |
 | Rendered pixels | [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) | Manual: measures real composited output in Chrome, which token math cannot see |
 
 ### Framework
@@ -273,7 +303,6 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 >   check, and it is run by hand.
 > - CI runs on manual dispatch only (`gh workflow run ci.yml`), by product-owner decision, so
 >   a push does not verify itself.
-> - `src/experimental/` is excluded from both the build and coverage.
 
 
 ## 9. Extension Points & Safe Modification Guide
@@ -311,14 +340,14 @@ The `website/` directory is completely independent. Edit React components in `we
 | Issue | Impact | Location |
 |---|---|---|
 | **XHR heuristic fragility** | Gmail's internal JSON format is undocumented and changes without notice | `xhrInterceptor.ts` |
-| **Storage has no compare-and-swap** | Two surfaces saving at the same instant can clobber each other's write; `chrome.storage` offers no transaction to prevent it | `src/utils/storage.ts` |
+| **Cross-device sync conflicts** | `chrome.storage.sync` replicates through Chrome Sync, which resolves per key as last-writer-wins with no hook for us. Two devices editing one account offline still lose a side. Writes *within* a profile are serialized as of v1.5.0 (ADR-013); this is what is left | `src/utils/storage.ts` |
 
 ### 🟡 Moderate
 
 | Issue | Impact | Location |
 |---|---|---|
 | **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference | `src/modules/theme.ts` |
-| **InboxSDK coupling** | SDK is used for 2 features (email detection, route listening) but adds ~200KB to bundle | `content.ts` |
+| **InboxSDK is 95% of the content script and neither of its two features has ever run** | The bundle is 1.09 MB, of which ~1.03 MB is InboxSDK. `InboxSDK.load()` awaits `pageWorld.js` setting a `<head>` attribute, and injecting `pageWorld.js` needs the `scripting` permission we do not declare, so the promise never settles and never rejects: `sdk.User.getEmailAddress()` and `sdk.Router.handleAllRoutes()` are unreachable, and the only symptom is one console error per Gmail load. Both features are covered anyway: email by `extractEmailFromDOM()` and the DOM poller, routes by the body `MutationObserver` and `popstate`. Measured: removing it builds a 54.6 KB content script and every behaviour still works. Live-verified 2026-09-21 | `content.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` etc. are Gmail's obfuscated class names that can change | `content.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 
@@ -327,8 +356,7 @@ The `website/` directory is completely independent. Edit React components in `we
 | Issue | Impact |
 |---|---|
 | Website is a separate `package.json` (not a monorepo workspace) | Build/deploy are independent |
-| No automated linting in CI | Only local `npm run lint` |
-| `experimental/` folder exists but is orphaned | Not referenced in build config |
+| Source files are not Prettier-clean | `npm run lint` passes and CI does not check formatting; `npm run format` would touch ~30 files in one unrelated diff |
 
 ---
 

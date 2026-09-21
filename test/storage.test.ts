@@ -253,7 +253,10 @@ describe('removeTab', () => {
     });
 
     test('does not crash when removing non-existent tab', async () => {
-        await expect(removeTab('user@gmail.com', 'nonexistent-id')).resolves.toBeUndefined();
+        const before = await getSettings('user@gmail.com');
+        const after = await removeTab('user@gmail.com', 'nonexistent-id');
+        expect(after.tabs).toEqual(before.tabs);
+        expect(after.rev).toBe(before.rev);
     });
 });
 
@@ -474,7 +477,10 @@ describe('Rule CRUD operations', () => {
 
     test('updateRule no-op for non-existent tabId', async () => {
         const a = acct('update2');
-        await expect(updateRule(a, 'nonexistent', { daysOld: 99 })).resolves.toBeUndefined();
+        const before = await getSettings(a);
+        const after = await updateRule(a, 'nonexistent', { daysOld: 99 });
+        expect(after.rules).toEqual(before.rules);
+        expect(after.rev).toBe(before.rev);
     });
 
     test('removeRule removes by tabId', async () => {
@@ -492,7 +498,10 @@ describe('Rule CRUD operations', () => {
 
     test('removeRule no-op for non-existent tabId', async () => {
         const a = acct('remove2');
-        await expect(removeRule(a, 'nonexistent')).resolves.toBeUndefined();
+        const before = await getSettings(a);
+        const after = await removeRule(a, 'nonexistent');
+        expect(after.rules).toEqual(before.rules);
+        expect(after.rev).toBe(before.rev);
     });
 
     test('getRulesForExport returns enriched rules with tab metadata', async () => {

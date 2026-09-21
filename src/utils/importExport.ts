@@ -129,10 +129,52 @@ export function validateImportData(data: Record<string, unknown>): Tab[] {
             if (typeof r.enabled !== 'boolean') {
                 throw new Error(`Invalid rule at index ${i}: "enabled" must be a boolean.`);
             }
+            if (r.targetLabel !== undefined && typeof r.targetLabel !== 'string') {
+                throw new Error(`Invalid rule at index ${i}: "targetLabel" must be a string.`);
+            }
         }
     }
 
+    sanitizeImportedIds(tabs, (data.rules as Record<string, unknown>[] | undefined) ?? []);
+
     return tabs as unknown as Tab[];
+}
+
+/**
+ * Ids we are willing to put in markup without thinking about it again.
+ * Everything this extension generates is a UUID or a `default-*` constant.
+ */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Replace any tab id that is not plain, and repoint the rules that used it.
+ *
+ * A tab id travels straight into an HTML attribute (`data-tab-id="..."`), so an
+ * imported backup carrying `id: 'x" onmouseover="…'` could inject markup into
+ * the options page, which is an extension page with chrome.* access. The sinks
+ * escape it too, but a backup is a file someone can be talked into opening, so
+ * the value should never have been dangerous in the first place.
+ *
+ * Rewriting beats rejecting: a legacy export whose ids came from the very old
+ * `labels` array still restores, it just gets fresh ids.
+ */
+function sanitizeImportedIds(tabs: Record<string, unknown>[], rules: Record<string, unknown>[]): void {
+    const remapped = new Map<string, string>();
+
+    tabs.forEach((t) => {
+        const id = t.id as string;
+        if (SAFE_ID.test(id)) return;
+        const replacement = crypto.randomUUID();
+        remapped.set(id, replacement);
+        t.id = replacement;
+    });
+
+    if (remapped.size === 0) return;
+
+    rules.forEach((r) => {
+        const next = remapped.get(r.tabId as string);
+        if (next) r.tabId = next;
+    });
 }
 
 // ---------------------------------------------------------------------------

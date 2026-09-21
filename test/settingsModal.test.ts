@@ -18,6 +18,7 @@ const mockGetSettings = jest.fn().mockResolvedValue({
     rules: [],
 });
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
+const mockSavePreferences = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
 const mockAddTab = jest.fn().mockResolvedValue(undefined);
 const mockRemoveTab = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTabOrder = jest.fn().mockResolvedValue(undefined);
@@ -28,6 +29,7 @@ const mockApplyTheme = jest.fn();
 jest.mock('../src/utils/storage', () => ({
     getSettings: (...args: any[]) => mockGetSettings(...args),
     saveSettings: (...args: any[]) => mockSaveSettings(...args),
+    savePreferences: (...args: any[]) => mockSavePreferences(...args),
     addTab: (...args: any[]) => mockAddTab(...args),
     removeTab: (...args: any[]) => mockRemoveTab(...args),
     updateTabOrder: (...args: any[]) => mockUpdateTabOrder(...args),
@@ -216,7 +218,7 @@ describe('settings modal behavior', () => {
         toggle.dispatchEvent(new Event('change', { bubbles: true }));
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(mockSaveSettings).toHaveBeenCalledWith('user@gmail.com', { showUnreadCount: true });
+        expect(mockSavePreferences).toHaveBeenCalledWith('user@gmail.com', { showUnreadCount: true });
     });
 
     test('Manage all accounts link opens the options page', () => {

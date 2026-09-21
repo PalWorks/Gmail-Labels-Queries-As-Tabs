@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/manifest-v3-green.svg" alt="Manifest V3">
   <img src="https://img.shields.io/badge/chrome-120%2B-yellow.svg" alt="Chrome 120+">
-  <img src="https://img.shields.io/badge/privacy-zero%20external%20requests-brightgreen.svg" alt="Privacy First">
+  <img src="https://img.shields.io/badge/privacy-no%20telemetry-brightgreen.svg" alt="Privacy First">
 </p>
 
 <p align="center">
@@ -130,7 +130,7 @@ Unread counts use a three-tier waterfall for maximum reliability:
 | **Per-Account Namespacing** | storage.ts | Settings keyed by `account_{email}` in chrome.storage.sync |
 | **CSS Custom Properties** | toolbar.css | Full theming via CSS variables with `prefers-color-scheme` media query and force-override classes |
 | **Optimistic UI** | dragdrop.ts | UI updates immediately on drop; storage write happens asynchronously |
-| **Progressive Enhancement** | content.ts init() | DOM-based detection runs immediately; InboxSDK loads in parallel for enhanced route detection |
+| **Progressive Enhancement** | content.ts init() | DOM-based detection runs immediately; InboxSDK loads in parallel as an intended enhancement. In practice it never finishes loading, because its page world needs the `scripting` permission we do not declare, so DOM detection is the only path that runs. See ARCHITECTURE.md section 10 |
 | **Strategy Pattern** | unread.ts | Three unread count strategies attempted in waterfall order |
 
 ### Data Flow
@@ -149,9 +149,9 @@ User clicks tab  →  window.location.hash changes (#inbox, #label/Work, #search
 | **Language** | TypeScript (ES2022, strict mode) |
 | **Bundler** | esbuild (5 entry points, minified, console-stripped) |
 | **Extension Platform** | Chrome Manifest V3 |
-| **Route Detection** | InboxSDK (`@inboxsdk/core`) |
+| **Route Detection** | Body `MutationObserver` + `popstate` (InboxSDK is bundled for this but never initialises) |
 | **Storage** | `chrome.storage.sync` (cross-device, per-account namespaced) |
-| **Testing** | Jest + ts-jest + jsdom (21 test suites, 365 test cases) |
+| **Testing** | Jest + ts-jest + jsdom |
 | **Linting** | ESLint + @typescript-eslint |
 | **Formatting** | Prettier (single quotes, 4-space indent, 120 char width) |
 | **CI/CD** | GitHub Actions (test, lint, build, verify, artifact) |
@@ -432,7 +432,7 @@ npx jest test/modals/
 | Welcome | `welcome.test.ts` | Onboarding page logic |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 26 test files, 478 test cases.**
+**Total: 30 test files, 571 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -460,7 +460,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage` (Jest, 478 tests) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 571 tests across 30 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -581,7 +581,9 @@ Quick start:
 ### Development Guidelines
 
 - TypeScript strict mode is enforced; avoid `any` unless absolutely necessary
-- All user-facing strings must be HTML escaped (XSS prevention)
+- All user-facing strings must be HTML escaped (XSS prevention), including ids; `test/htmlSinks.test.ts` enforces this against the AST
+- All settings writes go through `mutateSettings`, never read-modify-save; see ADR-013
+- No colour literals outside the stylesheets; `test/contrast.test.ts` enforces this
 - No background network requests (privacy-first principle). The single user-initiated exception is the feedback relay; see ADR-012 in DECISIONS.md
 - Production builds strip all `console.log` via esbuild's `drop` option
 - Keep modules focused with a single responsibility per file
@@ -594,7 +596,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (478 tests across 26 suites)
+npm test          # Jest (571 tests across 30 suites)
 npm run build     # Verify production build
 ```
 
@@ -606,6 +608,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: The extension has no server, no database, no tracking
+- **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
 - **Minimal permissions**: Only `storage`, `downloads`, and `management`
 - **Open source**: Full codebase available for audit
 

@@ -24,7 +24,7 @@ A Chrome MV3 extension that injects a user-configurable tab bar directly into th
 - ✓ **MULTI-01**: Multi-account support with per-email settings — v1.0
 - ✓ **UNREAD-01**: Real-time unread counts displayed on tabs — v1.0
 - ✓ **NAV-01**: Click tab to navigate via Gmail hash-based routing — v1.0
-- ✓ **PRIV-01**: Zero external network requests (privacy-first) — v1.0
+- ✓ **PRIV-01**: No telemetry, no analytics, no third-party requests. Superseded in v1.4.0 by PRIV-02: the extension now contacts exactly one origin, the feedback relay, and only when the user presses Send. See ADR-012.
 
 ### Active
 
@@ -64,7 +64,7 @@ A Chrome MV3 extension that injects a user-configurable tab bar directly into th
 ## Constraints
 
 - **Tech stack**: TypeScript + esbuild, Chrome MV3, no runtime dependencies — Bundle must be self-contained
-- **Privacy**: Zero external network requests — Core brand promise, non-negotiable
+- **Privacy**: No telemetry and no analytics, ever. One outbound origin exists, the feedback relay, used only on an explicit Send. Core brand promise, non-negotiable. See ADR-012.
 - **Platform**: Gmail web (`mail.google.com`) only — Extension relies on Gmail-specific DOM selectors
 - **Storage**: `chrome.storage.sync` (102,400 bytes total, 8,192 per item) — Limits total tabs/accounts
 - **Compatibility**: Chrome 120+ (MV3 baseline) — No Firefox/Safari support currently

@@ -13,6 +13,9 @@
 import {
     getSettings,
     saveSettings,
+    savePreferences,
+    upsertRule,
+    accountStorageKey,
     getAllAccounts,
     addTab,
     getGlobalTheme,
@@ -340,7 +343,8 @@ function setupPreferences(): void {
 
     unreadCheck.addEventListener('change', async () => {
         if (!currentAccountId) return;
-        await saveSettings(currentAccountId, { showUnreadCount: unreadCheck.checked });
+        const next = await savePreferences(currentAccountId, { showUnreadCount: unreadCheck.checked });
+        currentSettings = next;
     });
 }
 
@@ -478,11 +482,11 @@ function renderRuleTemplates(): void {
 
     grid.innerHTML = RULE_TEMPLATES.map(
         (t) => `
-        <div class="rule-template-card" data-template-id="${t.id}">
-            <span class="rt-title">${t.icon} ${escapeHtml(t.name)}</span>
+        <div class="rule-template-card" data-template-id="${escapeHtml(t.id)}">
+            <span class="rt-title">${escapeHtml(t.icon)} ${escapeHtml(t.name)}</span>
             <span class="rt-desc">${escapeHtml(t.description)}</span>
-            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${t.action} · ${t.daysOld}d</span>
-            <button class="btn-secondary rt-apply" data-template-id="${t.id}">Apply</button>
+            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${escapeHtml(t.action)} · ${escapeHtml(String(t.daysOld))}d</span>
+            <button class="btn-secondary rt-apply" data-template-id="${escapeHtml(t.id)}">Apply</button>
         </div>
     `
     ).join('');
@@ -556,7 +560,7 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
     const ruleMap = new Map(rules.map((r) => [r.tabId, r]));
 
     container.innerHTML = `
-        <div class="rule-row" style="font-weight:600;color:#718096;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">
+        <div class="rule-row rule-row-header">
             <span>Tab</span>
             <span>Action</span>
             <span>After (days)</span>
@@ -571,25 +575,25 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
                 const targetLabel = rule?.targetLabel || '';
 
                 return `
-                <div class="rule-row" data-tab-id="${tab.id}">
+                <div class="rule-row" data-tab-id="${escapeHtml(tab.id)}">
                     <span class="rule-tab-name">${escapeHtml(tab.title)}</span>
-                    <select class="input-select rule-action" data-tab-id="${tab.id}">
+                    <select class="input-select rule-action" data-tab-id="${escapeHtml(tab.id)}">
                         <option value="trash" ${action === 'trash' ? 'selected' : ''}>\ud83d\uddd1 Trash</option>
                         <option value="archive" ${action === 'archive' ? 'selected' : ''}>\ud83d\udce6 Archive</option>
                         <option value="markRead" ${action === 'markRead' ? 'selected' : ''}>✉️ Mark Read</option>
                         <option value="moveToLabel" ${action === 'moveToLabel' ? 'selected' : ''}>\ud83c\udff7 Move to Label</option>
                     </select>
-                    <input type="number" class="input-number rule-days" data-tab-id="${tab.id}" value="${daysOld}" min="1" max="365">
+                    <input type="number" class="input-number rule-days" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(String(daysOld))}" min="1" max="365">
                     <label class="toggle-switch">
-                        <input type="checkbox" class="rule-enabled" data-tab-id="${tab.id}" ${enabled ? 'checked' : ''}>
+                        <input type="checkbox" class="rule-enabled" data-tab-id="${escapeHtml(tab.id)}" ${enabled ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
                 ${action === 'moveToLabel'
                         ? `
-                    <div class="rule-target-row" data-tab-id="${tab.id}-target">
+                    <div class="rule-target-row" data-tab-id="${escapeHtml(tab.id)}-target">
                         <span class="label">\u21b3 Target label:</span>
-                        <input type="text" class="input-text rule-target-label" data-tab-id="${tab.id}" value="${escapeHtml(targetLabel)}" placeholder="e.g. Archive/Newsletters">
+                        <input type="text" class="input-text rule-target-label" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(targetLabel)}" placeholder="e.g. Archive/Newsletters">
                     </div>
                 `
                         : ''
@@ -604,41 +608,94 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
     container.addEventListener('change', handleRuleChange);
 }
 
+/**
+ * Debounce window for the free-text and numeric rule fields.
+ *
+ * `change` fires on commit rather than per keystroke, so the write rate is
+ * already low, but a number input's spinner can be clicked rapidly and
+ * chrome.storage.sync allows only 120 writes a minute. Coalescing costs
+ * nothing and removes the ceiling as a concern.
+ */
+const RULE_WRITE_DEBOUNCE_MS = 250;
+
+interface PendingWrite {
+    timer: ReturnType<typeof setTimeout>;
+    run: () => Promise<void>;
+}
+const pendingRuleWrites = new Map<string, PendingWrite>();
+
+/**
+ * Commit anything still sitting in the debounce window.
+ *
+ * Called when the page is hidden, because a tab closed 100ms after the last
+ * edit would otherwise drop it, and losing a setting to save a storage write
+ * is a bad trade.
+ */
+async function flushPendingRuleWrites(): Promise<void> {
+    const queued = Array.from(pendingRuleWrites.values());
+    pendingRuleWrites.clear();
+    await Promise.all(
+        queued.map(({ timer, run }) => {
+            clearTimeout(timer);
+            return run().catch((err) => console.error('Options: failed to save rule', err));
+        })
+    );
+}
+
 async function handleRuleChange(e: Event): Promise<void> {
     const target = e.target as HTMLElement;
     const tabId = target.getAttribute('data-tab-id');
-    if (!tabId || !currentAccountId || !currentSettings) return;
+    if (!tabId || !currentAccountId) return;
 
-    const settings = await getSettings(currentAccountId);
-    let rule = settings.rules.find((r) => r.tabId === tabId);
-
-    if (!rule) {
-        rule = { tabId, action: 'trash', daysOld: 30, enabled: false };
-        settings.rules.push(rule);
-    }
+    const updates: Partial<Rule> = {};
+    let redrawRow = false;
 
     if (target.classList.contains('rule-action')) {
-        rule.action = (target as HTMLSelectElement).value as Rule['action'];
-        await saveSettings(currentAccountId, settings);
-        currentSettings = await getSettings(currentAccountId);
-        renderRulesList(currentSettings.tabs, currentSettings.rules);
+        updates.action = (target as HTMLSelectElement).value as Rule['action'];
+        // Switching action shows or hides the target-label input.
+        redrawRow = true;
+    }
+    if (target.classList.contains('rule-days')) {
+        updates.daysOld = parseInt((target as HTMLInputElement).value, 10) || 30;
+    }
+    if (target.classList.contains('rule-enabled')) {
+        updates.enabled = (target as HTMLInputElement).checked;
+    }
+    if (target.classList.contains('rule-target-label')) {
+        updates.targetLabel = (target as HTMLInputElement).value;
+    }
+    if (Object.keys(updates).length === 0) return;
+
+    const write = async (): Promise<void> => {
+        const accountId = currentAccountId;
+        if (!accountId) return;
+        // Read fresh rather than trusting the rendered state: another surface
+        // may have changed this rule since the page last drew it.
+        const settings = await getSettings(accountId);
+        const existing = settings.rules.find((r) => r.tabId === tabId);
+        const base: Rule = existing ?? { tabId, action: 'trash', daysOld: 30, enabled: false };
+
+        const next = await upsertRule(accountId, { ...base, ...updates, tabId });
+        currentSettings = next;
+        if (redrawRow) renderRulesList(next.tabs, next.rules);
+    };
+
+    const debounced = target.classList.contains('rule-days') || target.classList.contains('rule-target-label');
+    if (!debounced) {
+        await write();
         return;
     }
 
-    if (target.classList.contains('rule-days')) {
-        rule.daysOld = parseInt((target as HTMLInputElement).value, 10) || 30;
-    }
-
-    if (target.classList.contains('rule-enabled')) {
-        rule.enabled = (target as HTMLInputElement).checked;
-    }
-
-    if (target.classList.contains('rule-target-label')) {
-        rule.targetLabel = (target as HTMLInputElement).value;
-    }
-
-    await saveSettings(currentAccountId, settings);
-    currentSettings = settings;
+    const key = `${tabId}:${target.className}`;
+    const queued = pendingRuleWrites.get(key);
+    if (queued) clearTimeout(queued.timer);
+    pendingRuleWrites.set(key, {
+        run: write,
+        timer: setTimeout(() => {
+            pendingRuleWrites.delete(key);
+            void write().catch((err) => console.error('Options: failed to save rule', err));
+        }, RULE_WRITE_DEBOUNCE_MS),
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -824,6 +881,156 @@ function setupFeedbackForm(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Settings Sync (react to edits made in a Gmail tab while this page is open)
+// ---------------------------------------------------------------------------
+
+interface FocusSnapshot {
+    selector: string;
+    start: number | null;
+    end: number | null;
+}
+
+/** Escape a value for use inside an attribute selector. */
+function escapeSelectorValue(value: string): string {
+    const api = (globalThis as { CSS?: { escape?: (v: string) => string } }).CSS;
+    if (api && typeof api.escape === 'function') return api.escape(value);
+    return value.replace(/["\\]/g, '\\$&');
+}
+
+/**
+ * Remember enough about the focused control to find it again after a
+ * re-render. Without this, a change arriving from a Gmail tab would yank the
+ * caret out of whatever the user is typing here.
+ */
+function captureFocus(): FocusSnapshot | null {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el || el === document.body) return null;
+    const tabId = el.getAttribute('data-tab-id');
+    if (!tabId) return null;
+    const cls = Array.from(el.classList).find((c) => c.startsWith('rule-') || c.startsWith('tab-'));
+    if (!cls) return null;
+
+    let start: number | null = null;
+    let end: number | null = null;
+    try {
+        // Throws on input types that have no text selection (number, checkbox).
+        const input = el as HTMLInputElement;
+        start = input.selectionStart;
+        end = input.selectionEnd;
+    } catch {
+        /* not a text input */
+    }
+
+    return { selector: `.${cls}[data-tab-id="${escapeSelectorValue(tabId)}"]`, start, end };
+}
+
+function restoreFocus(snapshot: FocusSnapshot | null): void {
+    if (!snapshot) return;
+    const el = document.querySelector<HTMLElement>(snapshot.selector);
+    if (!el) return;
+    el.focus();
+    if (snapshot.start === null) return;
+    try {
+        (el as HTMLInputElement).setSelectionRange(snapshot.start, snapshot.end ?? snapshot.start);
+    } catch {
+        /* not a text input */
+    }
+}
+
+/**
+ * True while the user is dragging a row in this page.
+ *
+ * Redrawing the list mid-drag pulls the element out from under the pointer and
+ * abandons the drag, so a change arriving from a Gmail tab waits for the drop.
+ * Tracked from bubbled DOM events rather than from dragdrop.ts, whose drag
+ * state is closure-local by design.
+ */
+let dragInProgress = false;
+let reloadDeferredByDrag = false;
+
+function setupDragAwareness(): void {
+    document.addEventListener('dragstart', () => {
+        dragInProgress = true;
+    });
+    const end = (): void => {
+        if (!dragInProgress) return;
+        dragInProgress = false;
+        if (!reloadDeferredByDrag) return;
+        reloadDeferredByDrag = false;
+        void reloadCurrentAccount().catch((e) => console.error('Options: failed to sync settings', e));
+    };
+    document.addEventListener('dragend', end);
+    document.addEventListener('drop', end);
+}
+
+/** Re-read this account's settings and redraw everything that shows them. */
+async function reloadCurrentAccount(): Promise<void> {
+    if (!currentAccountId) return;
+    if (dragInProgress) {
+        reloadDeferredByDrag = true;
+        return;
+    }
+    // Commit anything still in the debounce window first. Re-rendering would
+    // reset the inputs from storage, and the pending write would then land
+    // afterwards, leaving the field showing one value and storage holding
+    // another.
+    await flushPendingRuleWrites();
+    const snapshot = captureFocus();
+    currentSettings = await getSettings(currentAccountId);
+    setAppSettings(currentSettings);
+    renderSettingsTabList(currentSettings.tabs);
+    renderPreferences(currentSettings);
+    renderRulesList(currentSettings.tabs, currentSettings.rules);
+    restoreFocus(snapshot);
+}
+
+/**
+ * Follow changes another surface makes to the account being edited.
+ *
+ * Until v1.5 this page listened only to storage.local, for the theme. Its
+ * in-memory settings therefore went stale the moment anything changed in a
+ * Gmail tab and stayed stale indefinitely, which is what turned a race into
+ * real data loss: the page would render five tabs, Gmail would add a sixth,
+ * and a drag here would write the five-tab array straight over the top.
+ * Ordering by id fixed the write; this fixes the staleness that caused it.
+ */
+function setupSettingsSync(): void {
+    if (!chrome.storage?.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'sync' || !currentAccountId) return;
+
+        const change = changes[accountStorageKey(currentAccountId)];
+        if (!change) {
+            // Some other account was created or edited: the selector should
+            // show a newly registered account without a manual reload.
+            if (Object.keys(changes).some((k) => k.startsWith('account_'))) {
+                void refreshAccountListIfChanged();
+            }
+            return;
+        }
+
+        // Skip our own writes. `rev` is bumped on every successful write, so
+        // storage already matching what we hold means there is nothing to do.
+        const incomingRev = (change.newValue as Settings | undefined)?.rev;
+        if (typeof incomingRev === 'number' && incomingRev === currentSettings?.rev) return;
+
+        void reloadCurrentAccount().catch((e) => console.error('Options: failed to sync settings', e));
+    });
+}
+
+/** Repopulate the account selector when the set of accounts actually changed. */
+async function refreshAccountListIfChanged(): Promise<void> {
+    try {
+        const accounts = await getAllAccounts();
+        if (accounts.length === knownAccountCount) return;
+        knownAccountCount = accounts.length;
+        populateAccountSelector(accounts);
+    } catch (e) {
+        console.warn('Options: could not refresh the account list', e);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Theme Sync (react to global theme changes made elsewhere)
 // ---------------------------------------------------------------------------
 
@@ -857,7 +1064,7 @@ function setupThemeSync(): void {
 function showEmptyState(containerId: string, message: string): void {
     const el = document.getElementById(containerId);
     if (el) {
-        el.innerHTML = `<li class="empty-state"><p>${message}</p></li>`;
+        el.innerHTML = `<li class="empty-state"><p>${escapeHtml(message)}</p></li>`;
     }
 }
 
@@ -884,6 +1091,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSidebarThemeToggle();
     setupAccountSwitcher();
     setupThemeSync();
+    setupDragAwareness();
+    setupSettingsSync();
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') void flushPendingRuleWrites();
+    });
     setupPreferences();
     setupAddTab();
     setupDataControls();

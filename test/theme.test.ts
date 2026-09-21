@@ -6,6 +6,7 @@ export {};
  * Covers detectGmailDarkMode(), applyTheme(), and listenForSystemThemeChanges().
  */
 
+import { microtasks } from './helpers/async';
 import {
     detectGmailDarkMode,
     detectGmailTheme,
@@ -338,6 +339,113 @@ describe('watchGmailTheme', () => {
 
         expect(document.body.classList.contains('force-light')).toBe(true);
         stop();
+        jest.useRealTimers();
+    });
+
+    test('a stylesheet arriving after the ladder has expired still flips the theme', async () => {
+        // This is the gap the ladder alone could not cover: Gmail's background
+        // usually comes from a stylesheet, and a stylesheet loading changes no
+        // attribute on <html> or <body>, so the attribute observer never fires.
+        // On a slow connection that stylesheet lands after 10 seconds.
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(255, 255, 255)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        const stop = watchGmailTheme(() => 'system');
+        expect(document.body.classList.contains('force-light')).toBe(true);
+
+        // Ladder fully spent. Drain the observer callback our own class write
+        // queued, so the assertion below is about the stylesheet and nothing else.
+        await microtasks();
+        jest.advanceTimersByTime(20_000);
+        await microtasks();
+        jest.advanceTimersByTime(200);
+        expect(document.body.classList.contains('force-light')).toBe(true);
+
+        // Gmail's dark stylesheet finally lands.
+        map.set(document.body, 'rgb(32, 33, 36)');
+        document.head.appendChild(document.createElement('style'));
+
+        // MutationObserver callbacks are microtasks; then the debounce fires.
+        await microtasks();
+        jest.advanceTimersByTime(200);
+
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+        stop();
+        jest.useRealTimers();
+    });
+
+    test('ignores head churn that is not a stylesheet', async () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(255, 255, 255)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        const stop = watchGmailTheme(() => 'system');
+        await microtasks();
+        jest.advanceTimersByTime(20_000);
+        await microtasks();
+        jest.advanceTimersByTime(200);
+
+        // Gmail rewrites <head> constantly. A <meta> is not a repaint.
+        map.set(document.body, 'rgb(32, 33, 36)');
+        document.head.appendChild(document.createElement('meta'));
+        await microtasks();
+        jest.advanceTimersByTime(200);
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        stop();
+        jest.useRealTimers();
+    });
+
+    test('re-checks when a background tab becomes visible', async () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(255, 255, 255)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        const stop = watchGmailTheme(() => 'system');
+        await microtasks();
+        jest.advanceTimersByTime(20_000);
+        await microtasks();
+        jest.advanceTimersByTime(200);
+
+        map.set(document.body, 'rgb(32, 33, 36)');
+        Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        await microtasks();
+        jest.advanceTimersByTime(200);
+
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+        stop();
+        jest.useRealTimers();
+    });
+
+    test('teardown stops every source, including a pending debounce', async () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        map.set(document.body, 'rgb(255, 255, 255)');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        mockMatchMedia(false);
+
+        const stop = watchGmailTheme(() => 'system');
+        map.set(document.body, 'rgb(32, 33, 36)');
+        document.head.appendChild(document.createElement('style'));
+        await microtasks();
+
+        // Stop between the observer firing and the debounce elapsing.
+        stop();
+        jest.advanceTimersByTime(20_000);
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
         jest.useRealTimers();
     });
 

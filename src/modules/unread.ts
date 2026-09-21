@@ -233,28 +233,58 @@ export function resolveFeedLabel(tab: Tab): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Atom feed cache (TTL + in-flight coalescing)
+// Atom feed cache (TTL, backoff, coalescing, concurrency cap)
 // ---------------------------------------------------------------------------
 //
 // renderTabs() runs frequently (storage changes, re-render events), and each
-// run asks every tab for its count. Without caching, that is one network fetch
-// per tab per render. We cache the parsed feed count per label for a short TTL
-// and coalesce concurrent identical requests into a single fetch.
+// run asks every tab for its count. Without caching that is one network fetch
+// per tab per render, so counts are cached per label for a short TTL and
+// concurrent identical requests are coalesced into one fetch.
+//
+// Failure is tracked separately from the answer. A failed fetch used to be
+// stored as the number 0 and served for the full 30s TTL, which is
+// indistinguishable from "this label really has no unread mail" and blocked
+// the retry that would have corrected it. Now a failure keeps the last count
+// we actually know, backs the next attempt off, and lets the caller tell
+// "zero" from "no idea".
 
 const FEED_CACHE_TTL_MS = 30_000;
 
+/** First retry delay after a failure; doubles per consecutive failure. */
+const FEED_FAILURE_BACKOFF_MS = 5_000;
+/** Ceiling on that backoff, so a broken network is polled once every 5 min. */
+const FEED_FAILURE_BACKOFF_MAX_MS = 300_000;
+
+/**
+ * Feeds in flight at once. A tab bar with many labels, on a slow link, would
+ * otherwise open one connection per label simultaneously and compete with
+ * Gmail's own requests for the same connection pool.
+ */
+const MAX_CONCURRENT_FEED_FETCHES = 4;
+
 interface FeedCacheEntry {
-    count: number;
+    /** Last count we actually fetched, or null if we have never succeeded. */
+    count: number | null;
+    /** When this entry was last written, success or failure. */
     ts: number;
+    /** Consecutive failures since the last success. 0 means the count is fresh. */
+    failures: number;
 }
 
 const feedCache = new Map<string, FeedCacheEntry>();
-const inFlightFeeds = new Map<string, Promise<number>>();
+const inFlightFeeds = new Map<string, Promise<number | null>>();
+
+let activeFeedFetches = 0;
+const feedFetchWaiters: Array<() => void> = [];
 
 /** Clears the Atom feed cache. Primarily used by tests and forced refreshes. */
 export function clearUnreadCountCache(): void {
     feedCache.clear();
     inFlightFeeds.clear();
+    activeFeedFetches = 0;
+    // Resolve rather than drop: a waiter whose promise is thrown away never
+    // resumes, so its fetch would hang for the life of the page.
+    feedFetchWaiters.splice(0).forEach((resume) => resume());
 }
 
 // A stalled connection must not hold the in-flight slot open: without this,
@@ -262,39 +292,92 @@ export function clearUnreadCountCache(): void {
 // because the coalescing entry is only cleared when the promise settles.
 const FEED_FETCH_TIMEOUT_MS = 10_000;
 
-/** Fetch + parse the Atom feed for a label, returning the unread count (0 on any failure). */
-async function fetchFeedCount(labelForFeed: string): Promise<number> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FEED_FETCH_TIMEOUT_MS);
+function acquireFeedSlot(): Promise<void> {
+    if (activeFeedFetches < MAX_CONCURRENT_FEED_FETCHES) {
+        activeFeedFetches++;
+        return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => feedFetchWaiters.push(resolve));
+}
 
+function releaseFeedSlot(): void {
+    const next = feedFetchWaiters.shift();
+    // Hand the slot straight over rather than decrementing and re-incrementing.
+    if (next) {
+        next();
+        return;
+    }
+    activeFeedFetches = Math.max(0, activeFeedFetches - 1);
+}
+
+/** How long to wait before retrying a label that has failed `failures` times. */
+function backoffFor(failures: number): number {
+    if (failures <= 0) return 0;
+    const delay = FEED_FAILURE_BACKOFF_MS * 2 ** (failures - 1);
+    return Math.min(delay, FEED_FAILURE_BACKOFF_MAX_MS);
+}
+
+/**
+ * Fetch and parse the Atom feed for a label.
+ *
+ * Returns the count on success, or null when we could not find out. Null is
+ * not zero: the caller falls back to scraping the DOM, and the cache keeps
+ * whatever count it already had rather than blanking the badge.
+ */
+async function fetchFeedCount(labelForFeed: string): Promise<number | null> {
+    // Queue before starting the clock, so a request waiting its turn does not
+    // spend its own timeout budget sitting in the queue.
+    await acquireFeedSlot();
+
+    // The slot is released in this outer finally, not alongside the timer:
+    // anything that throws between acquiring and entering the inner try would
+    // otherwise leak a slot, and four leaks stop unread counts entirely.
     try {
-        const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
-        const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), FEED_FETCH_TIMEOUT_MS);
 
-        const response = await fetch(feedUrl, { signal: controller.signal });
-        if (!response.ok) return 0;
+        try {
+            const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
+            const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
 
-        const text = await response.text();
-        const xmlDoc = new DOMParser().parseFromString(text, 'text/xml');
-        const fullcount = xmlDoc.querySelector('fullcount');
-        if (fullcount && fullcount.textContent) {
-            const count = parseInt(fullcount.textContent, 10);
-            return Number.isFinite(count) && count > 0 ? count : 0;
+            const response = await fetch(feedUrl, { signal: controller.signal });
+            if (!response.ok) return null;
+
+            const text = await response.text();
+            const xmlDoc = new DOMParser().parseFromString(text, 'text/xml');
+            const fullcount = xmlDoc.querySelector('fullcount');
+            if (fullcount && fullcount.textContent) {
+                const count = parseInt(fullcount.textContent, 10);
+                return Number.isFinite(count) && count > 0 ? count : 0;
+            }
+            // A well-formed feed with no <fullcount> genuinely means zero unread.
+            return 0;
+        } catch (e) {
+            console.warn('Gmail Tabs: Failed to fetch atom feed for', labelForFeed, e);
+            return null;
+        } finally {
+            clearTimeout(timeout);
         }
-        return 0;
-    } catch (e) {
-        console.warn('Gmail Tabs: Failed to fetch atom feed for', labelForFeed, e);
-        return 0;
     } finally {
-        clearTimeout(timeout);
+        releaseFeedSlot();
     }
 }
 
-/** Cached, coalesced accessor for a label's feed count. */
-async function getCachedFeedCount(labelForFeed: string): Promise<number> {
+/**
+ * Cached, coalesced, backed-off accessor for a label's feed count.
+ *
+ * Returns null when the count is genuinely unknown: never fetched, or failing
+ * and we have no earlier answer to fall back on.
+ */
+async function getCachedFeedCount(labelForFeed: string): Promise<number | null> {
     const cached = feedCache.get(labelForFeed);
-    if (cached && Date.now() - cached.ts < FEED_CACHE_TTL_MS) {
-        return cached.count;
+    const age = cached ? Date.now() - cached.ts : Infinity;
+
+    if (cached) {
+        if (cached.failures === 0 && age < FEED_CACHE_TTL_MS) return cached.count;
+        // Still inside the backoff window: serve the last known count rather
+        // than hammering an endpoint that is not answering.
+        if (cached.failures > 0 && age < backoffFor(cached.failures)) return cached.count;
     }
 
     const existing = inFlightFeeds.get(labelForFeed);
@@ -302,7 +385,18 @@ async function getCachedFeedCount(labelForFeed: string): Promise<number> {
 
     const promise = fetchFeedCount(labelForFeed)
         .then((count) => {
-            feedCache.set(labelForFeed, { count, ts: Date.now() });
+            const previous = feedCache.get(labelForFeed);
+            if (count === null) {
+                feedCache.set(labelForFeed, {
+                    // Keep the last good number so the badge does not blink to
+                    // nothing over one dropped request.
+                    count: previous?.count ?? null,
+                    ts: Date.now(),
+                    failures: (previous?.failures ?? 0) + 1,
+                });
+                return previous?.count ?? null;
+            }
+            feedCache.set(labelForFeed, { count, ts: Date.now(), failures: 0 });
             return count;
         })
         .finally(() => {
@@ -325,7 +419,7 @@ export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<v
 
     if (labelForFeed !== null) {
         const count = await getCachedFeedCount(labelForFeed);
-        if (count > 0) {
+        if (count !== null && count > 0) {
             countSpan.textContent = count.toString();
             return;
         }
