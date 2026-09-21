@@ -27,7 +27,7 @@ body.theme-light {
     --surface-card: #ffffff;
     --text-accent: #1967d2;
     --text-muted: #5f6b7c;
-    --text-danger: #d93025;
+    --text-danger: #c5221f;
 }
 
 /* ── Reset & Base ──────────────────────────────────────────────── */
@@ -417,7 +417,9 @@ input:checked+.toggle-slider::before {
 }
 
 .btn-primary.success {
-    background: linear-gradient(135deg, #2d6a4f, #40916c);
+    /* Light end held at #2c7a52 (5.23:1 against white) — #40916c measured
+       3.83:1 and this state carries text the user needs to read. */
+    background: linear-gradient(135deg, #2d6a4f, #2c7a52);
 }
 
 .btn-secondary {

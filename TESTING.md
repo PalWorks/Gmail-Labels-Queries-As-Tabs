@@ -23,6 +23,9 @@ npm test                  # run all suites (jest)
 npx jest <pattern>        # run a subset, e.g. npx jest storage
 npx jest --coverage       # run with coverage and enforce thresholds
 npx jest --runInBand      # run serially (useful when diagnosing flake)
+
+# Contrast against rendered pixels, in a real Chrome (manual, see below)
+NODE_PATH=$(npm root -g) node scripts/contrast-audit.mjs <extension-id> [port]
 ```
 
 ## Coverage thresholds
@@ -42,10 +45,28 @@ the thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 21 suites, 365 tests as of v1.2.1.
+- 26 suites, 470 tests as of v1.4.0.
 - Suites cover: storage and migrations, tab rendering and keyboard/aria, unread waterfall,
   XHR interceptor validation, rules and Apps Script generation, options page, onboarding,
-  modals, drag-and-drop, state accessors, import/export, and the shared tab manager.
+  modals, drag-and-drop, state accessors, import/export, the shared tab manager, tab
+  colors, rule templates, in-product feedback, and the color-contrast palette.
+
+## Color contrast
+
+Two layers, because neither alone is enough:
+
+1. [test/contrast.test.ts](test/contrast.test.ts) runs in `npm test`. It reads the palette
+   tokens straight out of `options.css`, `toolbar.css` and `welcome.css` and fails if any
+   text token drops below 4.5:1 against the surfaces it is used on, if the primary button
+   gradient stops carrying white at both ends, if a retired low-contrast hex reappears as a
+   `color:`, or if helper text goes back to fading with `opacity`.
+2. [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) measures *rendered pixels* in a
+   real Chrome, which the unit test cannot: composited opacity, inherited colors and
+   stacked translucent surfaces. Run it after any visual change. It needs a Chrome started
+   with `--remote-debugging-port`, the unpacked `dist/` loaded, and a global Playwright.
+
+The token test is the guardrail; the browser script is the proof. A palette change should
+pass both before it ships.
 
 ## Writing a new test
 
