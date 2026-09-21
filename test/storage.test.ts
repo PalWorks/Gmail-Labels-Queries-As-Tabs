@@ -174,6 +174,25 @@ describe('ensureAccountRegistered', () => {
         expect(await getAllAccounts()).toContain('same@gmail.com');
     });
 
+    test('a failed write is logged, not thrown: Gmail init must not abort', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        const area = chrome.storage.sync as unknown as { set: unknown };
+        const originalSet = area.set;
+        area.set = jest.fn(() => {
+            throw new Error('QUOTA_BYTES quota exceeded');
+        });
+
+        try {
+            await expect(ensureAccountRegistered('doomed@gmail.com')).resolves.toBeUndefined();
+            expect(warn).toHaveBeenCalled();
+        } finally {
+            // Restore by hand: spyOn().mockRestore() leaves the harness mock
+            // without its callback, which silently hangs every later test.
+            area.set = originalSet;
+            warn.mockRestore();
+        }
+    });
+
     test('leaves an existing account untouched', async () => {
         mockStorage['account_user@gmail.com'] = {
             tabs: [{ id: 'tab1', title: 'Work', type: 'label', value: 'Work' }],

@@ -18,6 +18,16 @@
 > (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
 > CHANGELOG).
 
+> **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
+> `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,
+> plus `worker/` (the feedback relay, the only server-side component) and `scripts/`
+> (a manual contrast audit). ADR-008 is amended by ADR-012: the extension makes no
+> background requests, with one user-initiated exception. The master audit on this date
+> fixed: an Apps Script comment breakout via an imported tab title, an unbounded Atom-feed
+> fetch that could freeze a label's unread count for the life of the page, a registration
+> race on first Gmail load, a theme-detection gap on very slow paints, 33 WCAG AA text
+> failures on the options page, and five dead CSS rules.
+
 ## 1. High Level Overview
 
 **Gmail Labels as Tabs** is a Chrome Extension that injects a configurable tab bar directly into Gmail's web interface. Each tab maps to a Gmail label or a built-in view (Inbox, Sent, Drafts, etc.), giving users one-click navigation between their most-used labels. The extension also supports **automation rules** that generate Google Apps Script for email cleanup (trash, archive, mark-read, move-to-label) and **real-time unread count badges** via XHR interception of Gmail's internal API.
