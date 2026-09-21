@@ -305,7 +305,17 @@ describe('no stylesheet rule outlives what it styled', () => {
     test('the detector actually finds an orphan', () => {
         // Mutation check. The name is assembled at runtime so this very file
         // does not contain it and count as a usage.
-        const name = ['orphaned', 'rule', 'probe', Date.now().toString(36)].join('-');
+        //
+        // The segments are deliberately not English. An earlier version used
+        // 'orphaned-rule-probe-…', and the prefix rule above then matched the
+        // literal 'orphaned-' the moment a comment elsewhere in src/ described
+        // an orphaned content script: a self-check that failed because of
+        // prose, which is the least useful kind of red build.
+        const name = ['zqx', 'zqy', 'zqz', Date.now().toString(36)].join('-');
+        // Derived, never written literally: a literal here would appear in
+        // `sources`, since this file is one of them, and the check would
+        // fail on itself.
+        expect(sources).not.toContain(name.slice(0, name.indexOf('-') + 1));
         const orphans = classNames(`.${name} { color: red; }`).filter((n) => !isReferenced(n, sources));
         expect(orphans).toEqual([name]);
     });

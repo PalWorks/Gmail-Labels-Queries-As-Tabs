@@ -31,6 +31,14 @@ coming back. One small addition, in the modal people actually use.
   focuses an already-open options tab instead of piling up duplicates. `options.html` was
   deliberately **not** added to `web_accessible_resources`: that would fix the symptom by
   letting any script on the Gmail page reach the settings UI.
+- **An extension update silently killed the settings modal in every open Gmail tab.**
+  Chrome does not reload a page when it updates the extension running in it, so the content
+  script keeps running, the modal still opens and every button still clicks, while each
+  `chrome.*` call throws "Extension context invalidated." Nothing saved and nothing said.
+  Gmail tabs stay open for days, so this happens in the wild, not only in development. The
+  modal now detects an orphaned script and offers the only thing that helps: a short
+  explanation, a reminder that tabs, rules and settings are untouched, and a Reload button
+  ([src/modules/extensionContext.ts](src/modules/extensionContext.ts)).
 - **The help control in the modal footer was a `<div>`**, so it was unreachable by keyboard
   and announced as nothing: its icon is an `<svg>` with no text and its only description
   was a `title` attribute. It is a `<button>` with an `aria-label` now, as is the new header

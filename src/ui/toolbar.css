@@ -237,6 +237,17 @@ body.force-light {
     color: var(--modal-text);
 }
 
+/*
+ * Shown when this content script has been orphaned by an extension update.
+ * Deliberately plain: the only useful action is reloading the page.
+ */
+.context-invalidated-message {
+    margin: 0 0 12px 0;
+    color: var(--modal-text);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
 .modal-header-actions {
     display: flex;
     align-items: center;

@@ -13,6 +13,7 @@ import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl
 import { getRenderCallback } from './index';
 import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
+import { isExtensionContextAlive, isContextInvalidatedError } from '../extensionContext';
 
 /** Asks the service worker to open the options page. See `openOptionsPage`. */
 export const OPEN_OPTIONS_PAGE_ACTION = 'OPEN_OPTIONS_PAGE';
@@ -54,13 +55,50 @@ export function toggleSettingsModal(): void {
  * already orphaned.
  */
 function openOptionsPage(): void {
-    try {
-        void chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION })?.catch?.(() => {
-            /* worker asleep or context gone; nothing to recover */
-        });
-    } catch {
-        /* non-fatal: extension context may be unavailable */
+    if (!isExtensionContextAlive()) {
+        showContextInvalidatedNotice();
+        return;
     }
+    try {
+        void chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION })?.catch?.((e: unknown) => {
+            // The context can die between the check above and the reply.
+            if (isContextInvalidatedError(e)) showContextInvalidatedNotice();
+        });
+    } catch (e: unknown) {
+        if (isContextInvalidatedError(e)) showContextInvalidatedNotice();
+    }
+}
+
+/**
+ * Replace the modal's contents with the one thing that will actually help.
+ *
+ * An orphaned content script cannot re-establish itself, so every other
+ * control in this modal is dead too. Saying so, once, beats twelve buttons
+ * that each do nothing.
+ */
+function showContextInvalidatedNotice(close?: () => void): void {
+    const modal = document.getElementById(MODAL_ID);
+    if (!modal) return;
+    const content = modal.querySelector('.modal-content');
+    if (!content || content.querySelector('#modal-reload-page')) return;
+
+    content.innerHTML = `
+        <div class="modal-header">
+            <h3>Reload Gmail to continue</h3>
+            <div class="modal-header-actions">
+                <button type="button" class="close-btn" aria-label="Close settings">✕</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <p class="context-invalidated-message">This tab is still running an older copy of the
+            extension, because the extension was updated or reloaded while the tab was open.
+            Nothing here can save changes until the page is reloaded.</p>
+            <p class="context-invalidated-message">Your tabs, rules and settings are untouched.</p>
+            <button type="button" id="modal-reload-page" class="primary-btn">Reload Gmail</button>
+        </div>
+    `;
+    content.querySelector('#modal-reload-page')?.addEventListener('click', () => location.reload());
+    content.querySelector('.close-btn')?.addEventListener('click', () => (close ? close() : modal.remove()));
 }
 
 function createSettingsModal(): void {
@@ -155,6 +193,15 @@ function createSettingsModal(): void {
         modal.remove();
     };
     (modal as any)._close = close;
+
+    // If this script is already orphaned, nothing else in the modal can work:
+    // every control here ends in a `chrome.*` call. Say so once, rather than
+    // letting the user discover it one dead button at a time. Placed after the
+    // close wiring so the notice dismisses like any other modal.
+    if (!isExtensionContextAlive()) {
+        showContextInvalidatedNotice(close);
+        return;
+    }
 
     setTimeout(() => {
         const input = modal.querySelector('#modal-new-label') as HTMLInputElement;

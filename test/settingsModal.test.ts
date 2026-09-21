@@ -98,6 +98,10 @@ import { toggleSettingsModal } from '../src/modules/modals/settingsModal';
 beforeEach(() => {
     document.body.innerHTML = '';
     jest.clearAllMocks();
+    // A live extension context by default. Without `runtime.id` the modal
+    // correctly decides this tab is orphaned and offers only a reload, which
+    // is the behaviour two tests below opt into deliberately.
+    (global as any).chrome = { runtime: { id: 'abcdef', sendMessage: jest.fn().mockResolvedValue({ ok: true }) } };
 });
 
 // ---------------------------------------------------------------------------
@@ -221,6 +225,32 @@ describe('settings modal behavior', () => {
         expect(mockSavePreferences).toHaveBeenCalledWith('user@gmail.com', { showUnreadCount: true });
     });
 
+    test('an orphaned content script says so instead of showing dead controls', () => {
+        // chrome.runtime.id is gone: this tab is running an older copy of the
+        // extension after an update, so every control in the modal is dead.
+        (global as any).chrome = { runtime: { sendMessage: jest.fn() } };
+        expect((global as any).chrome.runtime.id).toBeUndefined();
+
+        toggleSettingsModal();
+        const modal = document.getElementById('gmail-tabs-settings-modal')!;
+
+        expect(modal.textContent).toContain('Reload Gmail to continue');
+        expect(modal.querySelector('#modal-reload-page')).not.toBeNull();
+        // The controls that cannot work are not offered at all.
+        expect(modal.querySelector('#modal-add-btn')).toBeNull();
+        expect(modal.querySelector('#uninstall-btn')).toBeNull();
+        // And it says the user's data is safe, because that is the first
+        // thing anyone reading "reload" will worry about.
+        expect(modal.textContent).toContain('untouched');
+    });
+
+    test('the notice is still dismissible', () => {
+        (global as any).chrome = { runtime: {} };
+        toggleSettingsModal();
+        (document.querySelector('#gmail-tabs-settings-modal .close-btn') as HTMLElement).click();
+        expect(document.getElementById('gmail-tabs-settings-modal')).toBeNull();
+    });
+
     /**
      * Both routes to the options page go through the service worker. Opening
      * it from the content script with `window.open` is refused by Chrome with
@@ -234,7 +264,7 @@ describe('settings modal behavior', () => {
     ])('%s', (_name, selector) => {
         test('asks the service worker to open the options page', () => {
             const sendMessage = jest.fn().mockResolvedValue({ ok: true });
-            (global as any).chrome = { runtime: { sendMessage } };
+            (global as any).chrome = { runtime: { id: 'abcdef', sendMessage } };
             const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
 
             toggleSettingsModal();
@@ -249,8 +279,11 @@ describe('settings modal behavior', () => {
         test('survives an invalidated extension context', () => {
             // sendMessage throws once the extension reloads under a still-open
             // Gmail tab. The modal must not take the page down with it.
+            // Alive at open, dies before the click: the check at open time
+            // cannot catch this one, so the call site has to.
             (global as any).chrome = {
                 runtime: {
+                    id: 'abcdef',
                     sendMessage: () => {
                         throw new Error('Extension context invalidated.');
                     },
@@ -262,7 +295,7 @@ describe('settings modal behavior', () => {
 
         test('survives the worker rejecting the message', async () => {
             const sendMessage = jest.fn().mockRejectedValue(new Error('Receiving end does not exist.'));
-            (global as any).chrome = { runtime: { sendMessage } };
+            (global as any).chrome = { runtime: { id: 'abcdef', sendMessage } };
             toggleSettingsModal();
             expect(() => (document.querySelector(selector) as HTMLElement).click()).not.toThrow();
             await Promise.resolve();

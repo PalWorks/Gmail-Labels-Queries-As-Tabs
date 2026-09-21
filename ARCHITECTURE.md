@@ -56,7 +56,7 @@ Gmail-Labels-As-Tabs/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 30 suites: one per module, plus four repo-wide guards
+├── test/                      # 31 suites: one per module, plus four repo-wide guards
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -282,7 +282,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 30 suites, 589 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 31 suites, 601 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
