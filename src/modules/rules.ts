@@ -22,6 +22,13 @@ export interface EnrichedRule extends Rule {
 }
 
 /**
+ * Upper bound on threads a single rule touches in one run of the generated
+ * script. The actions are destructive and the script runs unattended, so a
+ * rule that matches far more than intended should stop somewhere reviewable.
+ */
+export const MAX_THREADS_PER_RUN = 200;
+
+/**
  * Resolves the Gmail label name a tab targets, or null if the tab does not map
  * to a label. Automation rules run as Gmail `label:` searches, so only these
  * tabs can drive a rule:
@@ -94,6 +101,34 @@ var RULES = [
     ${rulesArrayStr}
 ];
 
+// Upper bound on threads touched per rule per run. These actions are
+// destructive, so a rule that unexpectedly matches half the mailbox stops at a
+// number you can review and undo rather than running to completion.
+var MAX_THREADS_PER_RUN = ${MAX_THREADS_PER_RUN};
+
+/**
+ * Builds the search for a rule.
+ *
+ * The label MUST be quoted. Gmail splits an unquoted label: operator at the
+ * first space, so a label named "Old Stuff" would search for label:Old AND
+ * Stuff and match threads that were never in the label — which, for a trash
+ * rule, deletes the wrong mail. Gmail has no escape for a quote inside a
+ * quoted term, so any quote in the name is dropped here; threadHasLabel below
+ * is what actually guarantees we only act on the right threads.
+ */
+function buildQuery(rule) {
+  return 'label:"' + String(rule.label).replace(/"/g, '') + '" older_than:' + rule.daysOld + 'd';
+}
+
+/** Exact, case-sensitive check that a thread really carries the label. */
+function threadHasLabel(thread, labelName) {
+  var labels = thread.getLabels();
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i].getName() === labelName) return true;
+  }
+  return false;
+}
+
 // ── Main Function ──────────────────────────────────────────────────
 function autoCleanup() {
   var currentUser = Session.getActiveUser().getEmail();
@@ -106,8 +141,20 @@ function autoCleanup() {
 
   RULES.forEach(function(rule) {
     try {
-      var query = 'label:' + rule.label + ' older_than:' + rule.daysOld + 'd';
-      var threads = GmailApp.search(query);
+      var query = buildQuery(rule);
+      var matched = GmailApp.search(query, 0, MAX_THREADS_PER_RUN);
+
+      // Defence in depth before a destructive action: Gmail search is a
+      // fuzzy query language, not an exact-match lookup, so confirm every
+      // thread genuinely carries this label before touching it.
+      var threads = matched.filter(function(t) { return threadHasLabel(t, rule.label); });
+
+      if (matched.length !== threads.length) {
+        Logger.log('NOTE: ' + (matched.length - threads.length) + ' thread(s) matched the search for "' + rule.label + '" but do not carry that label. Skipped.');
+      }
+      if (matched.length === MAX_THREADS_PER_RUN) {
+        Logger.log('NOTE: hit the ' + MAX_THREADS_PER_RUN + '-thread cap for "' + rule.label + '". The rest will be picked up on the next run.');
+      }
 
       if (threads.length === 0) return;
 

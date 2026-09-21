@@ -354,10 +354,15 @@ async function init(): Promise<void> {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message.action === 'TOGGLE_SETTINGS') {
             toggleSettingsModal();
-        } else if (message.action === 'GET_ACCOUNT_INFO') {
-            sendResponse({ account: getUserEmail() });
+            return false;
         }
-        return true;
+        if (message.action === 'GET_ACCOUNT_INFO') {
+            sendResponse({ account: getUserEmail() });
+            return false;
+        }
+        // Returning true for a message we do not answer holds the sender's
+        // channel open forever, so a promise-form sendMessage never settles.
+        return false;
     });
 
     // Unread updates from pageWorld.js

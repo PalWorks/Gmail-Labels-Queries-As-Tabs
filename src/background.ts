@@ -2,12 +2,34 @@
  * background.ts
  *
  * Service worker for the extension.
- * Handles opening the options page.
+ *
+ * Besides downloads and the install hook, this is the single writer for
+ * account settings. Every surface in the profile — the options page and the
+ * modals, drag handlers and tab manager inside every open Gmail tab — sends
+ * its change here as a `SettingsOp`. The worker is one JavaScript context, so
+ * running those through a per-account promise chain serializes them by
+ * construction: no lock, no retry, no window. See `mutateSettings`.
  */
 
 import '@inboxsdk/core/background.js';
+import { MUTATE_SETTINGS_ACTION, createMutationQueue, MutateSettingsResponse } from './utils/storage';
+
+const mutationQueue = createMutationQueue();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === MUTATE_SETTINGS_ACTION) {
+        mutationQueue(message.accountId, message.op)
+            .then((settings) => sendResponse({ ok: true, settings } satisfies MutateSettingsResponse))
+            .catch((e: unknown) =>
+                sendResponse({
+                    ok: false,
+                    error: e instanceof Error ? e.message : String(e),
+                } satisfies MutateSettingsResponse)
+            );
+        // Async reply: hold the channel open.
+        return true;
+    }
+
     if (message.action === 'DOWNLOAD_FILE') {
         try {
             console.log('Background: Received DOWNLOAD_FILE request');
@@ -53,7 +75,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.error('Background: Error processing download request:', e);
             sendResponse({ success: false, error: e.message });
         }
-    } else if (message.action === 'UNINSTALL_SELF') {
+        // chrome.downloads.download answers through a callback.
+        return true;
+    }
+
+    if (message.action === 'UNINSTALL_SELF') {
         console.log('Background: Received UNINSTALL_SELF request');
         if (chrome.management && chrome.management.uninstallSelf) {
             chrome.management.uninstallSelf({ showConfirmDialog: true }, () => {
@@ -64,8 +90,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
             console.error('Background: chrome.management.uninstallSelf is not available. Check permissions.');
         }
+        return false;
     }
-    return true; // Keep channel open for async response
+
+    // Anything else is not ours. Returning true here would hold the sender's
+    // message channel open forever: a promise-form sendMessage would never
+    // settle, which is exactly how a stale worker can hang a caller.
+    return false;
 });
 
 // Set the uninstall URL on startup/install
