@@ -86,10 +86,10 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 574 automated tests covering storage,
+The full source is public and auditable, with 577 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
-Website: https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/
+Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Support: support@palworks.ai
 ```
 
@@ -224,40 +224,28 @@ without having to ask.
 
 ### Privacy policy URL
 
-> **DO NOT SUBMIT YET.** Neither URL is currently correct, and the reason is worth
-> understanding before choosing one. See "Which site" immediately below.
-
 ```
-https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/privacy
+https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
 ```
 
-#### Which site
+This page was rewritten for 1.5.0 and is live. It states the storage model, both outbound
+paths in full (the feedback relay and the uninstall form), all four permissions, the Apps
+Script boundary, and separately that the marketing site itself runs Google Analytics and
+Microsoft Clarity while the extension runs neither.
 
-Two GitHub Pages sites are live, both with Pages enabled and both building from `main`:
+#### Why this URL, and not the other one
 
-| URL | Built from | State |
-|---|---|---|
-| `palworks.github.io/Gmail-Labels-As-Tabs` | `PalWorks/Gmail-Labels-As-Tabs` (separate repo) | **Canonical.** Has the SEO meta, `robots.txt`, `sitemap.xml`, Search Console verification and a `/contact` route. Its privacy policy is pre-1.4.0 and contradicts the shipped extension |
-| `palworks.github.io/Gmail-Labels-Queries-As-Tabs` | `website/` in this repo | **Leftover.** The website was split out into the separate repo on 2026-03-03 ("Initial commit: website separated from extension repo with SEO improvements") and this folder was never deleted, so its Pages deploy kept running. Its privacy policy is correct for 1.5.0 because it was rewritten here on 2026-09-21 |
+Two GitHub Pages sites answered for this product until 2026-09-21. The website was split
+out of the extension repository into `PalWorks/Gmail-Labels-As-Tabs` on 2026-03-03, but the
+`website/` folder left behind kept deploying a second copy at
+`palworks.github.io/Gmail-Labels-Queries-As-Tabs`. Two privacy policies existed and drifted
+apart: the listing named one, the extension's own help button linked to the other, and the
+policy that was correct was on the copy nobody pointed at.
 
-So the accurate policy is on the site that should be retired, and the site the listing has
-always named still carries the policy that predates the feedback form. Fix the canonical
-repo first, then point this URL at it and delete `website/` from here.
-
-**This changed in 1.5.0 and it matters.** Two sites are live: this one, built from
-[website/](website/) in this repository, and an older `palworks.github.io/Gmail-Labels-As-Tabs`
-built from somewhere else. Earlier versions of this file pointed the listing at the older
-one, whose privacy policy is still the pre-1.4.0 text: it claims nothing is ever transmitted,
-lists only two of the four permissions, and mentions neither the feedback form nor the
-uninstall page. Submitting against that URL means the declared policy contradicts the
-shipped behaviour, which is a rejection reason and a fair one.
-
-The URL above is the site this repository deploys and can keep accurate. It was rewritten
-for 1.5.0 and states the storage model, both outbound paths, all four permissions and the
-Apps Script boundary in the same terms as the extension's own Privacy tab.
-
-Deal with the older site separately: redirect it here, or take it down. Until then, do not
-use its URL anywhere.
+The duplicate is gone. `website/` and its deploy workflow were deleted from this repository
+and Pages was disabled on it, so exactly one privacy policy exists. Guards in
+`test/repoConsistency.test.ts` fail the build if anything here names the retired site, if
+the help link stops matching a real route, or if a `website/` folder reappears.
 
 ---
 
@@ -265,8 +253,8 @@ use its URL anywhere.
 
 | Field | Value |
 |---|---|
-| Homepage URL | `https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/` |
-| Support URL | `https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/` |
+| Homepage URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
+| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact` |
 | Support email | `support@palworks.ai` |
 
 The site has four routes (`/`, `/privacy`, `/terms`, `/changelog`) and no contact page, so
@@ -342,10 +330,9 @@ Verified on 2026-09-21 against `main` at the 1.5.0 release commit.
 - [x] `manifest.json` and `package.json` both read 1.5.0 (CI checks parity)
 - [x] Privacy policy page rewritten for 1.5.0: storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics stated separately
-      ([website/pages/Privacy.tsx](website/pages/Privacy.tsx))
 - [x] Privacy policy URL now points at the site this repository deploys, not the stale one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.5.0 ([website/pages/Changelog.tsx](website/pages/Changelog.tsx))
+- [x] Public changelog updated through 1.5.0
 - [x] Screenshots regenerated against the shipping build; all five are 1280x800 and contain
       only demo data (Inbox, Clients, Invoices, Newsletters)
 - [x] Feedback relay reachable: `/health` returns `{"ok":true}`
@@ -356,11 +343,11 @@ Verified on 2026-09-21 against `main` at the 1.5.0 release commit.
 - [x] Data usage answers reviewed: unchanged from 1.4.0, PII stays Yes because of the
       feedback form
 
-Still to do by hand, because none of them can be verified from this repository:
+Still to do by hand:
 
-- [ ] Deploy the website so the new privacy policy is live **before** submitting. It
-      deploys from `main` on any change under `website/`
 - [ ] Load `extension.zip` in a clean Chrome profile and click through once
-- [ ] Redirect or take down `palworks.github.io/Gmail-Labels-As-Tabs`, whose privacy policy
-      is pre-1.4.0 text and now contradicts the shipped product
 - [ ] Upload, paste the 1.5.0 release notes from section 6, and submit
+
+A note for next time: the website deploys **manually** now, in both repositories. A change
+to the privacy policy is not live, and must not be described as live, until
+`gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main` has run.

@@ -101,9 +101,29 @@ guards that stop each defect coming back.
   ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
 - A guard that fails when live documents disagree about how many tests there are. Four of them
   stated four different totals within this release, each correct when written.
-- A guard that fails when STORE_LISTING names a `palworks.github.io` URL outside the path
-  [website/vite.config.ts](website/vite.config.ts) actually deploys to. The listing pointed
-  its privacy policy at a second, stale site that this repository does not build.
+- Guards on the marketing-site links: nothing here may link to the retired Pages address,
+  the extension's help button must name a route that exists, the listing must name the live
+  site, and a `website/` folder may not reappear in this repository.
+
+### Changed (the marketing site moved out, and one link had to move with it)
+
+- **The duplicate website is gone.** The site was split into
+  [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) in
+  March 2026, but the `website/` folder left behind here kept deploying a second copy to
+  GitHub Pages. Two privacy policies existed and drifted: the store listing named one, the
+  extension's own help button linked to the other, and the one that was correct for 1.5.0
+  was on the copy nobody pointed at. The folder and its deploy workflow are deleted and
+  Pages is disabled on this repository, so exactly one policy exists.
+- **The in-Gmail Help button pointed at the site being retired**, and would have started
+  404ing for every installed user. It now opens
+  `https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact`, which is a real route; the
+  old link used `#/#contact`, which is not one and silently fell back to the homepage.
+- **CI now fetches the published privacy policy** and fails if it does not name every
+  outbound host the extension can reach, every permission the manifest asks for, or the
+  analytics the site itself runs, or if the site bundle contains an API key. The policy
+  lives in another repository and deploys by hand, so nothing else can keep it honest.
+- Both repositories now build only on manual dispatch. A guard fails the build if a
+  `push:` trigger reappears in any workflow here.
 
 ### Changed (website and store assets)
 
@@ -112,9 +132,9 @@ guards that stop each defect coming back.
   and mentioned neither the feedback relay nor the uninstall page. It now states the storage
   model, both outbound paths in full, every permission, the Apps Script boundary, and the
   fact that the marketing site itself uses analytics while the extension does not
-  ([website/pages/Privacy.tsx](website/pages/Privacy.tsx)).
+  (now in [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs)).
 - The public changelog covered v1.0.0 only. It now runs through 1.5.0
-  ([website/pages/Changelog.tsx](website/pages/Changelog.tsx)).
+  (same repository).
 - Store screenshots regenerated against the shipping build, and the privacy caption no longer
   says nothing leaves the browser unless you press Send Feedback, which stopped being true
   the moment the uninstall URL came back.

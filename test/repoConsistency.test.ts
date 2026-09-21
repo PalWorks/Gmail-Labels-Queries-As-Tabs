@@ -151,7 +151,11 @@ describe('documentation claims match the code', () => {
 
 describe('documentation points at files that exist', () => {
     /** Directories whose contents docs link to; anything else is a URL or anchor. */
-    const REPO_DIRS = ['src/', 'test/', 'scripts/', 'worker/', 'website/', '.planning/', '.github/', 'store-assets/'];
+    // No 'website/': the marketing site moved to PalWorks/Gmail-Labels-As-Tabs
+    // in v1.5.0, so a backticked `website/...` in prose now names a path in
+    // another repository and cannot be resolved from here. Markdown links to
+    // it are still caught below, which is the case that would mislead.
+    const REPO_DIRS = ['src/', 'test/', 'scripts/', 'worker/', '.planning/', '.github/', 'store-assets/'];
 
     function referencedPaths(text: string): string[] {
         const out = new Set<string>();
@@ -171,7 +175,7 @@ describe('documentation points at files that exist', () => {
     }
 
     /** Documented on purpose, absent on purpose. */
-    const INTENTIONALLY_ABSENT = new Set(['website/.env.local', '.env.local']);
+    const INTENTIONALLY_ABSENT = new Set(['.env.local']);
 
     test('every repo path named in a document resolves', () => {
         const missing: string[] = [];
@@ -431,36 +435,102 @@ describe('current-state documents agree on the test count', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The store listing must point at the site this repository deploys
+// The marketing site lives in another repository, and links must survive that
 // ---------------------------------------------------------------------------
 
 /**
- * Two GitHub Pages sites answer for this product. The listing pointed its
- * privacy policy URL at the one this repository does not build, so the
- * declared policy was four versions behind the shipped behaviour and nobody
- * could have fixed it from here.
+ * Two GitHub Pages sites answered for this product until v1.5.0. The website
+ * was split out into PalWorks/Gmail-Labels-As-Tabs in March 2026, but the
+ * `website/` folder left behind here kept deploying a second copy, so the
+ * privacy policy existed twice and drifted. The listing named one, the
+ * extension's own help button linked to the other, and the policy that was
+ * actually correct was on the copy nobody pointed at.
+ *
+ * The duplicate is gone. What remains is a cross-repository dependency, which
+ * nothing in a build can resolve, so these guards pin the one thing that can
+ * be checked from here: every URL we ship or publish names the surviving site.
  */
-describe('store listing URLs match the deployed site', () => {
-    const base = /base:\s*'([^']+)'/.exec(read('website/vite.config.ts'))?.[1];
+describe('links point at the marketing site that still exists', () => {
+    const SITE = 'https://palworks.github.io/Gmail-Labels-As-Tabs/';
 
-    test('the vite base path is readable', () => {
-        expect(base).toMatch(/^\/[A-Za-z0-9-]+\/$/);
-    });
+    /** Files that can send a user or a reviewer to the marketing site. */
+    const OUTWARD_FACING = [
+        'STORE_LISTING.md',
+        'README.md',
+        'SECURITY.md',
+        'src/options.html',
+        'src/modules/modals/settingsModal.ts',
+    ];
 
-    test('every palworks.github.io URL in the listing uses that base path', () => {
-        const wrong = (read('STORE_LISTING.md').match(/https:\/\/palworks\.github\.io\/[^\s`)|]*/g) ?? [])
-            .filter((u) => !u.startsWith(`https://palworks.github.io${base}`));
-        if (wrong.length > 0) {
+    /**
+     * A backticked host is being discussed, which the explanation of the
+     * retirement has to do; a URL with a scheme is a link somebody can click.
+     * Only the second is a defect. Same distinction the doc-claims guard makes.
+     */
+    function retiredLinks(body: string): string[] {
+        return (body.match(/https:\/\/palworks\.github\.io\/[^\s`)|"'<]*/g) ?? []).filter((u) =>
+            u.includes('Gmail-Labels-Queries-As-Tabs')
+        );
+    }
+
+    test('nothing links to the retired Pages site', () => {
+        const offenders = OUTWARD_FACING.flatMap((f) =>
+            retiredLinks(read(f)).map((u) => `${f}: ${u}`)
+        );
+        if (offenders.length > 0) {
             throw new Error(
-                `The listing points at a site this repository does not deploy:\n` +
-                    [...new Set(wrong)].map((u) => `  ${u}`).join('\n') +
-                    `\n\nExpected everything under https://palworks.github.io${base}`
+                `These still link to the retired Pages site, which no longer serves:\n` +
+                    offenders.map((o) => `  ${o}`).join('\n') +
+                    `\n\nUse ${SITE} instead.`
             );
         }
     });
 
-    test('the privacy policy route exists in the app', () => {
-        expect(read('website/App.tsx')).toContain('path="/privacy"');
-        expect(read('STORE_LISTING.md')).toContain(`https://palworks.github.io${base}#/privacy`);
+    test('the link detector ignores a backticked mention but catches a link', () => {
+        expect(retiredLinks('the old `palworks.github.io/Gmail-Labels-Queries-As-Tabs` site')).toEqual([]);
+        expect(retiredLinks('see https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/privacy')).toHaveLength(1);
+    });
+
+    test('the extension ships a help link to a route that exists on that site', () => {
+        const source = read('src/modules/modals/settingsModal.ts');
+        expect(source).toContain(`${SITE}#/contact`);
+        // `#/#contact` is not a route; it silently degrades to the homepage.
+        // Checked on the call, not the file, so the comment explaining it is fine.
+        expect(source).not.toMatch(/window\.open\(\s*'[^']*#\/#/);
+    });
+
+    test('the listing names the surviving site for privacy, homepage and support', () => {
+        const listing = read('STORE_LISTING.md');
+        expect(listing).toContain(`${SITE}#/privacy`);
+        const urls = listing.match(/https:\/\/palworks\.github\.io\/[^\s`)|]*/g) ?? [];
+        const wrong = [...new Set(urls.filter((u) => !u.startsWith(SITE)))];
+        if (wrong.length > 0) {
+            throw new Error(
+                `The listing names a palworks.github.io URL outside the live site:\n` +
+                    wrong.map((u) => `  ${u}`).join('\n')
+            );
+        }
+    });
+
+    test('this repository no longer builds a website of its own', () => {
+        // The duplicate came back once already, as a folder nobody deleted.
+        expect(fs.existsSync(path.join(ROOT, 'website'))).toBe(false);
+        const workflows = walk(path.join(ROOT, '.github', 'workflows'), () => true);
+        for (const wf of workflows) {
+            expect(fs.readFileSync(wf, 'utf8')).not.toMatch(/upload-pages-artifact|deploy-pages/);
+        }
+    });
+
+    test('every workflow is manually triggered', () => {
+        // Actions minutes are spent deliberately. A `push:` trigger creeping
+        // back in is the kind of thing nobody notices until the bill does.
+        const workflows = walk(path.join(ROOT, '.github', 'workflows'), (n) => n.endsWith('.yml'));
+        expect(workflows.length).toBeGreaterThan(0);
+        for (const wf of workflows) {
+            const body = fs.readFileSync(wf, 'utf8');
+            const triggers = /\non:\n([\s\S]*?)(?=\n[a-z]+:\n)/.exec(body)?.[1] ?? '';
+            expect(triggers).toContain('workflow_dispatch');
+            expect(triggers).not.toMatch(/^\s{2}(push|pull_request|schedule):/m);
+        }
     });
 });

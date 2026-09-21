@@ -63,7 +63,6 @@ Gmail-Labels-As-Tabs/
 ├── scripts/                   # Manual tooling (rendered-pixel contrast audit)
 ├── _locales/                  # i18n (internationalization) strings
 ├── dist/                      # Build output (loaded into Chrome)
-├── website/                   # SEPARATE marketing website (Vite + React)
 └── .github/workflows/         # CI (manual dispatch) and website deploy
 ```
 
@@ -78,7 +77,7 @@ Gmail-Labels-As-Tabs/
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
 | `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
 | `worker/` | The one server-side piece: relays user-submitted feedback to email, so no API key ships in the extension |
-| `website/` | Independent React+Vite project for the marketing site |
+| _(none)_ | The marketing site is a separate repository: [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) |
 
 ---
 
@@ -241,7 +240,6 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 | InboxSDK App ID | [content.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L13) | Hardcoded constant `APP_ID` |
 | Uninstall feedback URL | [background.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/background.ts#L66) | Hardcoded Tally form URL |
 | i18n | `_locales/en/` | Chrome i18n message format |
-| Website env | `website/.env.local` | Vite environment variables |
 
 > **No `.env` or secrets** are used by the extension itself. All config is user-controlled via `chrome.storage.sync`.
 
@@ -281,7 +279,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 30 suites, 574 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 30 suites, 577 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -329,7 +327,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 3. Use `chrome.runtime.sendMessage` bridge from `content.ts`
 
 ### Website Changes
-The `website/` directory is completely independent. Edit React components in `website/pages/` and `website/components/`. Deploy via `git push` (GitHub Actions).
+The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) and deploys manually: `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main`. A duplicate copy used to sit here as `website/` and served a second, drifting privacy policy; it was deleted in v1.5.0 and Pages disabled on this repository.
 
 ---
 

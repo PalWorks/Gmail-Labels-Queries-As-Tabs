@@ -168,6 +168,52 @@ jobs:
           done
           exit $status
 
+      # 5.7  The published privacy policy must describe the shipped extension
+      #
+      # The policy lives in another repository (PalWorks/Gmail-Labels-As-Tabs)
+      # and deploys manually, so nothing in this build can keep it honest by
+      # construction. It went four versions stale before anyone looked: it
+      # claimed the extension transmits nothing, listed two of the four
+      # permissions, and named neither the feedback relay nor the uninstall
+      # form. This fetches what a Web Store reviewer would actually read.
+      #
+      # It fails the build when the live page is wrong or unreachable, which
+      # is the right answer: we should not ship an extension whose declared
+      # policy cannot be produced.
+      - name: Verify the published privacy policy matches what the code does
+        run: |
+          site="https://palworks.github.io/Gmail-Labels-As-Tabs/"
+          bundle=$(curl -sSfL --retry 3 --retry-delay 5 --max-time 30 "$site" \
+            | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1)
+          if [ -z "$bundle" ]; then
+            echo "::error::Could not find the site bundle at $site"
+            exit 1
+          fi
+          curl -sSfL --retry 3 --retry-delay 5 --max-time 60 "$site$bundle" -o /tmp/site.js
+          echo "Fetched $bundle ($(stat --format=%s /tmp/site.js) bytes)"
+
+          # Every outbound host the extension can reach, and every permission
+          # the manifest asks for, has to appear on that page.
+          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev storage downloads management mail.google.com"
+          # Microsoft Clarity runs on the site itself and must be disclosed too.
+          required="$required Microsoft Clarity"
+          status=0
+          for term in $required; do
+            if grep -qF "$term" /tmp/site.js; then
+              echo "  ok       $term"
+            else
+              echo "::error::The published privacy policy never mentions '$term'"
+              status=1
+            fi
+          done
+
+          # A key must never be substituted into a static bundle.
+          if grep -qE 'AIza[0-9A-Za-z_-]{30,}' /tmp/site.js; then
+            echo "::error::The published site bundle contains a Google API key"
+            status=1
+          fi
+          exit $status
+
       # ------------------------------------------------------------------
       # Artifact uploads
       # ------------------------------------------------------------------

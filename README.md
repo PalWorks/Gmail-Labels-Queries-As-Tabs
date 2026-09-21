@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Install from Chrome Web Store</a> · 
-  <a href="https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/">Website</a> · 
+  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs/">Website</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
 </p>
 
@@ -385,7 +385,6 @@ Gmail-Labels-As-Tabs/
 │
 ├── _locales/en/messages.json         # Chrome i18n strings
 ├── dist/                             # Built extension (load this in Chrome)
-├── website/                          # Marketing site (Vite + React, independent project)
 ├── .github/workflows/
 │   ├── ci.yml                        # CI pipeline (test, lint, build, verify)
 │   └── deploy_website.yml            # GitHub Pages deployment for website
@@ -432,7 +431,7 @@ npx jest test/modals/
 | Welcome | `welcome.test.ts` | Onboarding page logic |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 30 test files, 574 test cases.**
+**Total: 30 test files, 577 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -460,7 +459,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 574 tests across 30 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 577 tests across 30 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -489,16 +488,18 @@ Upload `extension.zip` to the [Chrome Developer Dashboard](https://chrome.google
 
 ### Marketing Website
 
-The `website/` directory contains a separate Vite + React project deployed via GitHub Pages:
+The marketing site is **not in this repository**. It lives in
+[PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) and is
+published at <https://palworks.github.io/Gmail-Labels-As-Tabs/>, including the privacy
+policy the Chrome Web Store listing links to.
 
-```bash
-cd website
-npm install
-npm run dev      # Local development
-npm run build    # Production build
-```
+A `website/` folder used to sit here as well, left over from the March 2026 split, and it
+kept deploying a second copy of the site. Two privacy policies drifted apart as a result.
+It was deleted in v1.5.0, Pages was disabled on this repository, and
+`test/repoConsistency.test.ts` fails the build if a `website/` folder reappears or if
+anything here links to the retired address.
 
-Deployment is automated via `.github/workflows/deploy_website.yml` on push to `main`.
+That site deploys **manually**: `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main`.
 
 ## Roadmap
 
@@ -596,7 +597,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (574 tests across 30 suites)
+npm test          # Jest (577 tests across 30 suites)
 npm run build     # Verify production build
 ```
 
@@ -629,7 +630,7 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 
 <p align="center">
   <strong>Built with care for Gmail power users</strong><br>
-  <a href="https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/">Website</a> · 
+  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs/">Website</a> · 
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Chrome Web Store</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Request Feature</a>

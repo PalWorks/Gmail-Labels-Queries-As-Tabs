@@ -28,7 +28,7 @@
 > theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
 > failures. Four guard suites were added so each class of defect fails CI rather than
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
-> `rulesProperty`. 30 suites, 574 tests.
+> `rulesProperty`. 30 suites, 577 tests.
 >
 > **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and its
 > page world never initialises, because injecting it needs `chrome.scripting` and that
@@ -60,7 +60,6 @@
 gmail-labels-as-tabs/
 ├── .github/workflows/       # CI + website deployment pipelines
 │   ├── ci.yml               # Test, build, verify no console.log, upload artifact
-│   └── deploy_website.yml   # Build + deploy website/ to GitHub Pages
 ├── _locales/en/             # Chrome i18n (extension description string)
 ├── dist/                    # Production build output (gitignored)
 ├── src/                     # All extension source code
@@ -101,7 +100,6 @@ gmail-labels-as-tabs/
 │   ├── rules.test.ts, options.test.ts, settingsModal.test.ts, welcome.test.ts,
 │   ├── background.test.ts, xhrInterceptor.test.ts
 │   └── modals/              # pin, edit, delete, import, uninstall modal tests
-├── website/                 # Marketing/landing page (React, separate build)
 ├── build.js                 # esbuild configuration (5 entry points)
 ├── manifest.json            # Chrome Extension Manifest V3
 ├── package.json             # NPM scripts + dev dependencies
@@ -118,7 +116,7 @@ gmail-labels-as-tabs/
 | `src/utils/` | Shared infrastructure. Currently only `storage.ts` for chrome.storage.sync management. |
 | `src/ui/` | CSS files injected into Gmail. `toolbar.css` styles the tab bar and all modal overlays. |
 | `test/` | Unit tests using Jest + ts-jest + jsdom. Tests storage CRUD and script generation. |
-| `website/` | Independent React app for the public landing page, deployed to GitHub Pages. Has its own `package.json`. |
+| _(removed in 1.5.0)_ | The landing page lived here as `website/` and also deployed to Pages, duplicating the separate site. Deleted; the site is [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). |
 | `.github/workflows/` | Two pipelines: CI (test + build + verify) and website deployment (GitHub Pages). |
 
 ## 3. Entry Points and Execution Flow

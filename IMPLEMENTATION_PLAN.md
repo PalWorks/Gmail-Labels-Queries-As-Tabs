@@ -30,7 +30,7 @@ This ordering is deliberate: tooling improvements have zero user-facing risk and
 | **Developer is proficient in TypeScript** and Chrome Extension MV3 APIs | Evidenced by the existing codebase quality. |
 | **No breaking changes to user settings** | The `chrome.storage.sync` schema defined in `storage.ts` must remain backward compatible. Existing v1.1.0 users must not lose data on update. |
 | **Gmail's DOM structure is stable** for the duration of this roadmap | Gmail selector changes are external and unpredictable; this plan does not add new DOM dependencies. |
-| **Website (`website/`) is out of scope** | It has its own build pipeline and deployment and is not coupled to the extension code. |
+| **The marketing website is out of scope** | It has its own build pipeline and deployment and is not coupled to the extension code. Since v1.5.0 it is also a separate repository. |
 
 ## Phase 0: Tooling and Developer Experience
 

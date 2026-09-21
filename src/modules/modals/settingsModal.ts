@@ -14,6 +14,9 @@ import { getRenderCallback } from './index';
 import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
 
+/** Contact route on the marketing site (PalWorks/Gmail-Labels-As-Tabs). */
+export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact';
+
 export function toggleSettingsModal(): void {
     const modal = document.getElementById(MODAL_ID);
     if (modal) {
@@ -132,8 +135,14 @@ function createSettingsModal(): void {
     });
 
     // Help Button
+    //
+    // The marketing site lives in PalWorks/Gmail-Labels-As-Tabs, not in this
+    // repository. Until v1.5.0 this pointed at a second Pages site built from
+    // a leftover `website/` folder here; that site is retired, so this link
+    // would have started 404ing for every installed user. `#/contact` is a
+    // real route there, unlike the `#/#contact` this used to send people to.
     modal.querySelector('#modal-help-btn')?.addEventListener('click', () => {
-        window.open('https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/#contact', '_blank');
+        window.open(SITE_CONTACT_URL, '_blank');
     });
 
     // "Manage all accounts" opens the full options dashboard (multi-account).
