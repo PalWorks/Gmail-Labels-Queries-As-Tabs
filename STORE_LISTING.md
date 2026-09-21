@@ -224,9 +224,25 @@ without having to ask.
 
 ### Privacy policy URL
 
+> **DO NOT SUBMIT YET.** Neither URL is currently correct, and the reason is worth
+> understanding before choosing one. See "Which site" immediately below.
+
 ```
 https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/privacy
 ```
+
+#### Which site
+
+Two GitHub Pages sites are live, both with Pages enabled and both building from `main`:
+
+| URL | Built from | State |
+|---|---|---|
+| `palworks.github.io/Gmail-Labels-As-Tabs` | `PalWorks/Gmail-Labels-As-Tabs` (separate repo) | **Canonical.** Has the SEO meta, `robots.txt`, `sitemap.xml`, Search Console verification and a `/contact` route. Its privacy policy is pre-1.4.0 and contradicts the shipped extension |
+| `palworks.github.io/Gmail-Labels-Queries-As-Tabs` | `website/` in this repo | **Leftover.** The website was split out into the separate repo on 2026-03-03 ("Initial commit: website separated from extension repo with SEO improvements") and this folder was never deleted, so its Pages deploy kept running. Its privacy policy is correct for 1.5.0 because it was rewritten here on 2026-09-21 |
+
+So the accurate policy is on the site that should be retired, and the site the listing has
+always named still carries the policy that predates the feedback form. Fix the canonical
+repo first, then point this URL at it and delete `website/` from here.
 
 **This changed in 1.5.0 and it matters.** Two sites are live: this one, built from
 [website/](website/) in this repository, and an older `palworks.github.io/Gmail-Labels-As-Tabs`
