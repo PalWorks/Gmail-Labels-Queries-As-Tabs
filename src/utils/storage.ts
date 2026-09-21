@@ -478,6 +478,10 @@ async function mutateViaServiceWorker(accountId: string, op: SettingsOp): Promis
  * recognise its own change when `chrome.storage.onChanged` fires.
  */
 export async function mutateSettings(accountId: string, op: SettingsOp): Promise<Settings> {
+    // An empty id would write to the key `account_`, which then shows up in
+    // getAllAccounts() as a nameless account nobody can select or remove.
+    if (!accountId) throw new Error('mutateSettings called without an account id');
+
     const viaWorker = await mutateViaServiceWorker(accountId, op);
     if (viaWorker) return viaWorker;
     return mutateLocally(accountId, op);

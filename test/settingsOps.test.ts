@@ -466,3 +466,19 @@ describe('the stale-reorder reproduction', () => {
         expect(after.rules.find((r) => r.tabId === work.id)).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Input guards
+// ---------------------------------------------------------------------------
+
+describe('mutateSettings input guards', () => {
+    beforeEach(() => {
+        installAsyncChrome({ latencyTurns: 1 });
+    });
+
+    test('refuses an empty account id rather than writing to `account_`', async () => {
+        await expect(mutateSettings('', { kind: 'addTab', tab: tab('a') })).rejects.toThrow(/account id/i);
+        const { getAllAccounts } = await import('../src/utils/storage');
+        expect(await getAllAccounts()).toEqual([]);
+    });
+});

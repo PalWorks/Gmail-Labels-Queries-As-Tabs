@@ -631,13 +631,15 @@ const pendingRuleWrites = new Map<string, PendingWrite>();
  * edit would otherwise drop it, and losing a setting to save a storage write
  * is a bad trade.
  */
-function flushPendingRuleWrites(): void {
+async function flushPendingRuleWrites(): Promise<void> {
     const queued = Array.from(pendingRuleWrites.values());
     pendingRuleWrites.clear();
-    queued.forEach(({ timer, run }) => {
-        clearTimeout(timer);
-        void run().catch((err) => console.error('Options: failed to save rule', err));
-    });
+    await Promise.all(
+        queued.map(({ timer, run }) => {
+            clearTimeout(timer);
+            return run().catch((err) => console.error('Options: failed to save rule', err));
+        })
+    );
 }
 
 async function handleRuleChange(e: Event): Promise<void> {
@@ -968,6 +970,11 @@ async function reloadCurrentAccount(): Promise<void> {
         reloadDeferredByDrag = true;
         return;
     }
+    // Commit anything still in the debounce window first. Re-rendering would
+    // reset the inputs from storage, and the pending write would then land
+    // afterwards, leaving the field showing one value and storage holding
+    // another.
+    await flushPendingRuleWrites();
     const snapshot = captureFocus();
     currentSettings = await getSettings(currentAccountId);
     setAppSettings(currentSettings);
@@ -1087,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDragAwareness();
     setupSettingsSync();
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') flushPendingRuleWrites();
+        if (document.visibilityState === 'hidden') void flushPendingRuleWrites();
     });
     setupPreferences();
     setupAddTab();
