@@ -244,6 +244,41 @@ describe('settings modal behavior', () => {
         expect(modal.textContent).toContain('untouched');
     });
 
+    test('a control that fails on a dead context surfaces the notice', async () => {
+        // The modal opened while the context was alive, so the check at open
+        // time cannot help; the extension then updated underneath it. Every
+        // control here must end up saying so rather than doing nothing.
+        mockSetGlobalTheme.mockRejectedValueOnce(new Error('Extension context invalidated.'));
+
+        toggleSettingsModal();
+        const modal = document.getElementById('gmail-tabs-settings-modal')!;
+        expect(modal.querySelector('h3')!.textContent).toBe('Configure Tabs');
+
+        (modal.querySelector('[data-theme="dark"]') as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(document.getElementById('gmail-tabs-settings-modal')!.textContent).toContain(
+            'Reload Gmail to continue'
+        );
+    });
+
+    test('a genuine failure is not dressed up as a dead context', async () => {
+        // Telling someone to reload when reloading will not help is worse
+        // than saying nothing.
+        mockSetGlobalTheme.mockRejectedValueOnce(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'));
+        const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        toggleSettingsModal();
+        (document.querySelector('[data-theme="dark"]') as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(document.getElementById('gmail-tabs-settings-modal')!.textContent).not.toContain(
+            'Reload Gmail to continue'
+        );
+        expect(err).toHaveBeenCalled();
+        err.mockRestore();
+    });
+
     test('the notice is still dismissible', () => {
         (global as any).chrome = { runtime: {} };
         toggleSettingsModal();

@@ -28,7 +28,7 @@
 > theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
 > failures. Four guard suites were added so each class of defect fails CI rather than
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
-> `rulesProperty`. 31 suites, 601 tests.
+> `rulesProperty`. 31 suites, 603 tests.
 >
 > **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and
 > **neither of its two features has ever run in a shipped build**. `InboxSDK.load()` never

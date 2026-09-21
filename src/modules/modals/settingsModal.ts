@@ -101,6 +101,29 @@ function showContextInvalidatedNotice(close?: () => void): void {
     content.querySelector('.close-btn')?.addEventListener('click', () => (close ? close() : modal.remove()));
 }
 
+/**
+ * Run a settings action and, if it fails only because this script has been
+ * orphaned, say so instead of doing nothing at all.
+ *
+ * The check when the modal opens catches the common case, where the user
+ * comes back to a Gmail tab left open overnight. This catches the other one:
+ * the extension updating while the modal is already on screen, where every
+ * control silently stops working and the modal still looks fine.
+ *
+ * Anything that is not a dead context is a real bug and is logged rather than
+ * dressed up as one, because telling someone to reload when reloading will
+ * not help is worse than saying nothing.
+ */
+function guardedAction(work: Promise<unknown>): void {
+    void work.catch((e: unknown) => {
+        if (isContextInvalidatedError(e)) {
+            showContextInvalidatedNotice();
+            return;
+        }
+        console.error('Gmail Tabs: a settings action failed', e);
+    });
+}
+
 function createSettingsModal(): void {
     console.log('Gmail Tabs: Creating settings modal (v2)');
     const modal = document.createElement('div');
@@ -305,7 +328,9 @@ function createSettingsModal(): void {
         errorMsg.style.display = 'none';
     });
 
-    addBtn.addEventListener('click', async () => {
+    addBtn.addEventListener('click', () => guardedAction(handleAddTab()));
+
+    async function handleAddTab(): Promise<void> {
         const value = input.value.trim();
         const title = titleInput.value.trim();
 
@@ -352,7 +377,7 @@ function createSettingsModal(): void {
                 addBtn.disabled = true;
             }, 1000);
         }
-    });
+    }
 
     refreshList();
 
@@ -369,19 +394,23 @@ function createSettingsModal(): void {
     };
 
     // Theme is a browser-wide preference shared by all accounts in the window.
-    getGlobalTheme().then((theme) => {
-        updateThemeUI(theme);
-    });
+    guardedAction(
+        getGlobalTheme().then((theme) => {
+            updateThemeUI(theme);
+        })
+    );
 
     themeBtns.forEach((btn) => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
             const theme = (btn as HTMLElement).dataset.theme as 'system' | 'light' | 'dark';
-            setGlobalTheme(theme).then(() => {
-                updateThemeUI(theme);
-                applyTheme(theme);
-            });
+            guardedAction(
+                setGlobalTheme(theme).then(() => {
+                    updateThemeUI(theme);
+                    applyTheme(theme);
+                })
+            );
         });
     });
 
@@ -389,16 +418,20 @@ function createSettingsModal(): void {
     const unreadToggle = modal.querySelector('#modal-unread-toggle') as HTMLInputElement;
 
     if (getUserEmail()) {
-        getSettings(getUserEmail()!).then((settings) => {
-            unreadToggle.checked = settings.showUnreadCount;
-        });
+        guardedAction(
+            getSettings(getUserEmail()!).then((settings) => {
+                unreadToggle.checked = settings.showUnreadCount;
+            })
+        );
     }
 
-    unreadToggle.addEventListener('change', async () => {
-        if (getUserEmail()) {
-            const next = await savePreferences(getUserEmail()!, { showUnreadCount: unreadToggle.checked });
-            setAppSettings(next);
-            getRenderCallback()();
-        }
+    unreadToggle.addEventListener('change', () => {
+        if (!getUserEmail()) return;
+        guardedAction(
+            savePreferences(getUserEmail()!, { showUnreadCount: unreadToggle.checked }).then((next) => {
+                setAppSettings(next);
+                getRenderCallback()();
+            })
+        );
     });
 }

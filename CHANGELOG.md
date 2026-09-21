@@ -39,6 +39,12 @@ coming back. One small addition, in the modal people actually use.
   modal now detects an orphaned script and offers the only thing that helps: a short
   explanation, a reminder that tabs, rules and settings are untouched, and a Reload button
   ([src/modules/extensionContext.ts](src/modules/extensionContext.ts)).
+  The check runs when the modal opens, which covers coming back to a tab left open
+  overnight, and again on every action inside it, which covers the update landing while the
+  modal is already on screen. Before that second guard, clicking Dark in an orphaned modal
+  changed nothing and said nothing. A failure that is *not* a dead context is logged rather
+  than dressed up as one: telling someone to reload when reloading will not help is worse
+  than saying nothing.
 - **The help control in the modal footer was a `<div>`**, so it was unreachable by keyboard
   and announced as nothing: its icon is an `<svg>` with no text and its only description
   was a `title` attribute. It is a `<button>` with an `aria-label` now, as is the new header
