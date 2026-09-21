@@ -621,7 +621,7 @@ input:checked+.toggle-slider::before {
     align-items: center;
     gap: 6px;
     background: transparent;
-    color: #f56565;
+    color: var(--text-danger);
     border: 1px solid rgba(245, 101, 101, 0.3);
     border-radius: 6px;
     padding: 8px 16px;
@@ -1238,13 +1238,15 @@ body.theme-light .account-select:hover {
     border-color: rgba(49, 130, 206, 0.4);
 }
 
+/* White label on this gradient must clear 4.5:1 at BOTH ends, so the light
+   end is capped at #1967d2 (5.37:1) rather than the old #4299e1 (3.05:1). */
 body.theme-light .btn-primary {
-    background: linear-gradient(135deg, #3182ce, #4299e1);
+    background: linear-gradient(135deg, #1557b0, #1967d2);
 }
 
 body.theme-light .btn-primary:hover {
-    background: linear-gradient(135deg, #2b6cb0, #3182ce);
-    box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+    background: linear-gradient(135deg, #10458d, #1557b0);
+    box-shadow: 0 4px 12px rgba(21, 87, 176, 0.3);
 }
 
 body.theme-light .btn-secondary {
@@ -1257,7 +1259,7 @@ body.theme-light .btn-secondary:hover {
 }
 
 body.theme-light .btn-danger {
-    color: #e53e3e;
+    color: var(--text-danger);
     border-color: rgba(229, 62, 62, 0.3);
 }
 

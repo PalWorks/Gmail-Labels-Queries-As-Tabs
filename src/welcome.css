@@ -13,6 +13,9 @@
     --option-hover: #f1f3f4;
     --option-selected-bg: #e8f0fe;
     --option-selected-border: #1a73e8;
+    /* Darker than --primary-color: this one sits ON the tinted chip, where
+       #1a73e8 measured 3.93:1. */
+    --option-selected-text: #0b57d0;
 }
 
 /* Force Dark Theme */
@@ -30,6 +33,7 @@ html[data-theme="dark"] {
     --option-hover: #3c4043;
     --option-selected-bg: #41331c;
     --option-selected-border: #8ab4f8;
+    --option-selected-text: #8ab4f8;
 }
 
 /* System Dark Theme (overrides root if not forced light) */
@@ -48,6 +52,7 @@ html[data-theme="dark"] {
         --option-hover: #3c4043;
         --option-selected-bg: #41331c;
         --option-selected-border: #8ab4f8;
+        --option-selected-text: #8ab4f8;
     }
 }
 
@@ -236,7 +241,7 @@ p {
 }
 
 .theme-option input:checked+.theme-card span {
-    color: var(--primary-color);
+    color: var(--option-selected-text);
 }
 
 /* Action Area */
