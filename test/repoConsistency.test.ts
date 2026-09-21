@@ -80,13 +80,26 @@ describe('documentation claims match the code', () => {
         // the section says it no longer holds.
         const SUPERSEDED = /superseded|amended by|no longer|used to|previously|was corrected|becomes|until v1\.\d/i;
 
+        // Quoting the claim in order to discuss it is not making it. A plan
+        // that says it will guard against "zero external network requests",
+        // or an ADR naming the decision it retired, must not trip this.
+        const quotedClaim = (line: string, re: RegExp): boolean => {
+            const m = re.exec(line);
+            if (!m) return false;
+            const before = line[m.index - 1];
+            const after = line[m.index + m[0].length];
+            return (before === '"' && after === '"') || (before === '`' && after === '`');
+        };
+
         const offenders: string[] = [];
         for (const rel of LIVE_DOCS) {
             const lines = read(rel).split('\n');
             const headings = lines.flatMap((l, i) => (/^#{1,3} /.test(l) ? [i] : []));
 
             lines.forEach((line, i) => {
-                if (!FORBIDDEN.some((re) => re.test(line))) return;
+                const hit = FORBIDDEN.find((re) => re.test(line));
+                if (!hit) return;
+                if (quotedClaim(line, new RegExp(hit.source, 'i'))) return;
 
                 // Judge the whole enclosing section, not a fixed window: an
                 // ADR states its supersession in a paragraph at the end, which
@@ -105,6 +118,24 @@ describe('documentation claims match the code', () => {
                     `feedback relay when the user presses Send:\n${offenders.join('\n')}`
             );
         }
+    });
+
+    test('the claim check still fires on an unquoted assertion', () => {
+        // Mutation check: the exemptions above must not have neutered it.
+        const FORBIDDEN = /zero external network requests/i;
+        const asserted = 'The extension makes zero external network requests.';
+        const quoted = 'Guard against the "zero external network requests" claim.';
+
+        const isQuoted = (line: string): boolean => {
+            const m = FORBIDDEN.exec(line);
+            if (!m) return false;
+            const b = line[m.index - 1];
+            const a = line[m.index + m[0].length];
+            return (b === '"' && a === '"') || (b === '`' && a === '`');
+        };
+
+        expect(FORBIDDEN.test(asserted) && !isQuoted(asserted)).toBe(true);
+        expect(FORBIDDEN.test(quoted) && !isQuoted(quoted)).toBe(false);
     });
 
     test('the manifest and package versions agree', () => {

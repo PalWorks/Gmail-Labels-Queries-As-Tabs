@@ -18,6 +18,24 @@
 > (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
 > CHANGELOG).
 
+> **Refresh note (2026-09-21, v1.5.0):** a hardening pass. Settings writes are now
+> serialized through the service worker as `SettingsOp` values rather than
+> read-modify-saved (ADR-013); the uninstall URL is gone (ADR-014). Fixed on this date: an
+> unquoted label in the generated Gmail search that could trash mail outside the label; a
+> second Apps Script comment breakout via the account id in the script header; a stored XSS
+> reachable from an imported backup via an unescaped tab id; an unrecognised mutation op
+> that could erase an account; a failed unread fetch being cached as the number zero; a
+> theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
+> failures. Four guard suites were added so each class of defect fails CI rather than
+> review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
+> `rulesProperty`. 30 suites, 563 tests.
+>
+> **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and its
+> page world never initialises, because injecting it needs `chrome.scripting` and that
+> permission is not declared. Both features it supplies are already covered by code we own.
+> A stripped build measures 54.6 KB and behaves identically. See the execution record in
+> [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
+
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,
 > plus `worker/` (the feedback relay, the only server-side component) and `scripts/`

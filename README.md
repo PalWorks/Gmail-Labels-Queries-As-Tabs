@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/manifest-v3-green.svg" alt="Manifest V3">
   <img src="https://img.shields.io/badge/chrome-120%2B-yellow.svg" alt="Chrome 120+">
-  <img src="https://img.shields.io/badge/privacy-zero%20external%20requests-brightgreen.svg" alt="Privacy First">
+  <img src="https://img.shields.io/badge/privacy-no%20telemetry-brightgreen.svg" alt="Privacy First">
 </p>
 
 <p align="center">
@@ -460,7 +460,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage` (Jest, 478 tests) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 564 tests) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -581,7 +581,9 @@ Quick start:
 ### Development Guidelines
 
 - TypeScript strict mode is enforced; avoid `any` unless absolutely necessary
-- All user-facing strings must be HTML escaped (XSS prevention)
+- All user-facing strings must be HTML escaped (XSS prevention), including ids; `test/htmlSinks.test.ts` enforces this against the AST
+- All settings writes go through `mutateSettings`, never read-modify-save; see ADR-013
+- No colour literals outside the stylesheets; `test/contrast.test.ts` enforces this
 - No background network requests (privacy-first principle). The single user-initiated exception is the feedback relay; see ADR-012 in DECISIONS.md
 - Production builds strip all `console.log` via esbuild's `drop` option
 - Keep modules focused with a single responsibility per file
@@ -594,7 +596,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (478 tests across 26 suites)
+npm test          # Jest (563 tests across 30 suites)
 npm run build     # Verify production build
 ```
 
@@ -606,6 +608,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: The extension has no server, no database, no tracking
+- **Nothing on uninstall**: removing the extension opens no page and notifies nobody (ADR-014)
 - **Minimal permissions**: Only `storage`, `downloads`, and `management`
 - **Open source**: Full codebase available for audit
 

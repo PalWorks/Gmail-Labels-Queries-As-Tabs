@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## Philosophy
 
@@ -22,7 +22,7 @@ Last updated: 2026-07-07 (v1.2.1)
 npm test                  # run all suites (jest)
 npx jest <pattern>        # run a subset, e.g. npx jest storage
 npx jest --coverage       # run with coverage and enforce thresholds
-npx jest --runInBand      # run serially (useful when diagnosing flake)
+npx jest --runInBand      # run serially; CI does this as a second pass
 
 # Contrast against rendered pixels, in a real Chrome (manual, see below)
 NODE_PATH=$(npm root -g) node scripts/contrast-audit.mjs <extension-id> [port]
@@ -39,17 +39,43 @@ Enforced in [jest.config.js](jest.config.js):
 | Functions | 65 |
 | Lines | 65 |
 
-Current measured coverage sits above these (roughly 72 percent statements, 54 percent
-branches, 72 percent functions, 75 percent lines). Do not let a change drop coverage below
-the thresholds; add tests with new behavior.
+Current measured coverage sits above these. Do not let a change drop coverage below the
+thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 26 suites, 470 tests as of v1.4.0.
-- Suites cover: storage and migrations, tab rendering and keyboard/aria, unread waterfall,
-  XHR interceptor validation, rules and Apps Script generation, options page, onboarding,
-  modals, drag-and-drop, state accessors, import/export, the shared tab manager, tab
-  colors, rule templates, in-product feedback, and the color-contrast palette.
+- 30 suites, 563 tests as of v1.5.0.
+- Unit suites cover: storage and migrations, the settings reducer and write path, tab
+  rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
+  Apps Script generation, the options page, onboarding, modals, drag-and-drop, state
+  accessors, import/export, the shared tab manager, tab colors, rule templates, in-product
+  feedback, and the color-contrast palette.
+
+### Guards, which are not unit tests
+
+Four suites assert things about the repository rather than about a function. A failure is a
+statement about the codebase, and the fix is usually in the code they point at, not in the
+test.
+
+| Suite | Fails when | Why it exists |
+|---|---|---|
+| [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value is interpolated into `innerHTML` anywhere in `src/` | 22 sites were reviewed by eye and pronounced fine; one was a stored XSS reachable from an imported backup |
+| [test/contrast.test.ts](test/contrast.test.ts) | A palette token drops below AA, or any colour literal appears in a `.ts` or `.html` file | Two failing colours shipped inside TypeScript template strings, invisible to guards that only read `.css` |
+| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A live document contradicts the code, names a path that does not exist, omits a module from CONTEXT_MAP, or a CSS rule outlives its component | Five documents once claimed a network behaviour the code had not had for months, including the rule an agent reads first |
+| [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
+
+Each guard is mutation tested: it contains a case proving it still rejects what it is
+supposed to reject. A guard that cannot fail is worse than no guard, because it reads like
+coverage.
+
+### Concurrency
+
+[test/settingsOps.test.ts](test/settingsOps.test.ts) uses
+[test/helpers/storageMock.ts](test/helpers/storageMock.ts), a `chrome.storage` double with
+a controllable delay. The default mock elsewhere calls its callback synchronously, which
+makes every read-modify-write atomic by accident and hides the races entirely. One test
+deliberately demonstrates the old lost-update behaviour so the fix has something to be
+measured against.
 
 ## Color contrast
 
@@ -74,11 +100,25 @@ pass both before it ships.
 2. Start the file with `export {};` to avoid TS2451 redeclaration errors across the shared
    test scope (this convention is already applied repo-wide).
 3. Mock only the Chrome APIs the module touches. Reset mocks in `beforeEach`.
-4. Assert observable behavior. For async storage helpers, await a microtask flush
-   (`await new Promise((r) => setTimeout(r, 0))`) before asserting DOM effects.
+4. Assert observable behavior. Wait in turns, never in milliseconds: use `flush()` from
+   [test/helpers/async.ts](test/helpers/async.ts) rather than a fixed sleep. Fixed sleeps
+   caused the one long-standing flake in this suite, because under coverage instrumentation
+   or on a loaded machine the chain is not finished when the timer fires.
+5. Under `jest.useFakeTimers()`, use `microtasks()` instead of `flush()`. `flush` goes
+   through `setTimeout`, which fake timers replace, so awaiting it inside a fake-timer test
+   hangs forever.
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/) runs the test suite, builds the extension,
-verifies there is no `console.log` in `dist/js`, and uploads the build artifact. Keep the
-local verification gate (see [AGENTS.md](AGENTS.md)) green so CI stays green.
+[.github/workflows/ci.yml](.github/workflows/ci.yml) is **manual trigger only**
+(`gh workflow run ci.yml --ref <branch>`). It runs the suite with coverage, runs it a
+**second time serially**, lints, typechecks the feedback worker, builds, verifies there is
+no `console.log` in `dist/js`, packages and size-checks the zip, checks manifest and package
+versions match, checks for `@ts-ignore`, verifies the `dist/` structure, and uploads the
+artifacts.
+
+The second serial run is not redundant. Both intermittent failures this suite has ever had
+appeared only when timing shifted, and neither reproduced on a normal parallel run, so one
+green run was never evidence of a stable suite.
+
+Keep the local verification gate (see [AGENTS.md](AGENTS.md)) green so CI stays green.

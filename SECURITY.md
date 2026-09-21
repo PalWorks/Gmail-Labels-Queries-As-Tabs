@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-21 (v1.4.0)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## Privacy promise
 
@@ -18,6 +18,11 @@ Never label names, tab titles, contacts or mail. It goes to the relay in [worker
 which holds the mail provider's API key precisely so the extension does not have to, and
 which stores nothing.
 
+Uninstalling opens nothing. Until v1.5.0 the extension set an uninstall URL pointing at a
+third-party form, so removing it told a company we have no relationship with that you had
+done so. That was disclosed in no document and no store declaration, and it is gone rather
+than disclosed. See ADR-014.
+
 Any other request to a non `mail.google.com` origin, and any request the user did not
 explicitly trigger, is a blocking defect. See [DECISIONS.md](DECISIONS.md) ADR-008 as
 amended by ADR-012.
@@ -31,21 +36,39 @@ amended by ADR-012.
 | `management` | Enable self-uninstall from the settings page |
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |
 
-No `<all_urls>`, no broad host access, no scripting into other sites.
+No `<all_urls>`, no broad host access, no scripting into other sites. In particular there is
+no `scripting` permission, which is why InboxSDK's page-world half never initialises; see the
+InboxSDK row in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 
 ## Threat model and mitigations
 
-- **XSS via user data.** Tab titles, label names, and imported configuration are
-  user-controlled. All such strings must be inserted with `textContent` or an escape
-  helper, never via raw `innerHTML` interpolation. Imported JSON is validated before use.
+- **XSS via user data.** Tab titles, label names, **tab ids** and imported configuration are
+  user-controlled. All such strings must be inserted with `textContent` or `escapeHtml`,
+  never via raw `innerHTML` interpolation, and
+  [test/htmlSinks.test.ts](test/htmlSinks.test.ts) walks the AST and fails the build
+  otherwise. An id is not exempt because it looks like a UUID: until v1.5.0 a tab id from an
+  imported backup went unescaped into a `data-tab-id` attribute in the options page, which
+  is an extension page with `chrome.*` access. Imported ids outside `[A-Za-z0-9_-]` are now
+  replaced with fresh UUIDs at the boundary and the rules referencing them are repointed.
 - **MAIN-world injection surface.** [src/xhrInterceptor.ts](src/xhrInterceptor.ts) runs in
   Gmail's page context. It only reads responses and posts sanitized results back over a
   `CustomEvent` channel; it must not expose extension internals or accept commands from
   the page. Label and count parsing is validated (bounded integer counts, rejection of
   id/date-looking keys, filtering against the set of known rendered labels).
 - **Generated Apps Script safety.** [src/modules/rules.ts](src/modules/rules.ts) emits code
-  the user runs under their own Google account. The `trash` action uses Gmail Trash
-  (recoverable for 30 days); the generator never performs permanent deletion.
+  the user runs under their own Google account, unattended, with destructive actions. Four
+  separate protections, each for something that has gone wrong:
+
+  | Protection | Guards against |
+  |---|---|
+  | `trash` uses Gmail Trash, recoverable for 30 days; never permanent deletion | Irreversible loss |
+  | `escapeForScript` for string literals, `escapeForComment` for block comments, applied per context | A `*/` in a tab title or an account id ending the comment and injecting live top-level code. Both have happened |
+  | Every label is quoted in the search | `label:Old Stuff` being read as `label:Old AND Stuff`, trashing mail that was never in the label. An ordinary multi-word label was enough |
+  | 200 threads per rule per run, and each thread re-checked for the exact label name before it is touched | A rule matching far more than intended running to completion |
+
+  [test/rulesProperty.test.ts](test/rulesProperty.test.ts) drives 1,000 generated hostile
+  inputs through the generator, evaluates each result, and fails on a parse error, a lossy
+  round trip, an unquoted label, or any canary global being set.
 - **No secrets.** The extension holds no API keys, OAuth tokens, or credentials. There is
   nothing server-side to compromise.
 

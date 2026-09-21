@@ -40,26 +40,43 @@ away, and it can automate routine cleanup of those labels.
    UI and generator skip tabs that have no resolvable Gmail label.
 2. **Delete always means Trash.** Generated Apps Script never permanently deletes. The
    `trash` action moves threads to Trash, where Gmail keeps them recoverable for 30 days.
+   Three further limits apply because the script runs unattended: the label is quoted in
+   the search (an unquoted `label:Old Stuff` is read by Gmail as `label:Old AND Stuff`),
+   each rule stops at 200 threads per run, and every thread is re-checked for the exact
+   label name before it is touched.
 3. **Automation runs under the user's own account.** The extension generates a script the
    user pastes into their own Google Apps Script project and authorizes themselves. The
    extension holds no OAuth tokens and has no server-side access to anyone's Gmail.
 4. **Unread counting is a best-effort waterfall.** The extension tries three sources in
    order and uses the first that yields a trustworthy number:
-   1. Gmail Atom feed (`/feed/atom/<label>`), cached for about 30 seconds.
+   1. Gmail Atom feed (`/feed/atom/<label>`), cached for about 30 seconds, at most four
+      requests in flight at once. A failed fetch is recorded as a failure rather than as a
+      count of zero: the last known number stays on screen and the retry backs off from 5
+      seconds to a 5 minute ceiling.
    2. Interception of Gmail's own XHR responses (MAIN world), filtered against the set of
       known rendered labels to avoid false positives.
    3. DOM scraping of Gmail's own unread indicators.
 5. **Theme applies to the whole window, not one account.** Changing the theme in any
    account (or the options page or onboarding) propagates to every open Gmail tab in the
    profile via a `chrome.storage.local` change event.
+6. **A settings change is described, not performed.** Every surface that can edit settings
+   sends a `SettingsOp` to the service worker, which applies them one at a time per
+   account. Nothing reads settings, edits the object and saves it back; that is what used
+   to lose tabs when two surfaces wrote at once. See ADR-013.
 
 ## Glossary
 
 - **MAIN world / isolated world.** Two JavaScript execution contexts on a page. Content
   scripts run isolated; the XHR interceptor is injected into the page's MAIN world to see
   Gmail's own network traffic. They communicate via `CustomEvent` on `document`.
-- **InboxSDK.** A third-party library used to reliably locate Gmail UI anchor points for
-  injection. Bundled into the content script.
+- **InboxSDK.** A third-party library originally used to locate Gmail UI anchor points and
+  to detect the signed-in address. Bundled into the content script, where it accounts for
+  roughly 1.03 MB of 1.09 MB. Its page-world half does not currently initialise; see
+  ARCHITECTURE.md section 10.
+- **SettingsOp.** A description of a change to an account's settings, as plain data, so it
+  can be sent to the service worker and applied there. See DATA_MODEL.md.
+- **rev.** A counter on an account's stored settings, bumped on every write. Used to detect
+  a concurrent change and to tell one's own write apart from someone else's.
 - **Hash view.** Gmail encodes the current view in the URL fragment (for example
   `#inbox`, `#label/Work`, `#search/from%3Aboss`). The extension reads and sets this hash
   to navigate.

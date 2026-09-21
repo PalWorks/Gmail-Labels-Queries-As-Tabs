@@ -22,6 +22,12 @@ Last updated: 2026-09-21 (v1.5.0)
 | What changed and when? | [CHANGELOG.md](CHANGELOG.md) |
 | Deep repository audit and risk areas | [AUDIT.md](AUDIT.md) |
 | Why does the color palette look like this? | [test/contrast.test.ts](test/contrast.test.ts) |
+| Why can I not put a hex value in a .ts file? | [test/contrast.test.ts](test/contrast.test.ts) |
+| Why did my innerHTML change fail CI? | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) |
+| Why did my doc edit fail CI? | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) |
+| How are concurrent settings writes handled? | [test/settingsOps.test.ts](test/settingsOps.test.ts), ADR-013 |
+| Is the generated Apps Script safe for odd label names? | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) |
+| V1.5 hardening plan and what was deliberately not done | [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md) |
 | Historical implementation plan | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
 | Post-review improvements plan | [.planning/IMPROVEMENTS-PLAN.md](.planning/IMPROVEMENTS-PLAN.md) |
 

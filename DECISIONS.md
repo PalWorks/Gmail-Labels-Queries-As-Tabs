@@ -159,3 +159,57 @@ version and the browser build only: never label names, tab titles, addresses or 
 content. The relay validates hard, rate limits per IP, and stores nothing. If the Worker is
 ever taken down, the form degrades to an error message and the `mailto:` fallback beneath
 it still works.
+
+## ADR-013: Serialize settings writes through the service worker
+
+**Decision.** A change to an account's settings is described as a serializable `SettingsOp`
+and applied by the service worker, which keeps one promise chain per account. When the
+worker cannot be reached the same op is applied in the calling context, guarded by a `rev`
+token and a bounded retry. `applyOp` is pure and does the work on both paths.
+
+**Context.** Every surface writes: the options page, and the modals, drag handlers and tab
+manager inside *every open Gmail tab*. Each did a read-modify-write against one storage key
+and merged shallowly, so `tabs` and `rules` were replaced wholesale and two writers touching
+unrelated tabs still clobbered each other.
+
+The worst case needed no timing skill at all. The options page listened only for theme
+changes, so its in-memory settings went stale the moment anything changed elsewhere and
+stayed stale; meanwhile the reorder paths built a tab array from the rendered DOM and wrote
+it whole. Open the options page with five tabs, add a sixth in Gmail, drag to reorder in the
+options page, and the sixth is gone.
+
+Three approaches were considered. A `rev` counter with read-verify-write narrows the window
+to a microtask but never closes it, because `chrome.storage` has no compare-and-swap. Web
+Locks cannot span the two contexts that matter: a content script's lock scope is the page's
+origin, an extension page's is `chrome-extension://`. The service worker is a single
+JavaScript context, so a per-account promise chain serializes every writer in the profile by
+construction, with no lock and no window.
+
+**Consequences.** Ops must be plain data and must be idempotent, because a lost worker reply
+makes the caller fall back and apply the same op a second time. `reorderTabs` carries ids
+rather than tab objects, which is what makes a stale drag safe rather than merely unlikely.
+
+`applyOp` throws on an op kind it does not recognise. Without that it returned `undefined`
+and the write path spread it over the account, erasing every tab and rule. A Gmail tab
+running an older build against a just-updated worker reaches that path, so it is real.
+
+This does not fix cross-device conflicts. Chrome Sync resolves per key as last-writer-wins
+and gives us no hook. Shrinking the conflict unit would mean one key per tab, trading a
+data-loss risk for a 120-writes-per-minute quota risk; not done, and recorded in
+[DATA_MODEL.md](DATA_MODEL.md) rather than pretended away.
+
+## ADR-014: No uninstall URL
+
+**Decision.** The extension sets no uninstall URL. Feedback is collected in-product, on the
+Support & Feedback page.
+
+**Context.** Until v1.5.0 `chrome.runtime.setUninstallURL` pointed at a third-party form, so
+uninstalling opened that form and told a company we have no relationship with that someone
+had just removed the extension. It was disclosed in no document, no privacy page, and no
+Web Store data declaration. It also predated the in-product feedback form, which is a better
+channel and already documented.
+
+**Consequences.** Uninstall feedback is no longer collected. In exchange the product
+contacts exactly one origin, our own relay, and only when someone presses Send, which is a
+privacy story that fits on one line and is true. If uninstall feedback is wanted again it
+belongs on our own domain and in the privacy page before the first byte is sent.

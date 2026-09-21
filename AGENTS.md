@@ -29,20 +29,36 @@ Orientation reading order for a new agent:
    [src/modules/feedback.ts](src/modules/feedback.ts). Any other request to a non
    `mail.google.com` origin, or any request the user did not explicitly trigger, is a
    blocking defect. See [SECURITY.md](SECURITY.md) and ADR-012 in [DECISIONS.md](DECISIONS.md).
-2. **Escape all user-controlled strings before insertion into HTML.** Tab titles, label
-   names, and imported config are user data. Use `textContent` or an escape helper, never
-   raw `innerHTML` interpolation of user values.
-3. **No `console.log` in the production bundle.** esbuild is configured with
+2. **Escape user data for the language it lands in, not "for output".** Tab titles, label
+   names, ids and imported config are user data, and this project writes them into four
+   different languages: HTML, a JavaScript string literal, a JavaScript block comment, and
+   the Gmail search grammar. Each needs its own escaper, and using the wrong one has
+   already shipped twice. Use `textContent` or `escapeHtml` for markup;
+   [src/modules/rules.ts](src/modules/rules.ts) has `escapeForScript` and
+   `escapeForComment` and quotes every label it puts in a search.
+   [test/htmlSinks.test.ts](test/htmlSinks.test.ts) fails the build on an unescaped
+   interpolation into `innerHTML`; do not silence it by extending its allowlist with
+   anything user-controlled.
+3. **All settings writes go through `mutateSettings`.** Never read settings, change the
+   object and save it: that is the read-modify-write that lost tabs before v1.5.0.
+   Describe the change as a `SettingsOp`. New ops must be plain data (they cross a message
+   boundary) and idempotent (a lost worker reply makes the caller apply them twice). See
+   ADR-013 and [DATA_MODEL.md](DATA_MODEL.md).
+4. **No colour literals outside the stylesheets.** Every contrast guard reads `.css`, so a
+   hex value in a `.ts` template string is invisible to all of them, which is exactly how
+   two failing colours shipped. Define a token in CSS and use it.
+   [test/contrast.test.ts](test/contrast.test.ts) enforces this.
+5. **No `console.log` in the production bundle.** esbuild is configured with
    `drop: ['console']`, and CI greps `dist/js` to enforce it. Do not rely on console
    output at runtime.
-4. **No `@ts-ignore` / `@ts-expect-error`.** The project builds under `tsc --noEmit`
+6. **No `@ts-ignore` / `@ts-expect-error`.** The project builds under `tsc --noEmit`
    with strict mode and zero errors. Fix types properly.
-5. **Manifest and package versions must match.** `manifest.json` and `package.json`
+7. **Manifest and package versions must match.** `manifest.json` and `package.json`
    carry the same version string. Bump both together.
-6. **Theme is browser-wide, not per-account.** It lives in `chrome.storage.local` under
+8. **Theme is browser-wide, not per-account.** It lives in `chrome.storage.local` under
    `globalTheme`. Do not move it back into per-account `chrome.storage.sync`. See
    [DECISIONS.md](DECISIONS.md) ADR-002.
-7. **Do not commit build artifacts.** `dist/`, `extension.zip`, `dist.zip`, and
+9. **Do not commit build artifacts.** `dist/`, `extension.zip`, `dist.zip`, and
    `coverage/` are gitignored. Never force-add them.
 
 ## Coding conventions
@@ -69,10 +85,22 @@ Run all of these and confirm they pass. Do not report a task complete until they
 ```
 npx tsc --noEmit          # 0 errors
 npx jest                  # all suites pass
+npx jest --runInBand      # passes serially too; both flakes this suite has had
+                          # only appeared when timing shifted
 npx jest --coverage       # meets thresholds in jest.config.js
 npm run lint              # 0 errors (warnings tolerated)
 npm run build             # succeeds; then confirm no console.log in dist/js
 ```
+
+Four of the suites are guards rather than unit tests, and a failure from them is a
+statement about the repository, not about a function:
+
+| Suite | Fails when |
+|---|---|
+| [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value reaches `innerHTML` |
+| [test/contrast.test.ts](test/contrast.test.ts) | A palette value drops below AA, or a colour appears outside a stylesheet |
+| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component |
+| [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 hostile inputs |
 
 Then verify `manifest.json` and `package.json` versions match. See
 [TESTING.md](TESTING.md) and [PLAYBOOK.md](PLAYBOOK.md) for details.
@@ -95,5 +123,14 @@ Then verify `manifest.json` and `package.json` versions match. See
 - [src/content.ts](src/content.ts): injection lifecycle and storage listeners. Guard
   against unbounded timers; injection retries are single-flight and bounded.
 - [src/modules/rules.ts](src/modules/rules.ts): generates Google Apps Script that runs
-  under the user's own Google account. Generated code must remain safe (delete means
-  Trash, never permanent delete).
+  under the user's own Google account, unattended, with destructive actions. Generated code
+  must remain safe (delete means Trash, never permanent delete), every label must stay
+  quoted in the search, the per-run cap must stay, and every thread must keep being checked
+  for the exact label before it is touched. Changes here need
+  [test/rulesProperty.test.ts](test/rulesProperty.test.ts) to stay green.
+- [src/utils/storage.ts](src/utils/storage.ts): the single write path for everything the
+  user configures. `applyOp` must stay pure, total (an unknown op throws, never returns
+  `undefined`) and idempotent.
+- [src/background.ts](src/background.ts): the only serialization point for settings writes.
+  Do not return `true` from the message listener for a message you do not answer; that holds
+  the sender's channel open and a promise-form `sendMessage` never settles.

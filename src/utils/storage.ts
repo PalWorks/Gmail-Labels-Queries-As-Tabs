@@ -653,11 +653,6 @@ export async function updateTabOrder(accountId: string, newTabs: Tab[]): Promise
     return mutateSettings(accountId, { kind: 'reorderTabs', order: newTabs.map((t) => t.id) });
 }
 
-/** Reorders tabs by id, for callers that never held the tab objects. */
-export async function reorderTabs(accountId: string, order: string[]): Promise<Settings> {
-    return mutateSettings(accountId, { kind: 'reorderTabs', order });
-}
-
 /** Updates the account-level preferences that are not tabs or rules. */
 export async function savePreferences(
     accountId: string,

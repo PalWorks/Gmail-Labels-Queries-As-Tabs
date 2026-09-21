@@ -935,9 +935,39 @@ function restoreFocus(snapshot: FocusSnapshot | null): void {
     }
 }
 
+/**
+ * True while the user is dragging a row in this page.
+ *
+ * Redrawing the list mid-drag pulls the element out from under the pointer and
+ * abandons the drag, so a change arriving from a Gmail tab waits for the drop.
+ * Tracked from bubbled DOM events rather than from dragdrop.ts, whose drag
+ * state is closure-local by design.
+ */
+let dragInProgress = false;
+let reloadDeferredByDrag = false;
+
+function setupDragAwareness(): void {
+    document.addEventListener('dragstart', () => {
+        dragInProgress = true;
+    });
+    const end = (): void => {
+        if (!dragInProgress) return;
+        dragInProgress = false;
+        if (!reloadDeferredByDrag) return;
+        reloadDeferredByDrag = false;
+        void reloadCurrentAccount().catch((e) => console.error('Options: failed to sync settings', e));
+    };
+    document.addEventListener('dragend', end);
+    document.addEventListener('drop', end);
+}
+
 /** Re-read this account's settings and redraw everything that shows them. */
 async function reloadCurrentAccount(): Promise<void> {
     if (!currentAccountId) return;
+    if (dragInProgress) {
+        reloadDeferredByDrag = true;
+        return;
+    }
     const snapshot = captureFocus();
     currentSettings = await getSettings(currentAccountId);
     setAppSettings(currentSettings);
@@ -1054,6 +1084,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSidebarThemeToggle();
     setupAccountSwitcher();
     setupThemeSync();
+    setupDragAwareness();
     setupSettingsSync();
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') flushPendingRuleWrites();
