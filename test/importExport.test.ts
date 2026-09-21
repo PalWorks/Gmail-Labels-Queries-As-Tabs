@@ -248,3 +248,54 @@ describe('triggerDownload', () => {
         expect(result.error).toBe('Disk full');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Imported ids are made safe for markup
+// ---------------------------------------------------------------------------
+
+describe('validateImportData id sanitization', () => {
+    beforeAll(() => {
+        if (!globalThis.crypto?.randomUUID) {
+            Object.defineProperty(globalThis, 'crypto', {
+                value: { randomUUID: () => `uuid-${Math.random().toString(36).slice(2)}` },
+                writable: true,
+            });
+        }
+    });
+
+    test('leaves ordinary ids alone', () => {
+        const data = {
+            tabs: [{ id: 'default-inbox', title: 'Inbox', type: 'hash', value: '#inbox' }],
+        };
+        expect(validateImportData(data as any)[0].id).toBe('default-inbox');
+    });
+
+    test('replaces an id that would inject markup', () => {
+        // A tab id goes straight into data-tab-id="..." in the options page,
+        // which is an extension page with chrome.* access.
+        const data = {
+            tabs: [{ id: 'x" onmouseover="alert(1)', title: 'Evil', type: 'label', value: 'evil' }],
+        };
+        const tabs = validateImportData(data as any);
+        expect(tabs[0].id).not.toContain('"');
+        expect(tabs[0].id).toMatch(/^[A-Za-z0-9_-]+$/);
+    });
+
+    test('repoints rules at the replaced id so automation survives', () => {
+        const data = {
+            tabs: [{ id: 'bad id with spaces', title: 'T', type: 'label', value: 'v' }],
+            rules: [{ tabId: 'bad id with spaces', action: 'trash', daysOld: 30, enabled: true }],
+        };
+        const tabs = validateImportData(data as any);
+        expect((data.rules as any)[0].tabId).toBe(tabs[0].id);
+        expect(tabs[0].id).not.toBe('bad id with spaces');
+    });
+
+    test('rejects a non-string targetLabel', () => {
+        const data = {
+            tabs: [{ id: 'a', title: 'T', type: 'label', value: 'v' }],
+            rules: [{ tabId: 'a', action: 'moveToLabel', daysOld: 30, enabled: true, targetLabel: { evil: true } }],
+        };
+        expect(() => validateImportData(data as any)).toThrow(/targetLabel/);
+    });
+});

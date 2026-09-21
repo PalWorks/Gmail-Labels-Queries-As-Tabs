@@ -482,11 +482,11 @@ function renderRuleTemplates(): void {
 
     grid.innerHTML = RULE_TEMPLATES.map(
         (t) => `
-        <div class="rule-template-card" data-template-id="${t.id}">
-            <span class="rt-title">${t.icon} ${escapeHtml(t.name)}</span>
+        <div class="rule-template-card" data-template-id="${escapeHtml(t.id)}">
+            <span class="rt-title">${escapeHtml(t.icon)} ${escapeHtml(t.name)}</span>
             <span class="rt-desc">${escapeHtml(t.description)}</span>
-            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${t.action} · ${t.daysOld}d</span>
-            <button class="btn-secondary rt-apply" data-template-id="${t.id}">Apply</button>
+            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${escapeHtml(t.action)} · ${escapeHtml(String(t.daysOld))}d</span>
+            <button class="btn-secondary rt-apply" data-template-id="${escapeHtml(t.id)}">Apply</button>
         </div>
     `
     ).join('');
@@ -575,25 +575,25 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
                 const targetLabel = rule?.targetLabel || '';
 
                 return `
-                <div class="rule-row" data-tab-id="${tab.id}">
+                <div class="rule-row" data-tab-id="${escapeHtml(tab.id)}">
                     <span class="rule-tab-name">${escapeHtml(tab.title)}</span>
-                    <select class="input-select rule-action" data-tab-id="${tab.id}">
+                    <select class="input-select rule-action" data-tab-id="${escapeHtml(tab.id)}">
                         <option value="trash" ${action === 'trash' ? 'selected' : ''}>\ud83d\uddd1 Trash</option>
                         <option value="archive" ${action === 'archive' ? 'selected' : ''}>\ud83d\udce6 Archive</option>
                         <option value="markRead" ${action === 'markRead' ? 'selected' : ''}>✉️ Mark Read</option>
                         <option value="moveToLabel" ${action === 'moveToLabel' ? 'selected' : ''}>\ud83c\udff7 Move to Label</option>
                     </select>
-                    <input type="number" class="input-number rule-days" data-tab-id="${tab.id}" value="${daysOld}" min="1" max="365">
+                    <input type="number" class="input-number rule-days" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(String(daysOld))}" min="1" max="365">
                     <label class="toggle-switch">
-                        <input type="checkbox" class="rule-enabled" data-tab-id="${tab.id}" ${enabled ? 'checked' : ''}>
+                        <input type="checkbox" class="rule-enabled" data-tab-id="${escapeHtml(tab.id)}" ${enabled ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
                 ${action === 'moveToLabel'
                         ? `
-                    <div class="rule-target-row" data-tab-id="${tab.id}-target">
+                    <div class="rule-target-row" data-tab-id="${escapeHtml(tab.id)}-target">
                         <span class="label">\u21b3 Target label:</span>
-                        <input type="text" class="input-text rule-target-label" data-tab-id="${tab.id}" value="${escapeHtml(targetLabel)}" placeholder="e.g. Archive/Newsletters">
+                        <input type="text" class="input-text rule-target-label" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(targetLabel)}" placeholder="e.g. Archive/Newsletters">
                     </div>
                 `
                         : ''
@@ -1027,7 +1027,7 @@ function setupThemeSync(): void {
 function showEmptyState(containerId: string, message: string): void {
     const el = document.getElementById(containerId);
     if (el) {
-        el.innerHTML = `<li class="empty-state"><p>${message}</p></li>`;
+        el.innerHTML = `<li class="empty-state"><p>${escapeHtml(message)}</p></li>`;
     }
 }
 
