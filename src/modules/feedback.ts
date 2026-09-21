@@ -14,7 +14,7 @@
  */
 
 /** Deployed relay. Overridden in tests; see /worker/README.md to redeploy. */
-export const FEEDBACK_ENDPOINT = 'https://gmail-tabs-feedback.palworks.workers.dev/feedback';
+export const FEEDBACK_ENDPOINT = 'https://gmail-tabs-feedback.sunmooncal.workers.dev/feedback';
 
 /** Request timeout: a feedback form must never hang the options page. */
 const REQUEST_TIMEOUT_MS = 12000;

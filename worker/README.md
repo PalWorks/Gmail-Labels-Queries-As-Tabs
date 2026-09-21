@@ -39,7 +39,15 @@ npm run deploy
 `FEEDBACK_FROM` and `FEEDBACK_TO` live in `wrangler.toml` as plain vars; only the API key is
 a secret. The sending domain must be verified in Resend.
 
+## Deployed instance
+
+`https://gmail-tabs-feedback.sunmooncal.workers.dev` — Cloudflare account
+`96ec2a31…` (Palaniappan.tn@gmail.com), served on workers.dev with preview URLs off.
+KV namespace `FEEDBACK_RATE_LIMIT` = `447448e1…`. The Resend key is a sending-only key
+scoped to the `palworks.ai` domain, stored as the `RESEND_API_KEY` secret and never in
+this repo.
+
 ## Pointing the extension at it
 
-Set `FEEDBACK_ENDPOINT` in [../src/modules/feedback.ts](../src/modules/feedback.ts) to the
-deployed URL, then rebuild the extension.
+`FEEDBACK_ENDPOINT` in [../src/modules/feedback.ts](../src/modules/feedback.ts) holds the
+deployed URL. Change it there and rebuild the extension if the Worker moves.

@@ -1380,7 +1380,7 @@ body.theme-light .rule-template-card {
 }
 
 /* ---------------------------------------------------------------------------
-   Feedback form (Get in Touch)
+   Feedback form (Support & Feedback)
    --------------------------------------------------------------------------- */
 
 #feedback-form {
@@ -1503,4 +1503,33 @@ body.theme-light .feedback-status.is-success {
 #feedback-submit[disabled] {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* Support & Feedback: form leads, the review ask sits alongside it on wide
+   screens and drops underneath when there is no room for two columns. */
+.contact-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+    align-items: start;
+}
+
+.contact-grid > .card {
+    margin: 0;
+}
+
+.contact-rating-card {
+    text-align: center;
+    position: sticky;
+    top: 40px;
+}
+
+@media (max-width: 1024px) {
+    .contact-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .contact-rating-card {
+        position: static;
+    }
 }

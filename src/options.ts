@@ -728,7 +728,7 @@ function setupAccountSwitcher(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Feedback form (Get in Touch)
+// Feedback form (Support & Feedback)
 // ---------------------------------------------------------------------------
 
 function setStatus(el: HTMLElement, message: string, kind: 'error' | 'success' | 'none'): void {
