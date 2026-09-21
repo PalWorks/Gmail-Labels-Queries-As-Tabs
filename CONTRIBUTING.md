@@ -3,7 +3,7 @@
 Thanks for contributing to **Gmail Labels and Search Queries as Tabs**. This guide covers
 the workflow, standards, and checks.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## Prerequisites
 
@@ -55,6 +55,8 @@ Before opening a pull request, confirm the verification gate passes:
 
 - [ ] `npx tsc --noEmit` is clean
 - [ ] `npx jest` all suites pass
+- [ ] `npx jest --runInBand` passes too; both flakes this suite has had appeared only when
+      timing shifted, so one green parallel run proves less than it looks
 - [ ] `npx jest --coverage` meets thresholds
 - [ ] `npm run lint` has 0 errors
 - [ ] `npm run build` succeeds and `dist/js` has no `console.log`
@@ -62,7 +64,11 @@ Before opening a pull request, confirm the verification gate passes:
 - [ ] Docs updated ([CHANGELOG.md](CHANGELOG.md) and any affected reference docs)
 - [ ] No build artifacts committed (`dist/`, `extension.zip`, `dist.zip`, `coverage/`)
 
+CI does **not** run on your push. It is manual dispatch only, so run it yourself once the
+PR is up: `gh workflow run ci.yml --ref <your-branch>`.
+
 ## Reporting issues
 
-Use the support form linked from the extension's options page (Get in Touch section) for
-bug reports and feature requests.
+Use the Support & Feedback page inside the extension for bug reports and feature requests,
+or open an issue on
+[GitHub](https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues).

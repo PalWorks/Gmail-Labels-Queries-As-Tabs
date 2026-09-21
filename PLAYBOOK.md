@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## Local setup
 
@@ -59,9 +59,15 @@ Confirm `manifest.json` and `package.json` carry the same version.
 5. Re-read [STORE_LISTING.md](STORE_LISTING.md) and update the release notes, the version
    line and the pre-submission checklist. If permissions or outbound requests changed, the
    data-usage answers in the dashboard must change with them.
-6. Upload `extension.zip` to the Chrome Web Store Developer Dashboard.
-7. Tag the release in git and push the tag.
-8. Dispatch CI on `main` (`gh workflow run ci.yml --ref main`). It is manual-trigger only,
+6. **Update the published privacy policy, in the other repository, and deploy it**, before
+   uploading anything. It is at `pages/Privacy.tsx` in
+   [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs), it
+   deploys only on manual dispatch, and CI's last step will fail if it does not name every
+   outbound host and permission this build has. That page went four versions stale because
+   it lives somewhere else; assume it is stale until you have read it.
+7. Upload `extension.zip` to the Chrome Web Store Developer Dashboard.
+8. Tag the release in git and push the tag.
+9. Dispatch CI on `main` (`gh workflow run ci.yml --ref main`). It is manual-trigger only,
    so nothing runs on the merge itself.
 
 ## Roll back a release
@@ -86,6 +92,13 @@ almost always in the code or the document it points at.
 | `repoConsistency` path | Fix the link, or the file moved and the doc did not follow |
 | `repoConsistency` CONTEXT_MAP | Add the new module to the source map |
 | `repoConsistency` dead CSS | Delete the rule |
+| `repoConsistency` undisclosed host | The service worker names an outbound host that SECURITY.md, the privacy page or STORE_LISTING does not. Disclose it, or remove the host |
+| `repoConsistency` test count | Live documents disagree on the total. Set them all to what `npm test` prints |
+| `repoConsistency` retired site link | Something links to the Pages site deleted in v1.5.0. Use `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
+| `repoConsistency` `website/` exists | The duplicate marketing site came back. It belongs in the other repository |
+| `repoConsistency` workflow trigger | A `push:` or `pull_request:` trigger reappeared. Actions here are manual only |
+| CI: `dist/icons` undeclared | `copy-assets` swept up a file the manifest does not name. Two promo tiles shipped to users that way |
+| CI: published privacy policy | The live page no longer describes this code. Fix the page in the other repository and dispatch its deploy |
 | `rulesProperty` | The escaping is wrong for one of the generator's four output languages. The failure prints the seed case |
 
 ## Troubleshooting (production symptoms)
@@ -100,5 +113,24 @@ almost always in the code or the document it points at.
 
 ## CI
 
-Pushes and PRs run [.github/workflows/ci.yml](.github/workflows/): test, build, verify no
-`console.log` in `dist/js`, upload artifact. The website deploys via `deploy_website.yml`.
+**Nothing runs automatically.** [.github/workflows/ci.yml](.github/workflows/) is
+`workflow_dispatch` only, so a push and a merge run nothing; dispatch it yourself:
+
+```
+gh workflow run ci.yml --ref main -f ref_note="why this run"
+```
+
+It runs the suite twice (parallel, then serially to catch order and timing flakes), lints,
+typechecks the worker, builds, and then checks the artefact: no `console.log` in
+`dist/js`, version parity, no `@ts-ignore`, the required files present, no file in
+`dist/icons` the manifest does not declare, and the zip under 5MB. Its last step fetches
+the **published privacy policy** and fails if it no longer describes this code.
+
+The marketing site is a different repository and also deploys by hand:
+
+```
+gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main
+```
+
+A change to the privacy policy is not live, and must not be described as live, until that
+has run.

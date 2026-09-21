@@ -42,8 +42,23 @@ amended by ADR-012.
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |
 
 No `<all_urls>`, no broad host access, no scripting into other sites. In particular there is
-no `scripting` permission, which is why InboxSDK's page-world half never initialises; see the
-InboxSDK row in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+no `scripting` permission, which is why InboxSDK's page world is never injected and neither
+of its two features has ever run; see the InboxSDK row in
+[ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+
+## Where the published privacy policy lives
+
+The policy the Chrome Web Store listing links to is
+<https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy>, served from
+[PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs), a
+separate repository that deploys only on manual dispatch.
+
+That separation has already failed once. A duplicate copy of the site lived in this
+repository and deployed too, so two policies existed and drifted apart until the published
+one claimed the extension transmits nothing, months after the feedback relay shipped. The
+duplicate was deleted in v1.5.0 (ADR-016), and CI now fetches the live page and fails if it
+omits any outbound host, any permission the manifest declares, or the analytics the site
+itself runs. Treat that page as part of the release, not as marketing.
 
 ## Threat model and mitigations
 
@@ -89,5 +104,14 @@ The production bundle drops all `console` calls (`drop: ['console']`) and CI ver
 
 ## Reporting a vulnerability
 
-Use the support form linked from the extension's options page (Get in Touch section) to
-report a security concern privately. Do not open a public issue with exploit details.
+Use the **Support & Feedback** page inside the extension, or write to
+<support@palworks.ai>, to report a security concern privately. Do not open a public issue
+with exploit details.
+
+## Build integrity: what ships
+
+The package contains only what the manifest declares. Two promo tiles reached users for
+four versions because the copy step globbed a directory; CI now fails if `dist/icons` holds
+a file `manifest.json` does not name. Anything that is not loaded by a page or named by the
+manifest does not belong in the zip: it is bytes every user downloads and a reviewer has to
+account for.

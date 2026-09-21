@@ -62,11 +62,25 @@ test.
 | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value is interpolated into `innerHTML` anywhere in `src/` | 22 sites were reviewed by eye and pronounced fine; one was a stored XSS reachable from an imported backup |
 | [test/contrast.test.ts](test/contrast.test.ts) | A palette token drops below AA, or any colour literal appears in a `.ts` or `.html` file | Two failing colours shipped inside TypeScript template strings, invisible to guards that only read `.css` |
 | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A live document contradicts the code, names a path that does not exist, omits a module from CONTEXT_MAP, or a CSS rule outlives its component | Five documents once claimed a network behaviour the code had not had for months, including the rule an agent reads first |
+| ... also: an outbound host in `background.ts` is missing from SECURITY.md, the privacy page or STORE_LISTING | The uninstall URL opened a third-party form for four versions, disclosed nowhere |
+| ... also: live documents disagree on the test count | Four of them stated four different totals inside one release, each correct when written |
+| ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
+| ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
 
 Each guard is mutation tested: it contains a case proving it still rejects what it is
 supposed to reject. A guard that cannot fail is worse than no guard, because it reads like
 coverage.
+
+### Two gates that cannot live in jest
+
+| Gate | Fails when | Why it is in CI |
+|---|---|---|
+| `Verify dist/icons contains only icons the manifest declares` | The build copies a file into `dist/icons` that `manifest.json` never names | It needs the built artefact. Two promo tiles, 398 KB and 44% of the package, shipped to users this way because `copy-assets` globbed `src/icons/*.png` |
+| `Verify the published privacy policy matches what the code does` | The live policy omits an outbound host, a declared permission or the site's own analytics, or the site bundle contains an API key | It needs the network, and the page lives in another repository that deploys by hand. It went four versions stale. See ADR-016 |
+
+The second one couples a green build to an external site being up. That is the intended
+trade: an extension whose declared privacy policy cannot be produced should not ship.
 
 ### Concurrency
 

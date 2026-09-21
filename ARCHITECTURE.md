@@ -63,7 +63,7 @@ Gmail-Labels-As-Tabs/
 ├── scripts/                   # Manual tooling (rendered-pixel contrast audit)
 ├── _locales/                  # i18n (internationalization) strings
 ├── dist/                      # Build output (loaded into Chrome)
-└── .github/workflows/         # CI (manual dispatch) and website deploy
+└── .github/workflows/         # CI only, manual dispatch (the website is another repo)
 ```
 
 ### Responsibility Summary
@@ -222,7 +222,10 @@ Handles privileged Chrome APIs, and is the serialization point for settings:
 - `chrome.runtime.onInstalled` for onboarding
 - `chrome.action.onClicked` forwards to content script
 
-It sets **no uninstall URL**: see ADR-014.
+It sets an **uninstall URL**, pointing at the Tally feedback form, because uninstall is
+the one moment the in-product feedback form cannot reach. The link carries no address,
+settings or identifier, and its host must appear in SECURITY.md, the in-extension privacy
+page and STORE_LISTING.md or `test/repoConsistency.test.ts` fails the build. See ADR-014.
 
 The message listener returns `true` only for the two messages it answers asynchronously.
 Returning `true` for anything else holds the sender's channel open forever, so a
@@ -353,7 +356,7 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 
 | Issue | Impact |
 |---|---|
-| Website is a separate `package.json` (not a monorepo workspace) | Build/deploy are independent |
+| The marketing site is a separate repository | Build and deploy are independent, and the privacy policy it serves cannot be kept in step by this build. A CI step fetches the published policy instead |
 | Source files are not Prettier-clean | `npm run lint` passes and CI does not check formatting; `npm run format` would touch ~30 files in one unrelated diff |
 
 ---

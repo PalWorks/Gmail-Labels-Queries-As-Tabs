@@ -39,6 +39,15 @@ The screenshots show the real product. Two choices are worth recording:
   advertising a bug.
 - The previous tiles in `src/icons/` were AI-generated mockups with invented Gmail text
   ("Budgeriaves", "Showned"). They are superseded by these.
+- Those superseded tiles were also **shipping inside the extension** until v1.5.0, because
+  `copy-assets` globbed `src/icons/*.png`. 398 KB, 44% of the package, downloaded by every
+  user, named by no manifest entry and loaded by no page. The copy step now lists the four
+  declared icons, and CI fails if `dist/icons` gains anything else. The tiles here, in
+  `store-assets/`, are the ones to upload; nothing in this directory ships to a user.
+- The privacy screenshot's caption used to read "Nothing leaves your browser unless you
+  press Send Feedback". That stopped being true when the uninstall URL came back in v1.5.0
+  (ADR-014), so it now points at the policy rather than summarising it. A caption is a
+  claim; it goes stale like any other.
 
 ## Regenerating
 

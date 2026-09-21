@@ -55,7 +55,7 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 |----------|-----|
 | **Power Gmail users** | Navigate labels and saved searches without the sidebar |
 | **Multi-account users** | Independent tab configurations per Gmail account |
-| **Privacy-focused users** | Client-side tool with no background network requests; the only outbound call is feedback you choose to send |
+| **Privacy-focused users** | Client-side tool with no background network requests. Two things ever leave the browser and neither happens on its own: feedback you choose to send, and a form Chrome opens after you uninstall |
 | **Teams** | Exportable configs let you share tab setups across team members |
 
 ## Features
@@ -387,7 +387,6 @@ Gmail-Labels-As-Tabs/
 ├── dist/                             # Built extension (load this in Chrome)
 ├── .github/workflows/
 │   ├── ci.yml                        # CI pipeline (test, lint, build, verify)
-│   └── deploy_website.yml            # GitHub Pages deployment for website
 │
 ├── ARCHITECTURE.md                   # Detailed architecture analysis
 ├── AUDIT.md                          # Code quality audit
@@ -467,7 +466,12 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | **Version Parity** | Verifies `manifest.json` and `package.json` versions match |
 | **@ts-ignore Check** | Ensures zero `@ts-ignore` comments in source |
 | **Dist Verification** | Confirms all 11 required files exist in `dist/` |
+| **Declared Icons Only** | Fails if `dist/icons/` holds a file the manifest does not name. Two promo tiles, 398 KB, shipped to users this way until v1.5.0 |
+| **Published Privacy Policy** | Fetches <https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy> and fails if it omits an outbound host, a declared permission or the site's own analytics, or if the site bundle carries an API key. The policy lives in another repository and deploys by hand, so nothing else keeps it honest |
 | **Artifacts** | Uploads `dist/`, `extension.zip`, and coverage report (7-day retention) |
+
+Nothing here runs on a push. The workflow is `workflow_dispatch` only, so dispatch it:
+`gh workflow run ci.yml --ref main -f ref_note="why this run"`.
 
 ## Deployment
 

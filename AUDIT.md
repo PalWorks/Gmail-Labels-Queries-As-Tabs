@@ -1,7 +1,7 @@
 # Gmail Labels as Tabs: Repository Audit
 
 > **Version Analyzed:** 1.2.1 (Manifest V3)
-> **Stack:** TypeScript, esbuild, Chrome Extension APIs, InboxSDK
+> **Stack:** TypeScript, esbuild, Chrome Extension APIs (InboxSDK is bundled but inert; see section 7)
 > **License:** MIT
 >
 > **Refresh note (v1.2.1):** `modals.ts` has been decomposed into `src/modules/modals/*`;
@@ -20,7 +20,7 @@
 
 > **Refresh note (2026-09-21, v1.5.0):** a hardening pass. Settings writes are now
 > serialized through the service worker as `SettingsOp` values rather than
-> read-modify-saved (ADR-013); the uninstall URL is gone (ADR-014). Fixed on this date: an
+> read-modify-saved (ADR-013); the uninstall URL is kept and its disclosure is now a build gate (ADR-014); the theme settling ladder stays fixed by decision (ADR-015); and the duplicate marketing site was deleted so only one privacy policy exists (ADR-016). Fixed on this date: an
 > unquoted label in the generated Gmail search that could trash mail outside the label; a
 > second Apps Script comment breakout via the account id in the script header; a stored XSS
 > reachable from an imported backup via an unescaped tab id; an unrecognised mutation op
@@ -30,11 +30,13 @@
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
 > `rulesProperty`. 30 suites, 577 tests.
 >
-> **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and its
-> page world never initialises, because injecting it needs `chrome.scripting` and that
-> permission is not declared. Both features it supplies are already covered by code we own.
-> A stripped build measures 54.6 KB and behaves identically. See the execution record in
-> [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
+> **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and
+> **neither of its two features has ever run in a shipped build**. `InboxSDK.load()` never
+> settles, because it waits on a page world that needs the `scripting` permission we do not
+> declare, and it never rejects either, so the failure is silent apart from one console
+> error per Gmail load. Both features are covered by code we own. A stripped build measures
+> 54.6 KB and behaves identically. Live-verified 2026-09-21; see section 7 and the execution
+> record in [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,
@@ -58,8 +60,8 @@
 
 ```
 gmail-labels-as-tabs/
-├── .github/workflows/       # CI + website deployment pipelines
-│   ├── ci.yml               # Test, build, verify no console.log, upload artifact
+├── .github/workflows/       # One pipeline, manual dispatch only
+│   └── ci.yml               # Test, build, verify, package, check the published privacy policy
 ├── _locales/en/             # Chrome i18n (extension description string)
 ├── dist/                    # Production build output (gitignored)
 ├── src/                     # All extension source code
@@ -117,7 +119,7 @@ gmail-labels-as-tabs/
 | `src/ui/` | CSS files injected into Gmail. `toolbar.css` styles the tab bar and all modal overlays. |
 | `test/` | Unit tests using Jest + ts-jest + jsdom. Tests storage CRUD and script generation. |
 | _(removed in 1.5.0)_ | The landing page lived here as `website/` and also deployed to Pages, duplicating the separate site. Deleted; the site is [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). |
-| `.github/workflows/` | Two pipelines: CI (test + build + verify) and website deployment (GitHub Pages). |
+| `.github/workflows/` | One pipeline, `ci.yml`, manual dispatch only: test, build, verify, package, and fetch the published privacy policy to check it still describes this code. |
 
 ## 3. Entry Points and Execution Flow
 
@@ -143,7 +145,7 @@ manifest.json injects content.ts + toolbar.css at document_end
 content.ts::init()
    ├─── injectPageWorld()            ← Injects xhrInterceptor.js into MAIN world
    ├─── initializeFromDOM()          ← Extracts user email from DOM (polling fallback)
-   ├─── loadInboxSDK()              ← Loads InboxSDK for route tracking (non-fatal)
+   ├─── loadInboxSDK()              ← Never resolves: page world needs `scripting`. Inert
    ├─── attemptInjection()          ← Finds Gmail toolbar, inserts tab bar after it
    ├─── startObserver()             ← MutationObserver to re-inject if Gmail re-renders
    ├─── addEventListener(popstate)  ← Track URL changes for active tab highlighting
@@ -328,7 +330,7 @@ state.ts ──► storage (types only)
 
 | Library | Version | Purpose |
 |---|---|---|
-| `@inboxsdk/core` | ^2.2.11 | Gmail SDK for route tracking and email detection. Non-fatal fallback. |
+| `@inboxsdk/core` | ^2.2.11 | Intended for route tracking and email detection. Inert in practice: its page world is never injected, so neither feature runs. See section 7. |
 | `esbuild` | ^0.27.0 | Fast TypeScript bundler. Replaces webpack/rollup. |
 | `typescript` | ^5.3.3 | TypeScript compiler. |
 | `jest` | ^29.7.0 | Test runner. |

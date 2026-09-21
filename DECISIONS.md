@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -96,8 +96,11 @@ timers. See [src/content.ts](src/content.ts) and [src/modules/unread.ts](src/mod
 **Consequences.** No analytics or remote config is possible. Unread data must come from
 Gmail's feed, XHR, or DOM only. This is a hard constraint, see [SECURITY.md](SECURITY.md).
 
-**Amended by ADR-012.** The single exception is feedback the user types and submits.
-Nothing is sent in the background, ever.
+**Amended by ADR-012 and ADR-014.** Two exceptions exist and neither happens on its own:
+feedback the user types and submits, and the uninstall page Chrome opens after the
+extension has already been removed. Nothing is sent in the background, ever. Both hosts
+must be disclosed in SECURITY.md, the in-extension privacy page and STORE_LISTING.md, or
+the build fails.
 
 ## ADR-009: esbuild with console dropped, TypeScript strict
 
@@ -250,3 +253,48 @@ attribute observer, the `<head>` stylesheet observer, `load` and `visibilitychan
 the same `check()`, and `check()` is idempotent, so a redundant step costs a comparison and
 nothing else. Recorded as a decision rather than an omission, and cross-referenced from the
 constant so the next reader does not re-propose it.
+
+## ADR-016: One marketing site, in its own repository, with the policy checked from CI
+
+**Decision.** The marketing site lives only in
+[PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). The
+`website/` folder and its deploy workflow are deleted from this repository and GitHub Pages
+is disabled here. CI fetches the published privacy policy and fails if it stops describing
+this code.
+
+**Context.** The site was split out into its own repository on 2026-03-03, but the folder
+left behind here kept its Pages workflow, so two sites served the same product from
+`palworks.github.io/Gmail-Labels-As-Tabs` and `palworks.github.io/Gmail-Labels-Queries-As-Tabs`.
+
+That is not untidiness, it is a compliance failure waiting to be noticed. Two privacy
+policies existed. The Web Store listing named one, the extension's own Help button linked
+to the other, and the policy that was correct for 1.5.0 was on the copy nobody pointed at,
+while the one a reviewer would read still claimed the extension transmits nothing, months
+after the feedback relay shipped. Preparing the 1.5.0 submission, the first attempt at a
+fix updated the wrong copy, which is the clearest possible evidence that a human cannot be
+expected to keep two of these straight.
+
+Keeping the site separate was chosen over merging it back. The separate repository is
+strictly ahead: SEO metadata, `robots.txt`, `sitemap.xml`, Search Console verification and
+a `/contact` route, none of which exist in the copy here. It also keeps marketing edits out
+of the Actions context that builds a security-sensitive artefact, and lets the site change
+without touching a repository under store review.
+
+Merging would have bought one real thing, which is a policy that cannot drift from the
+code. That is bought here instead by a CI step that fetches the **published** page and
+asserts it names every outbound host the extension can reach, every permission the manifest
+declares, and the analytics the site itself runs, and that the bundle carries no API key.
+Checking the deployed page is stronger than co-location, because what a reviewer reads is
+the deployed page and not a file in a tree.
+
+**Consequences.** The extension's own Help link had to move: it pointed at the site being
+retired and would have 404'd for every installed user. It now opens `#/contact`, a real
+route, rather than the `#/#contact` it used, which was not one.
+
+CI depends on an external site being reachable. That is deliberate. If the privacy policy
+cannot be produced, the release should not proceed.
+
+The website deploys only on manual dispatch, so a change to the policy is not live until
+someone runs it. That is stated in that repository's README beside the policy itself, and
+in [PLAYBOOK.md](PLAYBOOK.md) as a numbered step in cutting a release, because "edited but
+not deployed" is a worse state than "never edited".

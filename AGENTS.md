@@ -4,7 +4,7 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## What this project is
 
@@ -22,13 +22,19 @@ Orientation reading order for a new agent:
 
 ## Hard constraints (never violate)
 
-1. **No background network requests.** Unread counts come only from Gmail's own Atom feed,
-   Gmail's XHR responses, or the DOM. No analytics, telemetry, or remote config, ever.
-   There is exactly one permitted outbound call, and only when the user presses Send on the
-   feedback form: the relay in [worker/](worker/), reached from
-   [src/modules/feedback.ts](src/modules/feedback.ts). Any other request to a non
-   `mail.google.com` origin, or any request the user did not explicitly trigger, is a
-   blocking defect. See [SECURITY.md](SECURITY.md) and ADR-012 in [DECISIONS.md](DECISIONS.md).
+1. **No background network requests, and every outbound host is disclosed.** Unread counts
+   come only from Gmail's own Atom feed, Gmail's XHR responses, or the DOM. No analytics,
+   telemetry, or remote config, ever. Exactly two outbound paths exist, and neither happens
+   on its own: the relay in [worker/](worker/), reached from
+   [src/modules/feedback.ts](src/modules/feedback.ts) when the user presses Send; and the
+   uninstall URL, which Chrome opens after the user has already removed the extension
+   (ADR-014). Any other request to a non `mail.google.com` origin, or any request the user
+   did not explicitly trigger, is a blocking defect.
+   Adding a host is not enough on its own: `test/repoConsistency.test.ts` fails the build
+   unless every host named in [src/background.ts](src/background.ts) also appears in
+   [SECURITY.md](SECURITY.md), the in-extension privacy page and
+   [STORE_LISTING.md](STORE_LISTING.md). The uninstall URL shipped undisclosed for four
+   versions, which is why this is a gate and not a habit. See ADR-012 and ADR-014.
 2. **Escape user data for the language it lands in, not "for output".** Tab titles, label
    names, ids and imported config are user data, and this project writes them into four
    different languages: HTML, a JavaScript string literal, a JavaScript block comment, and
@@ -60,6 +66,22 @@ Orientation reading order for a new agent:
    [DECISIONS.md](DECISIONS.md) ADR-002.
 9. **Do not commit build artifacts.** `dist/`, `extension.zip`, `dist.zip`, and
    `coverage/` are gitignored. Never force-add them.
+10. **Ship only what the manifest declares.** `copy-assets` must name the files it copies
+    rather than globbing a directory. Two promo tiles, 398 KB and 44% of the package,
+    reached users for four versions because `src/icons/*.png` swept them up. CI fails if
+    `dist/icons` holds a file the manifest does not declare.
+11. **The marketing site is not in this repository.** It is
+    [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs), and
+    it serves the privacy policy the Chrome Web Store listing links to. Do not re-create a
+    `website/` folder here: one existed, deployed a second copy of the site, and the two
+    privacy policies drifted until the published one contradicted the shipped extension.
+    A guard fails the build if the folder reappears or if anything here links to the
+    retired address. See ADR-016.
+12. **Every workflow is manually dispatched.** No `push:`, `pull_request:` or `schedule:`
+    trigger, in either repository, so Actions minutes are spent deliberately. A guard
+    enforces it. The practical consequence: merging changes nothing until you run
+    `gh workflow run ci.yml --ref main`, and editing the privacy policy changes nothing a
+    visitor sees until you run that repository's deploy.
 
 ## Coding conventions
 
@@ -99,8 +121,12 @@ statement about the repository, not about a function:
 |---|---|
 | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value reaches `innerHTML` |
 | [test/contrast.test.ts](test/contrast.test.ts) | A palette value drops below AA, or a colour appears outside a stylesheet |
-| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component |
+| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component; an outbound host goes undisclosed; live documents disagree on the test count; anything links to the retired Pages site; a `website/` folder reappears; a workflow gains an automatic trigger |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 hostile inputs |
+
+Two further gates live in CI rather than jest, because they need the built artefact or the
+network: `dist/icons` may hold only icons the manifest declares, and the **published**
+privacy policy must still name every outbound host and permission this build has.
 
 Then verify `manifest.json` and `package.json` versions match. See
 [TESTING.md](TESTING.md) and [PLAYBOOK.md](PLAYBOOK.md) for details.

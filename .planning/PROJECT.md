@@ -78,7 +78,7 @@ A Chrome MV3 extension that injects a user-configurable tab bar directly into th
 | Use `chrome.storage.sync` over `local` | Cross-device sync is a key feature | ✓ Good |
 | Per-account key namespacing (`account_{email}`) | Multi-account Gmail support | ✓ Good |
 | Dual-world injection (Isolated + Main) | Need XHR access for unread counts; MV3 forbids direct page JS access from content scripts | ✓ Good |
-| InboxSDK for route detection | Provides Gmail-aware routing and user identity | ⚠️ Revisit (200KB overhead for 2 features) |
+| InboxSDK for route detection | Intended to provide Gmail-aware routing and user identity | ❌ Inert. ~1.03 MB of the 1.09 MB content script, and neither feature has ever run: its page world needs the `scripting` permission we do not declare. Removal measured (54.6 KB build, behaviour unchanged) and pending as its own release |
 | Single `content.ts` monolith | Rapid initial development | ⚠️ Revisit (now 2141 lines, unmaintainable) |
 | `innerHTML` for modals | Quick implementation | ⚠️ Revisit (XSS vulnerability identified) |
 | Three-strategy unread count waterfall | Robustness against any single method failing | ✓ Good |

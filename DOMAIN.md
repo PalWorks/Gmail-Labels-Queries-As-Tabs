@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## The problem it solves
 
@@ -71,8 +71,10 @@ away, and it can automate routine cleanup of those labels.
   Gmail's own network traffic. They communicate via `CustomEvent` on `document`.
 - **InboxSDK.** A third-party library originally used to locate Gmail UI anchor points and
   to detect the signed-in address. Bundled into the content script, where it accounts for
-  roughly 1.03 MB of 1.09 MB. Its page-world half does not currently initialise; see
-  ARCHITECTURE.md section 10.
+  roughly 1.03 MB of 1.09 MB, and **inert**: its page world needs the `scripting`
+  permission this extension does not declare, so `InboxSDK.load()` never settles and
+  neither of its two features has ever run in a shipped build. It does not reject either,
+  so the only symptom is one console error per Gmail load. See ARCHITECTURE.md section 10.
 - **SettingsOp.** A description of a change to an account's settings, as plain data, so it
   can be sent to the service worker and applied there. See DATA_MODEL.md.
 - **rev.** A counter on an account's stored settings, bumped on every write. Used to detect

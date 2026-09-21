@@ -21,6 +21,10 @@ Last updated: 2026-09-21 (v1.5.0)
 | How do I contribute? | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | What changed and when? | [CHANGELOG.md](CHANGELOG.md) |
 | Deep repository audit and risk areas | [AUDIT.md](AUDIT.md) |
+| Where is the marketing site and the published privacy policy? | Another repository: [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). See ADR-016 and [SECURITY.md](SECURITY.md) |
+| What goes in the Web Store listing, and what is still to do? | [STORE_LISTING.md](STORE_LISTING.md) |
+| Where do the store screenshots come from? | [store-assets/README.md](store-assets/README.md) |
+| Why is InboxSDK in the bundle if nothing uses it? | [ARCHITECTURE.md](ARCHITECTURE.md) section 10, [AUDIT.md](AUDIT.md) section 7 |
 | Why does the color palette look like this? | [test/contrast.test.ts](test/contrast.test.ts) |
 | Why can I not put a hex value in a .ts file? | [test/contrast.test.ts](test/contrast.test.ts) |
 | Why did my innerHTML change fail CI? | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) |
@@ -78,7 +82,7 @@ Last updated: 2026-09-21 (v1.5.0)
 | MV3 manifest | [manifest.json](manifest.json) |
 | Feedback relay Worker (holds the mail API key) | [worker/](worker/) |
 | Rendered-pixel contrast audit (manual) | [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) |
-| CI + website deploy | [.github/workflows/](.github/workflows/) |
+| CI, manual dispatch only | [.github/workflows/](.github/workflows/) |
 | Chrome i18n strings | [_locales/en/messages.json](_locales/en/messages.json) |
 
 ## Tests map

@@ -105,6 +105,22 @@ guards that stop each defect coming back.
   the extension's help button must name a route that exists, the listing must name the live
   site, and a `website/` folder may not reappear in this repository.
 
+### Changed (documentation)
+
+- Every live document was swept against the shipped code on 2026-09-21. Corrections worth
+  naming, because each was a statement a reader would have acted on: ARCHITECTURE said the
+  extension sets no uninstall URL; AUDIT said the uninstall URL was gone; AGENTS rule 1
+  said there was exactly one permitted outbound call; PLAYBOOK said pushes and PRs run CI
+  and the website deploys from here; three documents still described a `deploy_website.yml`
+  and a `website/` folder that no longer exist; DOMAIN and PROJECT described InboxSDK as a
+  fallback rather than as inert; and the worker README called its relay the only origin the
+  extension contacts.
+- AGENTS gains three hard constraints: ship only what the manifest declares, do not
+  re-create a `website/` folder, and every workflow is manually dispatched.
+- PLAYBOOK's release procedure gains a numbered step to update and **deploy** the published
+  privacy policy in the other repository before uploading anything, and its guard-failure
+  table now covers all eight failure modes.
+
 ### Changed (the marketing site moved out, and one link had to move with it)
 
 - **The duplicate website is gone.** The site was split into
@@ -145,7 +161,7 @@ guards that stop each defect coming back.
   `Small Promo Tile.png` sat in `src/icons/`, which `copy-assets` copied wholesale, so every
   user downloaded 398 KB of store graphics the manifest never names and no page loads. They
   are also the superseded AI mockups that `store-assets/README.md` records as replaced. The
-  package drops from 898,996 to 500,113 bytes, 44% smaller, with no change to behaviour. A
+  package drops from 898,996 to about 500,100 bytes, 44% smaller, with no change to behaviour. A
   new CI step fails the build if `dist/icons/` gains a file the manifest does not declare.
 
 ## [1.4.0] - 2026-09-21

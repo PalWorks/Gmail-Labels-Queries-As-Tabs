@@ -4,8 +4,12 @@ Relays the extension's in-product feedback form to email via Resend.
 
 The extension cannot call Resend directly: a published CRX is a zip anyone can unpack, so
 an API key inside it is a public key. This Worker holds the key instead, and is the only
-origin the extension contacts besides `mail.google.com` (see ADR-012 in
+origin the *running* extension contacts besides `mail.google.com` (see ADR-012 in
 [DECISIONS.md](../DECISIONS.md)).
+
+One other host appears in the extension, and it is worth not confusing with this one: the
+uninstall URL (ADR-014). Chrome opens it after the extension has already been removed, so
+no code of ours runs and nothing is sent; it is a navigation, not a request.
 
 ## What it does
 
