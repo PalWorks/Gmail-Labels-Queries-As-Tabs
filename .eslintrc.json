@@ -33,6 +33,29 @@
     "overrides": [
         {
             "files": [
+                "src/**/*.ts"
+            ],
+            "excludedFiles": [
+                "src/**/*.test.ts"
+            ],
+            "parserOptions": {
+                "project": "./tsconfig.json"
+            },
+            "rules": {
+                "@typescript-eslint/no-floating-promises": "error",
+                "@typescript-eslint/no-misused-promises": [
+                    "error",
+                    {
+                        "checksVoidReturn": {
+                            "arguments": false,
+                            "attributes": false
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "files": [
                 "test/**/*.ts",
                 "src/**/*.test.ts"
             ],

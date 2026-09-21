@@ -45,6 +45,33 @@ coming back. One small addition, in the modal people actually use.
   changed nothing and said nothing. A failure that is *not* a dead context is logged rather
   than dressed up as one: telling someone to reload when reloading will not help is worse
   than saying nothing.
+- **Twenty-five more dropped promises, found by turning the compiler on the problem.**
+  The four silent failures above are one bug wearing four coats: a promise rejected, no
+  handler existed, and the only trace was a console line in a tab nobody had open.
+  Enabling `@typescript-eslint/no-floating-promises` and `no-misused-promises` as
+  type-aware errors over `src/` found twenty-five more, in the service worker, the
+  options page, the welcome page, the content script, the tab bar and two modals. The
+  ones a user could hit:
+  - **Uninstall, in an orphaned tab, removed its own dialog and uninstalled nothing** —
+    indistinguishable from an uninstall that worked. It now checks first, leaves the
+    dialog up, and shows the same reload notice as the settings modal.
+  - **Delete and reorder in the managed tab list reported nothing when the write
+    failed.** The row stayed exactly where it was, which reads as a broken button. Both
+    are `async` handlers assigned to a callback the renderer types as `() => void`, so
+    nothing was ever going to await them. They now report: the reload notice in Gmail, a
+    message on the options page.
+  - **The service worker answered `ok: true` for an options page that never opened.** The
+    handler's `try`/`catch` could not see the failure, because MV3 rejects rather than
+    throws. It is asynchronous now and reports what actually happened.
+  - **A failed theme write on the welcome page left the radio button showing a choice
+    that had not been saved.**
+  - `chrome.storage` cleanup in two places sat inside a `try`/`catch` whose comment
+    claimed to handle a dead context, and never could, for the same reason.
+
+  Fire-and-forget calls now say so at the call site through `catchChromeError` or
+  `ignoreChromeError`. A guard asserts the lint rules stay enabled, type-aware, and set
+  to `error` rather than `warn` — `npm run lint` tolerates warnings, so a downgrade would
+  have retired the check without failing anything. See ADR-017.
 - **The help control in the modal footer was a `<div>`**, so it was unreachable by keyboard
   and announced as nothing: its icon is an `<svg>` with no text and its only description
   was a `title` attribute. It is a `<button>` with an `aria-label` now, as is the new header

@@ -5,6 +5,7 @@
  */
 
 import { showUninstallModal } from '../../src/modules/modals/uninstallModal';
+import { flush } from '../helpers/async';
 
 // Mock chrome APIs
 const mockSendMessage = jest.fn();
@@ -16,6 +17,9 @@ const mockChrome = {
         },
     },
     runtime: {
+        // A live context. Without this the modal correctly refuses to act,
+        // which is what the orphaned-tab tests at the end of this file assert.
+        id: 'abcdefghijklmnop',
         sendMessage: mockSendMessage,
         lastError: null as chrome.runtime.LastError | null,
     },
@@ -57,6 +61,8 @@ describe('showUninstallModal', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
         jest.clearAllMocks();
+        mockChrome.runtime.id = 'abcdefghijklmnop';
+        mockSendMessage.mockReturnValue(undefined);
     });
 
     it('should append modal to document body', () => {
@@ -104,6 +110,7 @@ describe('showUninstallModal', () => {
         noBtn.click();
 
         expect(mockSendMessage).toHaveBeenCalledWith({ action: 'UNINSTALL_SELF' });
+        expect(document.querySelector('.gmail-tabs-modal')).toBeNull();
     });
 
     it('should export then uninstall when Yes clicked', async () => {
@@ -115,9 +122,67 @@ describe('showUninstallModal', () => {
         const yesBtn = document.querySelector('#uninstall-yes-btn') as HTMLElement;
         yesBtn.click();
 
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await flush();
 
         expect(triggerDownload).toHaveBeenCalled();
         expect(mockSendMessage).toHaveBeenCalledWith({ action: 'UNINSTALL_SELF' });
+    });
+
+    // -----------------------------------------------------------------------
+    // Orphaned tab
+    //
+    // Chrome does not reload a page when it updates the extension running in
+    // it. Until v1.5.0 the click here removed the dialog and sent a message
+    // into a dead context, which looks exactly like an uninstall that worked.
+    // -----------------------------------------------------------------------
+
+    describe('when the extension context has been invalidated', () => {
+        it('does not pretend the uninstall request was sent', () => {
+            showUninstallModal();
+            mockChrome.runtime.id = undefined as any;
+
+            (document.querySelector('#uninstall-no-btn') as HTMLElement).click();
+
+            expect(mockSendMessage).not.toHaveBeenCalled();
+            // The dialog must not disappear, because nothing happened.
+            expect(document.querySelector('.gmail-tabs-modal')).not.toBeNull();
+        });
+
+        it('says what went wrong and offers the one thing that fixes it', () => {
+            showUninstallModal();
+            mockChrome.runtime.id = undefined as any;
+
+            (document.querySelector('#uninstall-no-btn') as HTMLElement).click();
+
+            expect(document.querySelector('.gmail-tabs-modal h3')?.textContent).toBe('Reload Gmail to continue');
+            expect(document.querySelector('#modal-reload-page')).not.toBeNull();
+        });
+
+        it('reports a context that dies between the check and the reply', async () => {
+            showUninstallModal();
+            mockSendMessage.mockReturnValue(Promise.reject(new Error('Extension context invalidated.')));
+
+            (document.querySelector('#uninstall-no-btn') as HTMLElement).click();
+            await flush();
+
+            // close() ran on the optimistic path, so the notice has nowhere to
+            // render; what matters is that the rejection was handled and not
+            // left to surface as an unhandled promise.
+            expect(mockSendMessage).toHaveBeenCalledWith({ action: 'UNINSTALL_SELF' });
+        });
+
+        it('a real failure is not dressed up as a dead context', () => {
+            const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+            showUninstallModal();
+            mockSendMessage.mockImplementation(() => {
+                throw new Error('something else entirely');
+            });
+
+            (document.querySelector('#uninstall-no-btn') as HTMLElement).click();
+
+            expect(document.querySelector('.gmail-tabs-modal h3')?.textContent).toBe('Uninstall Extension?');
+            expect(error).toHaveBeenCalled();
+            error.mockRestore();
+        });
     });
 });

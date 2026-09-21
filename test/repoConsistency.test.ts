@@ -623,3 +623,53 @@ describe('content script only reaches web-accessible resources', () => {
         expect(accessible.has('options.html')).toBe(false);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Unhandled promises are a lint error, not a review habit
+// ---------------------------------------------------------------------------
+
+/**
+ * Every user-visible bug fixed in v1.5.0 was the same bug: a promise whose
+ * rejection nobody held. The options page could not be opened, a theme click
+ * did nothing, Uninstall removed its own dialog and sent nothing. Each was
+ * found by a person clicking, one at a time, weeks apart.
+ *
+ * A type-aware sweep found twenty-five of them in one pass. Keeping that
+ * sweep on is the only reason the twenty-sixth will not ship, so this asserts
+ * the rule is still enabled and still an error. See ADR-017.
+ */
+describe('floating promises stay a build failure', () => {
+    const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.eslintrc.json'), 'utf8'));
+
+    /** The override that turns on type-aware linting for the extension source. */
+    const typed = (config.overrides ?? []).find((o: { rules?: Record<string, unknown> }) =>
+        Object.keys(o.rules ?? {}).some((r) => r.includes('no-floating-promises'))
+    );
+
+    test('the src override exists and is type-aware', () => {
+        // Both rules need type information. Without `project` they are
+        // silently inert: eslint reports nothing and the config still looks
+        // correct to a reader.
+        expect(typed).toBeDefined();
+        expect(typed.parserOptions?.project).toBeTruthy();
+        expect(typed.files).toContain('src/**/*.ts');
+    });
+
+    test('both promise rules are errors, not warnings', () => {
+        // `npm run lint` is gated on 0 errors and tolerates warnings, so a
+        // downgrade to "warn" would retire the guard without failing anything.
+        const level = (rule: string): string => {
+            const v = typed.rules[rule];
+            return Array.isArray(v) ? v[0] : v;
+        };
+        expect(level('@typescript-eslint/no-floating-promises')).toBe('error');
+        expect(level('@typescript-eslint/no-misused-promises')).toBe('error');
+    });
+
+    test('the tsconfig the rules rely on still covers src', () => {
+        const tsconfig = JSON.parse(
+            fs.readFileSync(path.join(ROOT, typed.parserOptions.project.replace(/^\.\//, '')), 'utf8')
+        );
+        expect(tsconfig.include).toEqual(expect.arrayContaining(['src/**/*']));
+    });
+});

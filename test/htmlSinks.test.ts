@@ -40,6 +40,7 @@ const SAFE_IDENTIFIERS = new Map<string, string>([
     ['downBtn', 'Module-local literal markup'],
     ['removeBtn', 'Module-local literal markup'],
     ['colorClass', 'isValidTabColor() is checked before this is built'],
+    ['RELOAD_BUTTON_ID', 'Module constant: a literal element id in contextNotice.ts'],
 ]);
 
 /** Functions whose return value is markup assembled under the same rules. */

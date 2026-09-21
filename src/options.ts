@@ -45,6 +45,7 @@ import {
     validateFeedback,
 } from './modules/feedback';
 import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
+import { catchChromeError } from './modules/extensionContext';
 
 // ---------------------------------------------------------------------------
 // Navigation & Routing
@@ -330,6 +331,13 @@ function renderSettingsTabList(tabs: Tab[]): void {
             renderSettingsTabList(currentSettings.tabs);
             renderRulesList(currentSettings.tabs, currentSettings.rules);
         },
+        // A failed remove or reorder used to leave the row exactly where it
+        // was with nothing said, which reads as a broken button. `alert` is
+        // this page's existing idiom for a data operation that did not work.
+        onError: (e) => {
+            console.error('Options: tab list action failed', e);
+            alert('That change could not be saved. Please try again.');
+        },
     });
 }
 
@@ -397,7 +405,10 @@ function setupDataControls(): void {
                 'Are you sure you want to uninstall this extension? Export your settings first if you want to keep them.'
             )
         ) {
-            chrome.runtime.sendMessage({ action: 'UNINSTALL_SELF' });
+            catchChromeError(chrome.runtime.sendMessage({ action: 'UNINSTALL_SELF' }), (e) => {
+                console.error('Options: the uninstall request failed', e);
+                alert('The uninstall request could not be sent. Please remove the extension from chrome://extensions.');
+            });
         }
     });
 }
@@ -495,7 +506,8 @@ function renderRuleTemplates(): void {
         btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-template-id');
             const template = RULE_TEMPLATES.find((t) => t.id === id);
-            if (template) applyTemplate(template, btn);
+            // Reports its own failure on the button; cannot reject.
+            if (template) void applyTemplate(template, btn);
         });
     });
 }
@@ -1103,10 +1115,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Page chrome that must render even with no Gmail account set up yet.
     renderVersionTag();
-    applyStoredThemeEarly();
+    applyStoredThemeEarly().catch((e) => {
+        // Leaves the page on its default theme rather than unthemed and silent.
+        console.error('Options: could not apply the stored theme', e);
+    });
 
     // Load data
     renderRuleTemplates();
-    loadSettings();
+    // Renders its own failure into the tab list; cannot reject.
+    void loadSettings();
     setupScriptGeneration();
 });

@@ -13,8 +13,21 @@
 
 import '@inboxsdk/core/background.js';
 import { MUTATE_SETTINGS_ACTION, createMutationQueue, MutateSettingsResponse } from './utils/storage';
+import { catchChromeError } from './modules/extensionContext';
 
 const mutationQueue = createMutationQueue();
+
+/**
+ * Open the options page, preferring Chrome's own opener so an already-open
+ * tab is focused rather than duplicated.
+ */
+async function openOptionsPage(): Promise<void> {
+    if (chrome.runtime.openOptionsPage) {
+        await chrome.runtime.openOptionsPage();
+        return;
+    }
+    await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === MUTATE_SETTINGS_ACTION) {
@@ -86,20 +99,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // the "Manage all accounts" link silently did nothing from v1.2.1 to
         // v1.5.0. Listing the page would fix the symptom by letting any script
         // on Gmail reach the settings UI, so the worker opens it instead.
-        try {
-            if (chrome.runtime.openOptionsPage) {
-                // Focuses an already-open options tab rather than duplicating it.
-                chrome.runtime.openOptionsPage();
-            } else {
-                chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-            }
-            sendResponse({ ok: true });
-        } catch (e: unknown) {
-            console.error('Background: could not open the options page:', e);
-            sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
-        }
-        // Answered synchronously; do not hold the channel open.
-        return false;
+        //
+        // Answered asynchronously, and deliberately. Both openers can reject
+        // rather than throw, so the synchronous try/catch this replaced would
+        // have reported ok: true for an options page that never opened.
+        openOptionsPage()
+            .then(() => sendResponse({ ok: true }))
+            .catch((e: unknown) => {
+                console.error('Background: could not open the options page:', e);
+                sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+            });
+        return true;
     }
 
     if (message.action === 'UNINSTALL_SELF') {
@@ -158,14 +168,19 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
         // 1. Open Welcome Page
-        chrome.tabs.create({ url: 'welcome.html' });
+        catchChromeError(chrome.tabs.create({ url: 'welcome.html' }), (e) =>
+            console.warn('Background: could not open the welcome page:', e)
+        );
 
         // 2. Auto-Reload Open Gmail Tabs
         // This ensures the content script is injected immediately
         chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
             tabs.forEach((tab) => {
                 if (tab.id) {
-                    chrome.tabs.reload(tab.id);
+                    // One discarded or closing tab must not stop the rest.
+                    catchChromeError(chrome.tabs.reload(tab.id), (e) =>
+                        console.warn('Background: could not reload Gmail tab', tab.id, e)
+                    );
                 }
             });
         });

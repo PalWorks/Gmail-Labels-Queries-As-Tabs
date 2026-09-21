@@ -42,6 +42,11 @@ Load `dist/` as an unpacked extension (see [PLAYBOOK.md](PLAYBOOK.md)).
   add-tab and list behavior in [src/modules/tabManager.ts](src/modules/tabManager.ts).
 - Escape all user-controlled strings before inserting into the DOM. See
   [SECURITY.md](SECURITY.md).
+- Never leave a promise unhandled. For a `chrome.*` call that is genuinely
+  fire-and-forget, use `catchChromeError` or `ignoreChromeError` from
+  [src/modules/extensionContext.ts](src/modules/extensionContext.ts) rather than a bare
+  `void`. A `try`/`catch` around a `chrome.*` call does not help: MV3 rejects, it does
+  not throw. See ADR-017 in [DECISIONS.md](DECISIONS.md).
 
 ## Tests
 
@@ -58,7 +63,8 @@ Before opening a pull request, confirm the verification gate passes:
 - [ ] `npx jest --runInBand` passes too; both flakes this suite has had appeared only when
       timing shifted, so one green parallel run proves less than it looks
 - [ ] `npx jest --coverage` meets thresholds
-- [ ] `npm run lint` has 0 errors
+- [ ] `npm run lint` has 0 errors (it is type-aware over `src/`, so it is slower than a
+      plain lint and it will reject a promise whose rejection nobody handles)
 - [ ] `npm run build` succeeds and `dist/js` has no `console.log`
 - [ ] `manifest.json` and `package.json` versions match
 - [ ] Docs updated ([CHANGELOG.md](CHANGELOG.md) and any affected reference docs)

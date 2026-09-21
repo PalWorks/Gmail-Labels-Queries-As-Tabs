@@ -22,6 +22,7 @@ import {
     renderManagedTabList,
 } from '../src/modules/tabManager';
 import { Tab } from '../src/utils/storage';
+import { flush } from './helpers/async';
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -91,7 +92,7 @@ describe('renderManagedTabList', () => {
         { id: 'b', title: 'Work', type: 'label', value: 'Work' },
     ];
 
-    function setup() {
+    function setup(onError?: (e: unknown) => void) {
         const list = document.createElement('ul');
         document.body.appendChild(list);
         const reRender = jest.fn().mockResolvedValue(undefined);
@@ -101,6 +102,7 @@ describe('renderManagedTabList', () => {
             getAccountId: () => 'user@gmail.com',
             reRender,
             renderTabBar: jest.fn(),
+            onError,
         });
         return { list, reRender };
     }
@@ -128,5 +130,51 @@ describe('renderManagedTabList', () => {
         const reordered = mockUpdateTabOrder.mock.calls[0][1];
         expect(reordered.map((t: Tab) => t.id)).toEqual(['b', 'a']);
         expect(reRender).toHaveBeenCalled();
+    });
+
+    // -----------------------------------------------------------------------
+    // Failure reporting
+    //
+    // These handlers are async but the renderer types its callbacks as void,
+    // so nothing in the DOM ever awaited them. Before v1.5.0 a rejected write
+    // left the row exactly where it was with nothing said, and the rejection
+    // escaped unhandled.
+    // -----------------------------------------------------------------------
+
+    test('a failed remove is reported to the caller, not dropped', async () => {
+        const onError = jest.fn();
+        mockRemoveTab.mockRejectedValueOnce(new Error('storage is full'));
+        const { list, reRender } = setup(onError);
+
+        (list.querySelector('.remove-btn') as HTMLElement).click();
+        await flush();
+
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect((onError.mock.calls[0][0] as Error).message).toBe('storage is full');
+        // The re-render must not run: the tab is still there.
+        expect(reRender).not.toHaveBeenCalled();
+    });
+
+    test('a failed reorder is reported to the caller', async () => {
+        const onError = jest.fn();
+        mockUpdateTabOrder.mockRejectedValueOnce(new Error('write refused'));
+        const { list } = setup(onError);
+
+        (list.querySelector('.down-btn') as HTMLElement).click();
+        await flush();
+
+        expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    test('without a reporter, a failure still lands in the console rather than nowhere', async () => {
+        const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockRemoveTab.mockRejectedValueOnce(new Error('storage is full'));
+        const { list } = setup();
+
+        (list.querySelector('.remove-btn') as HTMLElement).click();
+        await flush();
+
+        expect(error).toHaveBeenCalled();
+        error.mockRestore();
     });
 });

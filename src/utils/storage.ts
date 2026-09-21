@@ -30,6 +30,7 @@
  */
 
 import { TabColor, normalizeTabColor } from './colors';
+import { ignoreChromeError } from '../modules/extensionContext';
 
 export interface Tab {
     id: string;
@@ -796,7 +797,9 @@ export async function migrateThemeToGlobalIfNeeded(accountId: string): Promise<v
     if (legacyTheme) {
         await setGlobalTheme(legacyTheme);
         try {
-            chrome.storage.sync.remove('theme');
+            // Rejects rather than throws when the context has gone, so the
+            // catch below never saw it. The stale key is harmless either way.
+            ignoreChromeError(chrome.storage.sync.remove('theme'));
         } catch {
             /* best-effort cleanup */
         }

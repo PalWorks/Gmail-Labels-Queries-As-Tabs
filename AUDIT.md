@@ -28,7 +28,18 @@
 > theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
 > failures. Four guard suites were added so each class of defect fails CI rather than
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
-> `rulesProperty`. 31 suites, 603 tests.
+> `rulesProperty`. 32 suites, 626 tests.
+>
+> Also on this date, and the most productive single finding of the pass: four separately
+> reported bugs turned out to be one. A promise rejected, no handler existed, and the
+> only trace was a console line in a tab nobody had open — the options page that would
+> not open from Gmail, the theme click that did nothing, the Uninstall that removed its
+> dialog and uninstalled nothing. Enabling
+> `@typescript-eslint/no-floating-promises` and `no-misused-promises` as type-aware
+> errors over `src/` found **25 more** in one pass, several of them user-reachable. The
+> rules are now a build gate, guarded against being downgraded to a warning (ADR-017).
+> Note what this says about the tests: the suite covering the broken options-page link
+> passed throughout, because it mocked the call that was failing.
 >
 > **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and
 > **neither of its two features has ever run in a shipped build**. `InboxSDK.load()` never

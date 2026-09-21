@@ -172,7 +172,11 @@ export function renderTabs(): void {
             countSpan.textContent = '';
             tabEl.appendChild(countSpan);
 
-            updateUnreadCount(tab, tabEl);
+            // Non-critical: a badge that cannot be filled stays empty. Logged
+            // rather than dropped, so a persistent failure is findable.
+            updateUnreadCount(tab, tabEl).catch((e) => {
+                console.warn('Gmail Tabs: could not update the unread count for', tab.value, e);
+            });
         }
 
         // Menu Button (Chevron)

@@ -9,6 +9,7 @@ export {};
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { flush } from './helpers/async';
 
 // ---------------------------------------------------------------------------
 // Mock InboxSDK background import (no-op)
@@ -253,7 +254,7 @@ describe('action click handler', () => {
 // ---------------------------------------------------------------------------
 
 describe('OPEN_OPTIONS_PAGE handler', () => {
-    test('opens the options page and does not hold the channel open', () => {
+    test('opens the options page and holds the channel open for the reply', async () => {
         const openOptionsPage = jest.fn();
         (global as any).chrome.runtime.openOptionsPage = openOptionsPage;
         const sendResponse = jest.fn();
@@ -261,31 +262,50 @@ describe('OPEN_OPTIONS_PAGE handler', () => {
         const held = messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse);
 
         expect(openOptionsPage).toHaveBeenCalledTimes(1);
+        // The openers can reject rather than throw, so the reply has to wait
+        // for them. Returning false here would close the channel before the
+        // answer existed.
+        expect(held).toBe(true);
+        await flush();
         expect(sendResponse).toHaveBeenCalledWith({ ok: true });
-        // Answered synchronously. Returning true would leave a promise-form
-        // sendMessage in the Gmail tab pending forever.
-        expect(held).toBe(false);
     });
 
-    test('falls back to a new tab where openOptionsPage is unavailable', () => {
+    test('falls back to a new tab where openOptionsPage is unavailable', async () => {
         (global as any).chrome.runtime.openOptionsPage = undefined;
         (global as any).chrome.runtime.getURL = (p: string) => `chrome-extension://id/${p}`;
         const sendResponse = jest.fn();
 
         messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse);
+        await flush();
 
         expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'chrome-extension://id/options.html' });
         expect(sendResponse).toHaveBeenCalledWith({ ok: true });
     });
 
-    test('reports a failure rather than throwing at the sender', () => {
+    test('reports a thrown failure rather than throwing at the sender', async () => {
         (global as any).chrome.runtime.openOptionsPage = () => {
             throw new Error('nope');
         };
         const sendResponse = jest.fn();
 
         expect(() => messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse)).not.toThrow();
+        await flush();
         expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: 'nope' });
+    });
+
+    test('reports a rejected open, which the old synchronous try/catch called success', async () => {
+        // This is the regression the async rewrite exists for. chrome.tabs
+        // and chrome.runtime reject their promises; they do not throw. The
+        // handler used to sendResponse({ ok: true }) alongside a rejection
+        // nobody was holding, so a failed open reported success and left an
+        // unhandled rejection in the worker.
+        (global as any).chrome.runtime.openOptionsPage = jest.fn().mockRejectedValue(new Error('no window'));
+        const sendResponse = jest.fn();
+
+        messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse);
+        await flush();
+
+        expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: 'no window' });
     });
 });
 

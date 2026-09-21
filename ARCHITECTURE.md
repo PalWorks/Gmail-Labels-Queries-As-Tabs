@@ -29,7 +29,7 @@ Gmail-Labels-As-Tabs/
 ├── generate_icons.py          # Utility to generate icon sizes from source
 │
 ├── src/                       # ★ ALL EXTENSION SOURCE CODE
-│   ├── content.ts             # Orchestrator: injection lifecycle, listeners, wiring (382 lines)
+│   ├── content.ts             # Orchestrator: injection lifecycle, listeners, wiring (416 lines)
 │   ├── background.ts          # Service worker (downloads, install hooks, action click)
 │   ├── xhrInterceptor.ts      # MAIN world script (XHR monkey-patch for unread counts)
 │   ├── options.ts/.html/.css  # Options page: settings, rules, privacy, feedback
@@ -45,7 +45,9 @@ Gmail-Labels-As-Tabs/
 │   │   ├── feedback.ts        # In-product feedback: validation, diagnostics, submit
 │   │   ├── theme.ts           # Theme resolution from Gmail's own rendered theme
 │   │   ├── state.ts           # Encapsulated module state behind accessors
+│   │   ├── extensionContext.ts # ★ Is this content script still attached to the extension?
 │   │   └── modals/            # One file per dialog (edit, delete, pin, import, …)
+│   │       └── contextNotice.ts # The one message a modal shows once orphaned
 │   ├── utils/
 │   │   ├── storage.ts         # ★ chrome.storage wrapper (multi-account) + migrations
 │   │   ├── importExport.ts    # Export / import serialization and validation
@@ -56,7 +58,7 @@ Gmail-Labels-As-Tabs/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 31 suites: one per module, plus four repo-wide guards
+├── test/                      # 32 suites: one per module, plus four repo-wide guards
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -158,7 +160,7 @@ Gmail-Labels-As-Tabs/
 
 ## 5. Core Modules & Relationships
 
-### `content.ts` — The Orchestrator (382 lines)
+### `content.ts` — The Orchestrator (416 lines)
 
 Since v1.2.0 this is a thin coordinator, not a monolith. It owns only what must be
 owned centrally:
@@ -172,6 +174,14 @@ owned centrally:
 
 Everything else lives in `src/modules/`: rendering in `tabs.ts`, counts in `unread.ts`,
 reordering in `dragdrop.ts`, dialogs in `modals/`, theme resolution in `theme.ts`.
+
+One lifecycle fact shapes every surface below it: Chrome does **not** reload a page when
+it updates the extension running in it. The content script keeps running, its DOM stays
+on screen and its buttons stay clickable, while every `chrome.*` call fails. Nothing can
+repair that from inside, so the rule is to notice and say so:
+[extensionContext.ts](src/modules/extensionContext.ts) detects it and
+[modals/contextNotice.ts](src/modules/modals/contextNotice.ts) is the single message
+every modal shows when it happens. See ADR-017.
 
 ### `storage.ts` — Data Layer and the only write path
 
@@ -282,7 +292,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 31 suites, 603 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 32 suites, 626 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -296,6 +306,15 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 - Path alias: `@/` → `src/`
 - Chrome APIs mocked manually (`global.chrome = {...}`)
 - Coverage thresholds enforced in [jest.config.js](jest.config.js): 65% statements, 50% branches, 65% functions, 65% lines
+
+### The gate that is not a test
+
+`npm run lint` is type-aware over `src/` and treats `no-floating-promises` and
+`no-misused-promises` as errors. It is part of the testing strategy because it catches
+what no unit test here caught: a promise whose rejection nobody holds, which renders as
+a control that does nothing and says nothing. Every user-visible bug fixed in 1.5.0 was
+one; enabling the rules found twenty-five more. The tests covering the broken
+options-page link *passed*, because they mocked the call that was failing. See ADR-017.
 
 ### Known gaps
 

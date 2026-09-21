@@ -430,7 +430,7 @@ npx jest test/modals/
 | Welcome | `welcome.test.ts` | Onboarding page logic |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 31 test files, 603 test cases.**
+**Total: 32 test files, 626 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -458,7 +458,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 603 tests across 31 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 626 tests across 32 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -601,7 +601,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (603 tests across 31 suites)
+npm test          # Jest (626 tests across 32 suites)
 npm run build     # Verify production build
 ```
 

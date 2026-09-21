@@ -8,6 +8,8 @@
 import { getSettings, getAllAccounts } from '../../utils/storage';
 import { buildExportPayload, generateExportFilename, triggerDownload } from '../../utils/importExport';
 import { getUserEmail } from '../state';
+import { isExtensionContextAlive, isContextInvalidatedError, catchChromeError } from '../extensionContext';
+import { renderContextInvalidatedNotice } from './contextNotice';
 
 export function showUninstallModal(): void {
     const modal = document.createElement('div');
@@ -52,21 +54,58 @@ export function showUninstallModal(): void {
         if (e.target === modal) close();
     });
 
-    modal.querySelector('#uninstall-yes-btn')?.addEventListener('click', async () => {
+    /**
+     * Ask the worker to uninstall, and say so if the request cannot leave.
+     *
+     * Until v1.5.0 this was a bare `sendMessage` whose promise nobody held.
+     * In an orphaned tab the click removed the dialog and nothing else
+     * happened, which reads exactly like an uninstall that worked. The modal
+     * now stays put unless the request actually went out.
+     */
+    const requestUninstall = (): void => {
+        console.log('Gmail Tabs: Requesting uninstall...');
+
+        if (!isExtensionContextAlive()) {
+            showDeadContextNotice();
+            return;
+        }
+
+        const report = (e: unknown): void => {
+            if (isContextInvalidatedError(e)) {
+                showDeadContextNotice();
+                return;
+            }
+            console.error('Gmail Tabs: the uninstall request failed', e);
+        };
+
         try {
-            await exportAllAccounts();
-            uninstallExtension();
+            catchChromeError(chrome.runtime.sendMessage({ action: 'UNINSTALL_SELF' }), report);
         } catch (e) {
-            console.error('Export failed', e);
-            alert('Export failed. Proceeding to uninstall...');
-            uninstallExtension();
+            report(e);
+            return;
         }
         close();
+    };
+
+    function showDeadContextNotice(): void {
+        const content = modal.querySelector('.modal-content');
+        if (content) renderContextInvalidatedNotice(content, close);
+    }
+
+    modal.querySelector('#uninstall-yes-btn')?.addEventListener('click', () => {
+        void (async () => {
+            try {
+                await exportAllAccounts();
+            } catch (e) {
+                console.error('Export failed', e);
+                alert('Export failed. Proceeding to uninstall...');
+            }
+            requestUninstall();
+        })();
     });
 
     modal.querySelector('#uninstall-no-btn')?.addEventListener('click', () => {
-        uninstallExtension();
-        close();
+        requestUninstall();
     });
 }
 
@@ -91,9 +130,4 @@ async function exportAllAccounts(): Promise<void> {
         console.error('Gmail Tabs: Error exporting all accounts', e);
         throw e;
     }
-}
-
-function uninstallExtension(): void {
-    console.log('Gmail Tabs: Requesting uninstall...');
-    chrome.runtime.sendMessage({ action: 'UNINSTALL_SELF' });
 }

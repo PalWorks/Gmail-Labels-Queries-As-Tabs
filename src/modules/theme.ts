@@ -17,6 +17,7 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 export type ResolvedTheme = 'light' | 'dark';
 
 import { MAIN_CONTENT_SELECTOR } from '../utils/selectors';
+import { ignoreChromeError } from './extensionContext';
 
 // Gmail dark mode background colors (and close variants)
 const GMAIL_DARK_BG_COLORS = [
@@ -121,7 +122,10 @@ function parseLuminance(color: string): number | null {
  */
 export function publishDetectedTheme(theme: ResolvedTheme): void {
     try {
-        chrome?.storage?.local?.set({ [DETECTED_GMAIL_THEME_KEY]: theme });
+        // The try/catch alone was not enough: an orphaned context rejects
+        // rather than throws, so the failure this comment claimed to handle
+        // was escaping as an unhandled rejection.
+        ignoreChromeError(chrome?.storage?.local?.set({ [DETECTED_GMAIL_THEME_KEY]: theme }));
     } catch {
         // Storage unavailable (context invalidated, or unit test): ignore.
     }

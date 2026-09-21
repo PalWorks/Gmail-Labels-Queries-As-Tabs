@@ -75,6 +75,17 @@ export interface ManagedTabListDeps {
      */
     enableColorPicker?: boolean;
     listOptions?: TabListOptions;
+    /**
+     * Report a failed remove or reorder.
+     *
+     * The row actions are async but the renderer's callback contract is not,
+     * so nothing in the DOM was ever going to await them. Before v1.5.0 a
+     * rejected storage write left the row on screen with no explanation,
+     * which reads as "the button is broken". Callers pass whatever surface
+     * they have: in Gmail, the orphaned-context notice; on the options page,
+     * a console error.
+     */
+    onError?: (error: unknown) => void;
 }
 
 /** Attach drag-and-drop listeners to each draggable <li> in the list. */
@@ -98,29 +109,45 @@ export function wireTabListDragListeners(listEl: HTMLElement, handlers: ModalDra
 export function renderManagedTabList(deps: ManagedTabListDeps): void {
     const { listEl, tabs, getAccountId, reRender, renderTabBar, enableColorPicker, listOptions } = deps;
 
+    const onError = deps.onError ?? ((error: unknown) => console.error('Tab list action failed', error));
+
+    /**
+     * Run an async row action from a callback the renderer types as `void`.
+     *
+     * The rejection has nowhere to go once the click handler has returned, so
+     * it is caught here rather than escaping as an unhandled rejection that
+     * the user never sees.
+     */
+    const run = (work: () => Promise<void>): void => {
+        work().catch(onError);
+    };
+
     const callbacks: TabListCallbacks = {
-        onRemove: async (tabId) => {
-            const account = getAccountId();
-            if (!account) return;
-            await removeTab(account, tabId);
-            await reRender();
-        },
-        onMoveUp: async (index) => {
-            const account = getAccountId();
-            if (!account || index <= 0) return;
-            const reordered = [...tabs];
-            [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-            await updateTabOrder(account, reordered);
-            await reRender();
-        },
-        onMoveDown: async (index) => {
-            const account = getAccountId();
-            if (!account || index >= tabs.length - 1) return;
-            const reordered = [...tabs];
-            [reordered[index + 1], reordered[index]] = [reordered[index], reordered[index + 1]];
-            await updateTabOrder(account, reordered);
-            await reRender();
-        },
+        onRemove: (tabId) =>
+            run(async () => {
+                const account = getAccountId();
+                if (!account) return;
+                await removeTab(account, tabId);
+                await reRender();
+            }),
+        onMoveUp: (index) =>
+            run(async () => {
+                const account = getAccountId();
+                if (!account || index <= 0) return;
+                const reordered = [...tabs];
+                [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
+                await updateTabOrder(account, reordered);
+                await reRender();
+            }),
+        onMoveDown: (index) =>
+            run(async () => {
+                const account = getAccountId();
+                if (!account || index >= tabs.length - 1) return;
+                const reordered = [...tabs];
+                [reordered[index + 1], reordered[index]] = [reordered[index], reordered[index + 1]];
+                await updateTabOrder(account, reordered);
+                await reRender();
+            }),
     };
 
     if (enableColorPicker) {

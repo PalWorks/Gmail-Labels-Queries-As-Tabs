@@ -4,6 +4,7 @@
  */
 
 import { getGlobalTheme, setGlobalTheme, Theme } from './utils/storage';
+import { catchChromeError } from './modules/extensionContext';
 
 document.addEventListener('DOMContentLoaded', () => {
     const openGmailBtn = document.getElementById('open-gmail-btn');
@@ -24,15 +25,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Load saved theme (browser-wide, shared by all accounts)
-    getGlobalTheme().then((savedTheme) => {
-        applyTheme(savedTheme);
+    getGlobalTheme()
+        .then((savedTheme) => {
+            applyTheme(savedTheme);
 
-        // Update radio button
-        const radioToSelect = document.querySelector(`input[name="theme"][value="${savedTheme}"]`) as HTMLInputElement;
-        if (radioToSelect) {
-            radioToSelect.checked = true;
-        }
-    });
+            // Update radio button
+            const radioToSelect = document.querySelector(
+                `input[name="theme"][value="${savedTheme}"]`
+            ) as HTMLInputElement;
+            if (radioToSelect) {
+                radioToSelect.checked = true;
+            }
+        })
+        .catch((e) => {
+            // The page stays usable on its default theme.
+            console.error('Welcome: could not read the saved theme', e);
+        });
 
     // Listen for changes
     themeRadios.forEach((radio) => {
@@ -42,7 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newTheme = target.value as Theme;
                 applyTheme(newTheme);
                 // Persist to the browser-wide theme so all Gmail tabs pick it up.
-                setGlobalTheme(newTheme);
+                setGlobalTheme(newTheme).catch((e) => {
+                    // The radio already moved, so say the choice did not stick.
+                    console.error('Welcome: could not save the theme', e);
+                    target.checked = false;
+                });
             }
         });
     });
@@ -57,14 +69,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Activate the first one found
                     const tab = tabs[0];
                     if (tab.id) {
-                        chrome.tabs.update(tab.id, { active: true });
-                        chrome.tabs.reload(tab.id);
+                        const report = (e: unknown): void =>
+                            console.error('Welcome: could not switch to the Gmail tab', e);
+                        catchChromeError(chrome.tabs.update(tab.id, { active: true }), report);
+                        catchChromeError(chrome.tabs.reload(tab.id), report);
                         // Optional: Close the welcome tab if you want, but keeping it open is fine too
                         // window.close();
                     }
                 } else {
                     // No tab found, open a new one
-                    chrome.tabs.create({ url: 'https://mail.google.com/' });
+                    catchChromeError(chrome.tabs.create({ url: 'https://mail.google.com/' }), (e) =>
+                        console.error('Welcome: could not open Gmail', e)
+                    );
                 }
             });
         });

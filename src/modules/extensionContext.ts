@@ -42,3 +42,34 @@ export function isContextInvalidatedError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error ?? '');
     return /extension context invalidated|context invalidated|receiving end does not exist/i.test(message);
 }
+
+/**
+ * Attach a rejection handler to a `chrome.*` call that may or may not hand
+ * back a promise.
+ *
+ * MV3 returns one whenever the callback argument is omitted, so every such
+ * call is a rejection waiting to be dropped on the floor. Two things stop us
+ * writing `.catch()` directly at each site: the callback form returns
+ * `undefined`, and so do the test doubles, and `undefined.catch` is a
+ * TypeError that would take down the very caller the handler was added to
+ * protect.
+ *
+ * Use this for fire-and-forget calls. Where the result matters, await it.
+ */
+export function catchChromeError(result: unknown, handler: (error: unknown) => void): void {
+    if (typeof (result as Promise<unknown> | undefined)?.catch === 'function') {
+        void (result as Promise<unknown>).catch(handler);
+    }
+}
+
+/**
+ * Fire-and-forget a `chrome.*` call whose failure is genuinely not worth
+ * reporting: best-effort cleanup, or a cache write that the next read will
+ * redo anyway. Named so that "we deliberately ignore this" is visible at the
+ * call site, rather than looking like an oversight the linter missed.
+ */
+export function ignoreChromeError(result: unknown): void {
+    catchChromeError(result, () => {
+        /* deliberately ignored: see the call site's comment */
+    });
+}

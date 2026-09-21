@@ -83,6 +83,24 @@ Orientation reading order for a new agent:
     `gh workflow run ci.yml --ref main`, and editing the privacy policy changes nothing a
     visitor sees until you run that repository's deploy.
 
+13. **Never drop a promise.** `@typescript-eslint/no-floating-promises` and
+    `no-misused-promises` are errors over `src/`, and a guard asserts they stay errors.
+    Every user-visible bug fixed in 1.5.0 was one dropped rejection, reported months
+    apart as four unrelated defects. For a `chrome.*` call that is genuinely
+    fire-and-forget, say so at the call site with `catchChromeError` (log it) or
+    `ignoreChromeError` (do not), both from
+    [src/modules/extensionContext.ts](src/modules/extensionContext.ts); a bare `void` is
+    only for a function that already reports its own failure, and needs a comment saying
+    which. A `try`/`catch` around a `chrome.*` call is **not** enough: MV3 rejects, it
+    does not throw, so the catch never fires. See ADR-017.
+
+14. **An orphaned tab must say so, not fail quietly.** Any in-Gmail control that reaches
+    `chrome.*` checks `isExtensionContextAlive()` first, and treats a rejection matching
+    `isContextInvalidatedError()` by rendering
+    [contextNotice.ts](src/modules/modals/contextNotice.ts). Anything else is a real bug
+    and is logged as one: telling someone to reload when reloading will not help is worse
+    than saying nothing.
+
 ## Coding conventions
 
 - TypeScript, ES2022, strict. Two-space indentation, single quotes, semicolons
@@ -110,7 +128,8 @@ npx jest                  # all suites pass
 npx jest --runInBand      # passes serially too; both flakes this suite has had
                           # only appeared when timing shifted
 npx jest --coverage       # meets thresholds in jest.config.js
-npm run lint              # 0 errors (warnings tolerated)
+npm run lint              # 0 errors (warnings tolerated). Type-aware over src/, so it
+                          # is slower than it used to be and catches dropped promises
 npm run build             # succeeds; then confirm no console.log in dist/js
 ```
 

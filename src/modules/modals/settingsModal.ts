@@ -13,7 +13,8 @@ import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl
 import { getRenderCallback } from './index';
 import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
-import { isExtensionContextAlive, isContextInvalidatedError } from '../extensionContext';
+import { isExtensionContextAlive, isContextInvalidatedError, catchChromeError } from '../extensionContext';
+import { renderContextInvalidatedNotice } from './contextNotice';
 
 /** Asks the service worker to open the options page. See `openOptionsPage`. */
 export const OPEN_OPTIONS_PAGE_ACTION = 'OPEN_OPTIONS_PAGE';
@@ -60,12 +61,20 @@ function openOptionsPage(): void {
         return;
     }
     try {
-        void chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION })?.catch?.((e: unknown) => {
-            // The context can die between the check above and the reply.
-            if (isContextInvalidatedError(e)) showContextInvalidatedNotice();
+        // The context can die between the check above and the reply.
+        catchChromeError(chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION }), (e) => {
+            if (isContextInvalidatedError(e)) {
+                showContextInvalidatedNotice();
+                return;
+            }
+            console.error('Gmail Tabs: could not ask the extension to open the options page', e);
         });
     } catch (e: unknown) {
-        if (isContextInvalidatedError(e)) showContextInvalidatedNotice();
+        if (isContextInvalidatedError(e)) {
+            showContextInvalidatedNotice();
+            return;
+        }
+        console.error('Gmail Tabs: could not ask the extension to open the options page', e);
     }
 }
 
@@ -80,25 +89,8 @@ function showContextInvalidatedNotice(close?: () => void): void {
     const modal = document.getElementById(MODAL_ID);
     if (!modal) return;
     const content = modal.querySelector('.modal-content');
-    if (!content || content.querySelector('#modal-reload-page')) return;
-
-    content.innerHTML = `
-        <div class="modal-header">
-            <h3>Reload Gmail to continue</h3>
-            <div class="modal-header-actions">
-                <button type="button" class="close-btn" aria-label="Close settings">✕</button>
-            </div>
-        </div>
-        <div class="modal-body">
-            <p class="context-invalidated-message">This tab is still running an older copy of the
-            extension, because the extension was updated or reloaded while the tab was open.
-            Nothing here can save changes until the page is reloaded.</p>
-            <p class="context-invalidated-message">Your tabs, rules and settings are untouched.</p>
-            <button type="button" id="modal-reload-page" class="primary-btn">Reload Gmail</button>
-        </div>
-    `;
-    content.querySelector('#modal-reload-page')?.addEventListener('click', () => location.reload());
-    content.querySelector('.close-btn')?.addEventListener('click', () => (close ? close() : modal.remove()));
+    if (!content) return;
+    renderContextInvalidatedNotice(content, () => (close ? close() : modal.remove()));
 }
 
 /**
@@ -115,13 +107,16 @@ function showContextInvalidatedNotice(close?: () => void): void {
  * not help is worse than saying nothing.
  */
 function guardedAction(work: Promise<unknown>): void {
-    void work.catch((e: unknown) => {
-        if (isContextInvalidatedError(e)) {
-            showContextInvalidatedNotice();
-            return;
-        }
-        console.error('Gmail Tabs: a settings action failed', e);
-    });
+    void work.catch(reportActionFailure);
+}
+
+/** The rejection half of `guardedAction`, for callers that already have a handler slot. */
+function reportActionFailure(e: unknown): void {
+    if (isContextInvalidatedError(e)) {
+        showContextInvalidatedNotice();
+        return;
+    }
+    console.error('Gmail Tabs: a settings action failed', e);
 }
 
 function createSettingsModal(): void {
@@ -318,6 +313,10 @@ function createSettingsModal(): void {
                 setAppSettings(await getSettings(getUserEmail()!));
                 getRenderCallback()();
             },
+            // Remove and reorder run through the same guard as every other
+            // control here, so an orphaned tab says so rather than leaving
+            // the row on screen as if the button were broken.
+            onError: reportActionFailure,
         });
     }
 
@@ -364,7 +363,7 @@ function createSettingsModal(): void {
             input.classList.remove('input-error');
             errorMsg.style.display = 'none';
 
-            refreshList();
+            await refreshList();
             setAppSettings(await getSettings(getUserEmail()!));
             getRenderCallback()();
 
@@ -379,7 +378,7 @@ function createSettingsModal(): void {
         }
     }
 
-    refreshList();
+    guardedAction(refreshList());
 
     // Theme Selector Logic
     const themeBtns = modal.querySelectorAll('.theme-btn');

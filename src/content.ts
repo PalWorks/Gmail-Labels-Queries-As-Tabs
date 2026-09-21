@@ -233,17 +233,21 @@ async function initializeFromDOM(): Promise<void> {
         }
     } else {
         console.log('Gmail Tabs: Email not found yet, polling DOM...');
-        const accountPoller = setInterval(async () => {
+        // An async interval callback has nowhere to reject to, so it catches
+        // its own failure. Without this, a storage error during the polling
+        // path lost the tab bar in silence while the immediate path above
+        // reported the identical failure.
+        const accountPoller = setInterval(() => {
             email = extractEmailFromDOM();
-            if (email) {
-                console.log('Gmail Tabs: Account detected via polling:', email);
-                clearInterval(accountPoller);
-                if (!getUserEmail()) {
-                    setUserEmail(email);
-                    initPromise = initPromise || finalizeInit(email);
-                    await initPromise;
-                }
-            }
+            if (!email) return;
+            console.log('Gmail Tabs: Account detected via polling:', email);
+            clearInterval(accountPoller);
+            if (getUserEmail()) return;
+            setUserEmail(email);
+            initPromise = initPromise || finalizeInit(email);
+            initPromise.catch((err) => {
+                console.error('Gmail Tabs: account initialization failed after polling', err);
+            });
         }, 1000);
 
         setTimeout(() => clearInterval(accountPoller), 60000);
@@ -321,8 +325,15 @@ async function init(): Promise<void> {
     console.log('Gmail Tabs: Initializing...');
     injectPageWorld();
 
-    initializeFromDOM();
-    loadInboxSDK();
+    // Deliberately not awaited: injection and the observer must start while
+    // account detection is still polling. Not awaited is not unwatched,
+    // though. A rejection here means no tab bar ever appears, which was
+    // previously indistinguishable from Gmail simply being slow.
+    initializeFromDOM().catch((err) => {
+        console.error('Gmail Tabs: account initialization failed; the tab bar will not appear', err);
+    });
+    // Cannot reject: it swallows everything itself. See its doc comment.
+    void loadInboxSDK();
 
     attemptInjection();
     startObserver();
@@ -392,10 +403,14 @@ async function init(): Promise<void> {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        init();
+function bootstrap(): void {
+    init().catch((err) => {
+        console.error('Gmail Tabs: initialization failed', err);
     });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrap);
 } else {
-    init();
+    bootstrap();
 }

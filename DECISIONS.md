@@ -298,3 +298,55 @@ The website deploys only on manual dispatch, so a change to the policy is not li
 someone runs it. That is stated in that repository's README beside the policy itself, and
 in [PLAYBOOK.md](PLAYBOOK.md) as a numbered step in cutting a release, because "edited but
 not deployed" is a worse state than "never edited".
+
+## ADR-017: Unhandled promise rejections are a build failure
+
+**Decision.** Enable `@typescript-eslint/no-floating-promises` and `no-misused-promises`
+as **errors** over `src/`, with type-aware linting turned on for that override in
+[.eslintrc.json](.eslintrc.json). Every `chrome.*` call that is genuinely
+fire-and-forget states so at the call site through `catchChromeError` or
+`ignoreChromeError` in [src/modules/extensionContext.ts](src/modules/extensionContext.ts).
+
+**Context.** Four user-visible bugs were fixed in the run-up to 1.5.0. They read as four
+unrelated defects and were found weeks apart by a person clicking things:
+
+| Symptom | Actual cause |
+|---|---|
+| "Manage all accounts" did nothing, since v1.2.1 | A blocked navigation whose rejection nobody held |
+| A theme click in an old tab did nothing | A rejected storage write in an orphaned context |
+| Uninstall closed its dialog and did not uninstall | `sendMessage` into a dead context, promise dropped |
+| The options page never opened from Gmail | The same, one layer down |
+
+They are one bug. A promise rejected, no handler existed, and the only trace was a console
+entry in a tab nobody had open. The common repair — add a `.catch` where the bug was
+reported — fixes the instance and leaves the class, which is why the same defect kept
+arriving wearing different clothes.
+
+Turning the rule on found **25 more** in a single pass, across the service worker, the
+options page, the welcome page, the content script and two modals. That ratio is the
+argument: manual review had caught four in four months, and the compiler caught
+twenty-five in one command.
+
+`no-misused-promises` is included because three of the twenty-five were not floating at
+all. They were `async` functions assigned to a callback the renderer types as
+`() => void`: delete and reorder in the managed tab list, where a rejected storage write
+left the row on screen with nothing said.
+
+**Consequences.** Linting `src/` now needs type information, so `npm run lint` is slower.
+That cost is paid once per run and bounded; the alternative was paying it per release in
+user-reported silent failures.
+
+A rule that reports nothing is indistinguishable from a rule that is absent, so
+[test/repoConsistency.test.ts](test/repoConsistency.test.ts) asserts the override still
+exists, still carries `parserOptions.project`, and is still set to `error` rather than
+`warn` — `npm run lint` is gated on zero **errors** and tolerates warnings, so a
+downgrade would have retired the guard without failing anything.
+
+Three call sites are marked `void` with a comment, not given a handler, because the
+function already reports its own failure to the user: `loadInboxSDK`, `loadSettings` and
+`applyTemplate`. `void` here means "audited", not "ignored".
+
+The linter cannot see two shapes, so they were fixed by hand and are called out in the
+code: an `async` callback passed to `setInterval` (the account poller in
+[src/content.ts](src/content.ts)), which has nowhere to reject to, and a `.then()` chain
+whose rejection is handled by its eventual caller rather than in place.

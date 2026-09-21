@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 31 suites, 603 tests as of v1.5.0.
+- 32 suites, 626 tests as of v1.5.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, onboarding, modals, drag-and-drop, state
@@ -67,6 +67,7 @@ test.
 | ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
+| ... also: the floating-promise lint rules are removed, downgraded to a warning, or lose their type information | A rule that reports nothing looks exactly like a rule that is absent. `npm run lint` tolerates warnings, so "warn" would have retired the guard silently. See ADR-017 |
 
 Each guard is mutation tested: it contains a case proving it still rejects what it is
 supposed to reject. A guard that cannot fail is worse than no guard, because it reads like
@@ -81,6 +82,19 @@ coverage.
 
 The second one couples a green build to an external site being up. That is the intended
 trade: an extension whose declared privacy policy cannot be produced should not ship.
+
+### The gate that is not a test at all
+
+`npm run lint` is type-aware over `src/` and treats
+`@typescript-eslint/no-floating-promises` and `no-misused-promises` as errors. It is
+listed here because it catches a class of defect no unit test in this repository ever
+did: a promise whose rejection nobody holds, which produces a control that does nothing
+and says nothing.
+
+Every user-visible bug fixed in 1.5.0 was an instance. Turning the rules on found
+twenty-five more in one pass. Writing a test per instance would not have helped; the
+tests that existed for the broken options-page link passed, because they mocked the call
+that was failing. See ADR-017.
 
 ### Concurrency
 
