@@ -79,6 +79,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.action === 'OPEN_OPTIONS_PAGE') {
+        // A content script cannot open this itself. `options.html` is not in
+        // `web_accessible_resources`, so a navigation whose initiator is
+        // mail.google.com is refused with ERR_BLOCKED_BY_CLIENT, which is how
+        // the "Manage all accounts" link silently did nothing from v1.2.1 to
+        // v1.5.0. Listing the page would fix the symptom by letting any script
+        // on Gmail reach the settings UI, so the worker opens it instead.
+        try {
+            if (chrome.runtime.openOptionsPage) {
+                // Focuses an already-open options tab rather than duplicating it.
+                chrome.runtime.openOptionsPage();
+            } else {
+                chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+            }
+            sendResponse({ ok: true });
+        } catch (e: unknown) {
+            console.error('Background: could not open the options page:', e);
+            sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+        // Answered synchronously; do not hold the channel open.
+        return false;
+    }
+
     if (message.action === 'UNINSTALL_SELF') {
         console.log('Background: Received UNINSTALL_SELF request');
         if (chrome.management && chrome.management.uninstallSelf) {

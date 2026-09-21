@@ -534,3 +534,82 @@ describe('links point at the marketing site that still exists', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// A content script may only reach extension resources that are web-accessible
+// ---------------------------------------------------------------------------
+
+/**
+ * The content script runs in Gmail, so any navigation it starts has
+ * `https://mail.google.com` as its initiator. Chrome refuses such a
+ * navigation to a `chrome-extension://` URL unless that exact path is in
+ * `web_accessible_resources`, and the refusal is silent to the page:
+ * ERR_BLOCKED_BY_CLIENT in a tab nobody is watching.
+ *
+ * That is how the "Manage all accounts" link did nothing at all from v1.2.1
+ * to v1.5.0. It called `window.open(chrome.runtime.getURL('options.html'))`,
+ * every test mocked `window.open`, and the failure only became visible when
+ * somebody clicked it in a real browser.
+ *
+ * Adding `options.html` to `web_accessible_resources` would fix the symptom
+ * and create a worse problem, because any script on the Gmail page could then
+ * frame or probe the settings UI. So the rule is the other way round: code
+ * bundled into the content script may only name a resource that is already
+ * web-accessible, and anything else goes through the service worker.
+ */
+describe('content script only reaches web-accessible resources', () => {
+    /** Everything esbuild bundles into `dist/js/content.js`. */
+    const CONTENT_SCRIPT_SOURCES = [
+        path.join(ROOT, 'src', 'content.ts'),
+        ...walk(path.join(ROOT, 'src', 'modules'), (n) => n.endsWith('.ts')),
+    ];
+
+    function webAccessiblePaths(): Set<string> {
+        const manifest = JSON.parse(read('manifest.json'));
+        const out = new Set<string>();
+        for (const entry of manifest.web_accessible_resources ?? []) {
+            for (const resource of entry.resources ?? []) out.add(resource);
+        }
+        return out;
+    }
+
+    /** Every literal path passed to `chrome.runtime.getURL` in a file. */
+    function requestedResources(source: string): string[] {
+        return [...source.matchAll(/chrome\.runtime\.getURL\(\s*['"`]([^'"`]+)['"`]/g)].map((m) => m[1]);
+    }
+
+    test('the manifest declares at least one web-accessible resource', () => {
+        // Otherwise every assertion below passes for the wrong reason.
+        expect(webAccessiblePaths().size).toBeGreaterThan(0);
+    });
+
+    test('every resource the content script asks for is web-accessible', () => {
+        const accessible = webAccessiblePaths();
+        const offenders: string[] = [];
+        for (const file of CONTENT_SCRIPT_SOURCES) {
+            for (const resource of requestedResources(fs.readFileSync(file, 'utf8'))) {
+                if (!accessible.has(resource)) {
+                    offenders.push(`${path.relative(ROOT, file)} -> ${resource}`);
+                }
+            }
+        }
+        if (offenders.length > 0) {
+            throw new Error(
+                'The content script names an extension resource that is not in ' +
+                    'web_accessible_resources, so Chrome will block it silently:\n' +
+                    offenders.map((o) => `  ${o}`).join('\n') +
+                    '\n\nAsk the service worker to do it instead. Do not widen ' +
+                    'web_accessible_resources to make this pass.'
+            );
+        }
+    });
+
+    test('the detector catches a resource that is not declared', () => {
+        // Mutation check: options.html is the real historical case.
+        const accessible = webAccessiblePaths();
+        expect(requestedResources("window.open(chrome.runtime.getURL('options.html'))")).toEqual([
+            'options.html',
+        ]);
+        expect(accessible.has('options.html')).toBe(false);
+    });
+});

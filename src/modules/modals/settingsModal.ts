@@ -14,6 +14,9 @@ import { getRenderCallback } from './index';
 import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
 
+/** Asks the service worker to open the options page. See `openOptionsPage`. */
+export const OPEN_OPTIONS_PAGE_ACTION = 'OPEN_OPTIONS_PAGE';
+
 /** Contact route on the marketing site (PalWorks/Gmail-Labels-As-Tabs). */
 export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact';
 
@@ -31,17 +34,30 @@ export function toggleSettingsModal(): void {
 }
 
 /**
- * Open the extension's own options page in a new tab.
+ * Open the extension's own options page.
  *
- * Reached from two places in this modal, so it lives here rather than being
- * written twice. `chrome.runtime.getURL` throws once the extension context is
- * invalidated, which happens on every reload during development and on an
- * update in the wild, and there is nothing useful to do about it from a page
- * that is already orphaned.
+ * This asks the service worker to do it, and that indirection is the whole
+ * point. Until v1.5.0 this code ran `window.open(chrome.runtime.getURL(...))`
+ * straight from the content script, and Chrome blocked every attempt with
+ * ERR_BLOCKED_BY_CLIENT: the navigation's initiator is `mail.google.com`, and
+ * a web origin may only reach an extension resource listed in
+ * `web_accessible_resources`. `options.html` is deliberately not listed, and
+ * should not be, because listing it would let any script on the Gmail page
+ * frame or probe the settings UI.
+ *
+ * The worker has no such restriction. `chrome.runtime.openOptionsPage()` also
+ * focuses an options tab that is already open instead of piling up duplicates.
+ *
+ * `chrome.runtime.sendMessage` throws once the extension context is
+ * invalidated, which happens on every reload in development and on an update
+ * in the wild. Nothing useful can be done about that from a page that is
+ * already orphaned.
  */
 function openOptionsPage(): void {
     try {
-        window.open(chrome.runtime.getURL('options.html'), '_blank');
+        void chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION })?.catch?.(() => {
+            /* worker asleep or context gone; nothing to recover */
+        });
     } catch {
         /* non-fatal: extension context may be unavailable */
     }

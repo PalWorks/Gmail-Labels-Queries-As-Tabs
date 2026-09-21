@@ -21,6 +21,16 @@ coming back. One small addition, in the modal people actually use.
 
 ### Fixed
 
+- **"Manage all accounts" never worked.** From v1.2.1 until now, the link in the settings
+  modal's footer did nothing at all: it called
+  `window.open(chrome.runtime.getURL('options.html'))` from the content script, and Chrome
+  refuses that with `ERR_BLOCKED_BY_CLIENT`, because the navigation's initiator is
+  `mail.google.com` and `options.html` is not in `web_accessible_resources`. Every test
+  mocked `window.open`, so the suite proved only that the right URL was computed. Both
+  routes to the options page now ask the service worker, which has no such restriction and
+  focuses an already-open options tab instead of piling up duplicates. `options.html` was
+  deliberately **not** added to `web_accessible_resources`: that would fix the symptom by
+  letting any script on the Gmail page reach the settings UI.
 - **The help control in the modal footer was a `<div>`**, so it was unreachable by keyboard
   and announced as nothing: its icon is an `<svg>` with no text and its only description
   was a `title` attribute. It is a `<button>` with an `aria-label` now, as is the new header
@@ -116,6 +126,10 @@ coming back. One small addition, in the modal people actually use.
   from SECURITY.md, the in-extension privacy page or STORE_LISTING.md. The uninstall URL went
   four versions undisclosed; a promise not to repeat that is worth less than a failing test
   ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
+- A guard that fails when anything bundled into the content script names a
+  `chrome.runtime.getURL` resource that is not in `web_accessible_resources`. Chrome blocks
+  those navigations silently, which is how the options-page link stayed broken for three
+  releases ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
 - A guard that fails when live documents disagree about how many tests there are. Four of them
   stated four different totals within this release, each correct when written.
 - Guards on the marketing-site links: nothing here may link to the retired Pages address,

@@ -248,6 +248,47 @@ describe('action click handler', () => {
 // Uninstall URL
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// OPEN_OPTIONS_PAGE: the content script cannot do this itself
+// ---------------------------------------------------------------------------
+
+describe('OPEN_OPTIONS_PAGE handler', () => {
+    test('opens the options page and does not hold the channel open', () => {
+        const openOptionsPage = jest.fn();
+        (global as any).chrome.runtime.openOptionsPage = openOptionsPage;
+        const sendResponse = jest.fn();
+
+        const held = messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse);
+
+        expect(openOptionsPage).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+        // Answered synchronously. Returning true would leave a promise-form
+        // sendMessage in the Gmail tab pending forever.
+        expect(held).toBe(false);
+    });
+
+    test('falls back to a new tab where openOptionsPage is unavailable', () => {
+        (global as any).chrome.runtime.openOptionsPage = undefined;
+        (global as any).chrome.runtime.getURL = (p: string) => `chrome-extension://id/${p}`;
+        const sendResponse = jest.fn();
+
+        messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse);
+
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'chrome-extension://id/options.html' });
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+    });
+
+    test('reports a failure rather than throwing at the sender', () => {
+        (global as any).chrome.runtime.openOptionsPage = () => {
+            throw new Error('nope');
+        };
+        const sendResponse = jest.fn();
+
+        expect(() => messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE' }, {}, sendResponse)).not.toThrow();
+        expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: 'nope' });
+    });
+});
+
 describe('uninstall URL', () => {
     test('is set, so uninstalling can ask why', () => {
         expect(mockSetUninstallURL).toHaveBeenCalledTimes(1);

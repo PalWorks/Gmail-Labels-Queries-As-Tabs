@@ -221,40 +221,52 @@ describe('settings modal behavior', () => {
         expect(mockSavePreferences).toHaveBeenCalledWith('user@gmail.com', { showUnreadCount: true });
     });
 
-    test('Manage all accounts link opens the options page', () => {
-        (global as any).chrome = { runtime: { getURL: (p: string) => `chrome-extension://id/${p}` } };
-        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    /**
+     * Both routes to the options page go through the service worker. Opening
+     * it from the content script with `window.open` is refused by Chrome with
+     * ERR_BLOCKED_BY_CLIENT, because the navigation's initiator is
+     * mail.google.com and `options.html` is not web-accessible. That is how
+     * "Manage all accounts" did nothing at all from v1.2.1 to v1.5.0.
+     */
+    describe.each([
+        ['Manage all accounts link', '#modal-manage-accounts'],
+        ['header button', '#modal-open-options'],
+    ])('%s', (_name, selector) => {
+        test('asks the service worker to open the options page', () => {
+            const sendMessage = jest.fn().mockResolvedValue({ ok: true });
+            (global as any).chrome = { runtime: { sendMessage } };
+            const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
 
-        toggleSettingsModal();
-        (document.querySelector('#modal-manage-accounts') as HTMLElement).click();
+            toggleSettingsModal();
+            (document.querySelector(selector) as HTMLElement).click();
 
-        expect(openSpy).toHaveBeenCalledWith('chrome-extension://id/options.html', '_blank');
-        openSpy.mockRestore();
-    });
+            expect(sendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE' });
+            // Never directly: Chrome blocks it from a content script.
+            expect(openSpy).not.toHaveBeenCalled();
+            openSpy.mockRestore();
+        });
 
-    test('the header button opens the options page too', () => {
-        (global as any).chrome = { runtime: { getURL: (p: string) => `chrome-extension://id/${p}` } };
-        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
-
-        toggleSettingsModal();
-        (document.querySelector('#modal-open-options') as HTMLElement).click();
-
-        expect(openSpy).toHaveBeenCalledWith('chrome-extension://id/options.html', '_blank');
-        openSpy.mockRestore();
-    });
-
-    test('the header button survives an invalidated extension context', () => {
-        // getURL throws once the extension reloads under a still-open Gmail
-        // tab. The modal must not take the page down with it.
-        (global as any).chrome = {
-            runtime: {
-                getURL: () => {
-                    throw new Error('Extension context invalidated.');
+        test('survives an invalidated extension context', () => {
+            // sendMessage throws once the extension reloads under a still-open
+            // Gmail tab. The modal must not take the page down with it.
+            (global as any).chrome = {
+                runtime: {
+                    sendMessage: () => {
+                        throw new Error('Extension context invalidated.');
+                    },
                 },
-            },
-        };
-        toggleSettingsModal();
-        expect(() => (document.querySelector('#modal-open-options') as HTMLElement).click()).not.toThrow();
+            };
+            toggleSettingsModal();
+            expect(() => (document.querySelector(selector) as HTMLElement).click()).not.toThrow();
+        });
+
+        test('survives the worker rejecting the message', async () => {
+            const sendMessage = jest.fn().mockRejectedValue(new Error('Receiving end does not exist.'));
+            (global as any).chrome = { runtime: { sendMessage } };
+            toggleSettingsModal();
+            expect(() => (document.querySelector(selector) as HTMLElement).click()).not.toThrow();
+            await Promise.resolve();
+        });
     });
 
     test('every icon-only control in the modal is a focusable button with a label', () => {
