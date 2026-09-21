@@ -35,6 +35,15 @@ jobs:
       - name: Run tests with coverage
         run: npm test -- --coverage
 
+      # A second pass, serially, under a different scheduler. The suite has
+      # had two intermittent failures in its life and both only appeared when
+      # timing shifted: fixed wall-clock sleeps losing a race under coverage,
+      # and a first-test ts-jest compile overrunning the default timeout.
+      # Neither reproduced on a normal parallel run, so one green run is not
+      # evidence of a stable suite.
+      - name: Re-run tests serially to catch order and timing flakes
+        run: npm test -- --runInBand
+
       - name: Lint
         run: npm run lint
 

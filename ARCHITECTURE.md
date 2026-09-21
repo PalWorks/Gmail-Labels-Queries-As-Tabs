@@ -55,7 +55,6 @@ Gmail-Labels-As-Tabs/
 │   ├── ui/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
-│   └── experimental/          # Archived code, excluded from build and coverage
 │
 ├── test/                      # 26 suites, mirroring src/ one file per module
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
@@ -273,7 +272,6 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 >   check, and it is run by hand.
 > - CI runs on manual dispatch only (`gh workflow run ci.yml`), by product-owner decision, so
 >   a push does not verify itself.
-> - `src/experimental/` is excluded from both the build and coverage.
 
 
 ## 9. Extension Points & Safe Modification Guide
@@ -328,7 +326,6 @@ The `website/` directory is completely independent. Edit React components in `we
 |---|---|
 | Website is a separate `package.json` (not a monorepo workspace) | Build/deploy are independent |
 | No automated linting in CI | Only local `npm run lint` |
-| `experimental/` folder exists but is orphaned | Not referenced in build config |
 
 ---
 

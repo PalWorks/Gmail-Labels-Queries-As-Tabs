@@ -14,6 +14,8 @@ export {};
  * project is large-text-only, so there is nothing to relax.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { contrastRatio, parseColor, flatten, readTokens, readCss } from './helpers/contrast';
 
 const AA_NORMAL = 4.5;
@@ -197,5 +199,116 @@ describe('welcome page palette', () => {
 
     test.each(scopes)('%s primary text on cards', (name, tokens) => {
         expectContrast(`${name} primary text`, tokens['--text-primary'], tokens['--card-bg'], AA_NORMAL);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Colours must live in CSS, where the guards above can see them
+// ---------------------------------------------------------------------------
+//
+// Everything above reads .css files. That is the whole weakness: the two
+// defects found on 2026-09-21 were hex values sitting in TypeScript template
+// strings, one at 3.72:1 and one at 2.66:1, and neither guard could see
+// either. The audit script could not either, because it measures whatever
+// happened to be rendered when it ran.
+//
+// So the rule is not "check the colours in TypeScript too". It is that there
+// are no colours in TypeScript.
+
+describe('no colour literals outside the stylesheets', () => {
+    const ROOT = path.join(__dirname, '..');
+
+    /**
+     * Places a colour may legitimately appear outside a stylesheet, each with
+     * the reason. Adding an entry is a deliberate act.
+     */
+    const ALLOWED = new Map<string, string>([
+        [
+            'src/modules/theme.ts',
+            "Gmail's own background colours, sampled to detect its theme. These are " +
+                'values we read, never values we paint.',
+        ],
+    ]);
+
+    function sourceFiles(dir: string, exts: string[]): string[] {
+        return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) return sourceFiles(full, exts);
+            return exts.some((e) => entry.name.endsWith(e)) ? [full] : [];
+        });
+    }
+
+    /**
+     * A hex colour is 3, 4, 6 or 8 hex digits after a `#`. Anything else that
+     * starts with `#` is a Gmail route (`#inbox`), a selector, or an HTML
+     * entity (`&#039;`) — hence the check that `&` does not precede it.
+     */
+    const HEX_COLOR = /(^|[^&\w])(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3}))(?![0-9a-zA-Z_-])/g;
+    const FUNCTIONAL_COLOR = /\b(?:rgba?|hsla?|color-mix|oklch)\s*\(/g;
+
+    function findColors(file: string): string[] {
+        const text = fs.readFileSync(file, 'utf8');
+        const hits: string[] = [];
+        for (const m of text.matchAll(HEX_COLOR)) hits.push(m[2]);
+        for (const m of text.matchAll(FUNCTIONAL_COLOR)) hits.push(m[0]);
+        return hits;
+    }
+
+    const files = [...sourceFiles(path.join(ROOT, 'src'), ['.ts']), ...sourceFiles(path.join(ROOT, 'src'), ['.html'])];
+
+    test('scans the files it claims to scan', () => {
+        const rel = files.map((f) => path.relative(ROOT, f));
+        expect(rel).toContain('src/options.ts');
+        expect(rel).toContain('src/options.html');
+        expect(rel).toContain('src/modules/modals/settingsModal.ts');
+        expect(rel.length).toBeGreaterThan(20);
+    });
+
+    test('no .ts or .html file paints a colour of its own', () => {
+        const offenders = files
+            .map((file) => ({ rel: path.relative(ROOT, file), colors: findColors(file) }))
+            .filter(({ rel, colors }) => colors.length > 0 && !ALLOWED.has(rel));
+
+        if (offenders.length > 0) {
+            const detail = offenders.map((o) => `  ${o.rel}: ${[...new Set(o.colors)].join(', ')}`).join('\n');
+            throw new Error(
+                `Colour literals outside the stylesheets:\n${detail}\n\n` +
+                    'Move the value into a CSS token so the contrast guards can see it, ' +
+                    'or add the file to ALLOWED in this test with a reason.'
+            );
+        }
+    });
+
+    test('every allowlisted file still contains the colours it was allowed for', () => {
+        // A stale allowlist is a hole. If the reason has gone, the entry must too.
+        for (const rel of ALLOWED.keys()) {
+            const full = path.join(ROOT, rel);
+            expect(fs.existsSync(full)).toBe(true);
+            expect(findColors(full).length).toBeGreaterThan(0);
+        }
+    });
+
+    test('the scanner actually recognises a colour', () => {
+        // Mutation check: without this, the test above passes on a broken regex.
+        const tmp = path.join(__dirname, '__color_probe.ts');
+        fs.writeFileSync(tmp, "const a = '#718096';\nconst b = 'rgba(1,2,3,0.5)';\nconst c = '#abc';\n");
+        try {
+            expect(findColors(tmp)).toEqual(['#718096', '#abc', 'rgba(']);
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    test('the scanner does not mistake Gmail routes or HTML entities for colours', () => {
+        const tmp = path.join(__dirname, '__color_probe_ok.ts');
+        fs.writeFileSync(
+            tmp,
+            "const a = '#inbox';\nconst b = '#label/Work';\nconst c = '&#039;';\nconst d = '#search/is:unread';\nconst e = `section-${'x'}`;\n"
+        );
+        try {
+            expect(findColors(tmp)).toEqual([]);
+        } finally {
+            fs.unlinkSync(tmp);
+        }
     });
 });

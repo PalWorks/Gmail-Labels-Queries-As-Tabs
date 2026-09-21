@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-21 (v1.4.0)
+Last updated: 2026-09-21 (v1.5.0)
 
 ## Documentation index
 
@@ -48,7 +48,14 @@ Last updated: 2026-09-21 (v1.4.0)
 | Shared accessible color swatch picker | [src/modules/colorPicker.ts](src/modules/colorPicker.ts) |
 | One-click automation rule presets (feature-flagged) | [src/modules/ruleTemplates.ts](src/modules/ruleTemplates.ts) |
 | In-product feedback: validation, diagnostics, submit | [src/modules/feedback.ts](src/modules/feedback.ts) |
-| Modal dialogs (one file per dialog) | [src/modules/modals/](src/modules/modals/) |
+| Shared tab list rendering + HTML escaping | [src/utils/tabListRenderer.ts](src/utils/tabListRenderer.ts) |
+| Modal dialogs: barrel export | [src/modules/modals/index.ts](src/modules/modals/index.ts) |
+| Modal: in-Gmail settings overlay | [src/modules/modals/settingsModal.ts](src/modules/modals/settingsModal.ts) |
+| Modal: edit a tab's title, value and colour | [src/modules/modals/editModal.ts](src/modules/modals/editModal.ts) |
+| Modal: confirm removing a tab | [src/modules/modals/deleteModal.ts](src/modules/modals/deleteModal.ts) |
+| Modal: pin the current Gmail view as a tab | [src/modules/modals/pinModal.ts](src/modules/modals/pinModal.ts) |
+| Modal: import a config file | [src/modules/modals/importModal.ts](src/modules/modals/importModal.ts) |
+| Modal: uninstall confirmation | [src/modules/modals/uninstallModal.ts](src/modules/modals/uninstallModal.ts) |
 | In-Gmail toolbar + modal styles | [src/ui/toolbar.css](src/ui/toolbar.css) |
 | Options page styles | [src/options.css](src/options.css) |
 | Onboarding page styles | [src/welcome.css](src/welcome.css) |

@@ -99,13 +99,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
 });
 
-// Set the uninstall URL on startup/install
-const FEEDBACK_URL = 'https://tally.so/r/D4BBRR?transparentBackground=1&formEventsForwarding=1';
-if (chrome.runtime.setUninstallURL) {
-    chrome.runtime.setUninstallURL(FEEDBACK_URL, () => {
-        console.log('Background: Uninstall URL set to', FEEDBACK_URL);
-    });
-}
+// No uninstall URL.
+//
+// Until v1.5.0 this set one, pointing at a third-party form, so uninstalling
+// opened that form in a new tab and told a company we have no relationship
+// with that someone had just removed this extension. It was disclosed
+// nowhere: not in SECURITY.md, not on the privacy page, not in the store
+// listing, and not in the Web Store data declaration.
+//
+// It is gone rather than disclosed. The extension now carries its own
+// feedback form (Settings -> Support & Feedback), which is a better channel
+// and already documented, and removing this leaves exactly one outbound
+// origin in the whole product: our own relay, contacted only when someone
+// presses Send. That is a privacy story that fits on one line.
+//
+// If uninstall feedback is ever wanted again, it belongs on our own domain
+// and in the privacy page before the first byte is sent.
 
 chrome.action.onClicked.addListener((tab) => {
     if (tab.id) {

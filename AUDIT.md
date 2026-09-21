@@ -99,7 +99,6 @@ gmail-labels-as-tabs/
 | `src/modules/` | Feature-sliced modules for the content script. Each handles one concern (tabs, modals, theme, etc.). |
 | `src/utils/` | Shared infrastructure. Currently only `storage.ts` for chrome.storage.sync management. |
 | `src/ui/` | CSS files injected into Gmail. `toolbar.css` styles the tab bar and all modal overlays. |
-| `src/experimental/` | Archived/deferred features. Currently contains a commented-out Label Menu Integration. |
 | `test/` | Unit tests using Jest + ts-jest + jsdom. Tests storage CRUD and script generation. |
 | `website/` | Independent React app for the public landing page, deployed to GitHub Pages. Has its own `package.json`. |
 | `.github/workflows/` | Two pipelines: CI (test + build + verify) and website deployment (GitHub Pages). |
@@ -351,7 +350,7 @@ jest.config.js
 |---|---|---|
 | `test/storage.test.ts` | 413 | Multi-account CRUD (addTab, removeTab, updateTab, updateTabOrder), getAllAccounts, legacy migration, import schema validation, Rule CRUD (add, update, remove, duplicate prevention) |
 | `test/rules.test.ts` | 218 | Apps Script generation for all 4 action types, Sheet logging, edge cases (no matching tab, disabled rules), special character escaping, script structural validity |
-| `src/xhrInterceptor.test.ts` | 169 | XHR interception, Gmail JSON parsing, label validation, custom event dispatch |
+| `test/xhrInterceptor.test.ts` | 169 | XHR interception, Gmail JSON parsing, label validation, custom event dispatch |
 
 ### Testing Approach
 
@@ -433,7 +432,7 @@ The theme system uses CSS classes `force-dark` and `force-light` on `document.bo
 | Issue | Location | Impact |
 |---|---|---|
 | **@ts-ignore comments** | `src/xhrInterceptor.ts` (lines 48, 51, 59, 77) | XHR prototype patching requires type overrides. Acceptable for this pattern but could be improved with a typed wrapper. |
-| **Experimental code is archived in-repo** | `src/experimental/LabelMenuIntegration.ts` | 313 lines of commented-out code with restoration instructions. Better as a Git branch than dead code. |
+| **Experimental code is archived in-repo** | (removed in v1.5.0) | 313 lines of commented-out Label Menu Integration lived in an experimental folder. Deleted; the history is in Git where it belongs. |
 | **No source maps in production** | `build.js` (`sourcemap: false`) | Debugging production issues requires correlating minified code manually. |
 
 ## 11. 90-Second Mental Model

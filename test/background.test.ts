@@ -7,6 +7,9 @@ export {};
  * the install hook, and action click handler.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+
 // ---------------------------------------------------------------------------
 // Mock InboxSDK background import (no-op)
 // ---------------------------------------------------------------------------
@@ -246,11 +249,17 @@ describe('action click handler', () => {
 // ---------------------------------------------------------------------------
 
 describe('uninstall URL', () => {
-    test('sets feedback URL on startup', () => {
-        expect(mockSetUninstallURL).toHaveBeenCalledWith(
-            expect.stringContaining('tally.so'),
-            expect.any(Function)
-        );
+    test('none is set, so uninstalling tells no third party', () => {
+        // Removed in v1.5.0. It pointed at a third-party form and was
+        // disclosed nowhere, which is the kind of thing a privacy-first
+        // extension must not do quietly.
+        expect(mockSetUninstallURL).not.toHaveBeenCalled();
+    });
+
+    test('no third-party origin is referenced by the service worker at all', () => {
+        const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'background.ts'), 'utf8');
+        // Comments explaining the removal are fine; a live call is not.
+        expect(source).not.toMatch(/setUninstallURL\s*\(/);
     });
 });
 
