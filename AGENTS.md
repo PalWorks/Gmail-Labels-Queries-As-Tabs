@@ -22,10 +22,13 @@ Orientation reading order for a new agent:
 
 ## Hard constraints (never violate)
 
-1. **Zero external network requests.** The extension must never call any third-party
-   server. Unread counts come only from Gmail's own Atom feed, Gmail's XHR responses,
-   or the DOM. No analytics, telemetry, or remote config. Adding a `fetch`/`XMLHttpRequest`
-   to any non `mail.google.com` origin is a blocking defect. See [SECURITY.md](SECURITY.md).
+1. **No background network requests.** Unread counts come only from Gmail's own Atom feed,
+   Gmail's XHR responses, or the DOM. No analytics, telemetry, or remote config, ever.
+   There is exactly one permitted outbound call, and only when the user presses Send on the
+   feedback form: the relay in [worker/](worker/), reached from
+   [src/modules/feedback.ts](src/modules/feedback.ts). Any other request to a non
+   `mail.google.com` origin, or any request the user did not explicitly trigger, is a
+   blocking defect. See [SECURITY.md](SECURITY.md) and ADR-012 in [DECISIONS.md](DECISIONS.md).
 2. **Escape all user-controlled strings before insertion into HTML.** Tab titles, label
    names, and imported config are user data. Use `textContent` or an escape helper, never
    raw `innerHTML` interpolation of user values.

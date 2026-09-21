@@ -1,4 +1,6 @@
 export {};
+import { flush } from './helpers/async';
+
 /**
  * content.test.ts
  *
@@ -172,8 +174,8 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
 
         await importContent();
 
-        // Allow async initialization to complete
-        await new Promise((r) => setTimeout(r, 100));
+        // Let initialisation settle. Turns, not milliseconds: see helpers/async.
+        await flush();
 
         expect(mockState.currentUserEmail).toBe('user@gmail.com');
     });
@@ -193,7 +195,7 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         });
 
         await importContent();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
 
         expect(mockState.currentUserEmail).toBe('test@example.com');
     });
@@ -208,8 +210,8 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         });
 
         await importContent();
-        // Wait for InboxSDK fallback
-        await new Promise((r) => setTimeout(r, 200));
+        // Let the InboxSDK fallback path settle.
+        await flush(40);
 
         // SDK fallback should set email
         expect(mockState.currentUserEmail).toBe('sdk@gmail.com');
@@ -288,7 +290,7 @@ describe('storage change listener', () => {
         mockGetSettings.mockResolvedValue(settings);
 
         await importContentAndGetListeners();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
 
         // Reset call count after init
         mockRenderTabs.mockClear();
@@ -298,7 +300,7 @@ describe('storage change listener', () => {
         const listener = storageChangeListeners[0];
         if (listener) {
             listener({ 'account_user@test.com': { newValue: settings } }, 'sync');
-            await new Promise((r) => setTimeout(r, 50));
+            await flush();
             expect(mockRenderTabs).toHaveBeenCalled();
         }
     });
@@ -309,7 +311,7 @@ describe('storage change listener', () => {
         mockGetSettings.mockResolvedValue(settings);
 
         await importContentAndGetListeners();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
 
         mockRenderTabs.mockClear();
 
@@ -317,7 +319,7 @@ describe('storage change listener', () => {
         const listener = storageChangeListeners[0];
         if (listener) {
             listener({ 'unrelated_key': { newValue: 'something' } }, 'sync');
-            await new Promise((r) => setTimeout(r, 50));
+            await flush();
             expect(mockRenderTabs).not.toHaveBeenCalled();
         }
     });
@@ -403,7 +405,7 @@ describe('injection and theme', () => {
         mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
 
         await importContent();
-        await new Promise((r) => setTimeout(r, 50));
+        await flush();
 
         const bar = document.getElementById('gmail-labels-as-tabs-bar');
         expect(bar).not.toBeNull();
@@ -437,7 +439,7 @@ describe('injection and theme', () => {
         mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
 
         await importContent();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
 
         expect(mockApplyTheme).toHaveBeenCalledWith('dark');
     });
@@ -447,7 +449,7 @@ describe('injection and theme', () => {
         mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
 
         await importContent();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
         mockApplyTheme.mockClear();
 
         const listener = storageChangeListeners[0];
@@ -461,7 +463,7 @@ describe('injection and theme', () => {
         mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
 
         await importContent();
-        await new Promise((r) => setTimeout(r, 100));
+        await flush();
         mockApplyTheme.mockClear();
 
         const listener = storageChangeListeners[0];

@@ -2,17 +2,25 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.4.0)
 
 ## Privacy promise
 
-The extension makes **zero external network requests**. It never sends browsing data,
-analytics, or telemetry anywhere. All data stays in the user's browser storage. The only
-origin it interacts with is `mail.google.com`, using Gmail's own feed, XHR responses, and
-DOM to compute unread counts.
+The extension makes **no background network requests**. It never sends browsing data,
+analytics, or telemetry anywhere, and all settings stay in the user's browser storage. For
+everything it does on its own, the only origin it touches is `mail.google.com`, using
+Gmail's own feed, XHR responses, and DOM to compute unread counts.
 
-This is a hard product and engineering constraint. Introducing any request to a non
-`mail.google.com` origin is a blocking defect. See [DECISIONS.md](DECISIONS.md) ADR-008.
+One outbound call exists, and only when the user asks for it: pressing **Send Feedback** on
+the Support & Feedback page posts the message, an optional reply address, and (if the box
+stays ticked) the extension version, browser build and counts of tabs, rules and accounts.
+Never label names, tab titles, contacts or mail. It goes to the relay in [worker/](worker/),
+which holds the mail provider's API key precisely so the extension does not have to, and
+which stores nothing.
+
+Any other request to a non `mail.google.com` origin, and any request the user did not
+explicitly trigger, is a blocking defect. See [DECISIONS.md](DECISIONS.md) ADR-008 as
+amended by ADR-012.
 
 ## Permissions and why each is needed
 

@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-07-07 (v1.2.1)
+Last updated: 2026-09-21 (v1.4.0)
 
 ## Documentation index
 
@@ -21,6 +21,7 @@ Last updated: 2026-07-07 (v1.2.1)
 | How do I contribute? | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | What changed and when? | [CHANGELOG.md](CHANGELOG.md) |
 | Deep repository audit and risk areas | [AUDIT.md](AUDIT.md) |
+| Why does the color palette look like this? | [test/contrast.test.ts](test/contrast.test.ts) |
 | Historical implementation plan | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) |
 | Post-review improvements plan | [.planning/IMPROVEMENTS-PLAN.md](.planning/IMPROVEMENTS-PLAN.md) |
 
@@ -42,7 +43,11 @@ Last updated: 2026-07-07 (v1.2.1)
 | Apps Script generation from rules | [src/modules/rules.ts](src/modules/rules.ts) |
 | Shared add-tab parsing + managed list behavior | [src/modules/tabManager.ts](src/modules/tabManager.ts) |
 | Drag-and-drop reordering | [src/modules/dragdrop.ts](src/modules/dragdrop.ts) |
-| Theme application to the page | [src/modules/theme.ts](src/modules/theme.ts) |
+| Theme resolution: Gmail's own theme, not the OS | [src/modules/theme.ts](src/modules/theme.ts) |
+| Tab color palette tokens and validation | [src/utils/colors.ts](src/utils/colors.ts) |
+| Shared accessible color swatch picker | [src/modules/colorPicker.ts](src/modules/colorPicker.ts) |
+| One-click automation rule presets (feature-flagged) | [src/modules/ruleTemplates.ts](src/modules/ruleTemplates.ts) |
+| In-product feedback: validation, diagnostics, submit | [src/modules/feedback.ts](src/modules/feedback.ts) |
 | Modal dialogs (one file per dialog) | [src/modules/modals/](src/modules/modals/) |
 | In-Gmail toolbar + modal styles | [src/ui/toolbar.css](src/ui/toolbar.css) |
 | Options page styles | [src/options.css](src/options.css) |
@@ -58,6 +63,8 @@ Last updated: 2026-07-07 (v1.2.1)
 | TypeScript config | [tsconfig.json](tsconfig.json) |
 | ESLint / Prettier config | [.eslintrc.json](.eslintrc.json), [.prettierrc](.prettierrc) |
 | MV3 manifest | [manifest.json](manifest.json) |
+| Feedback relay Worker (holds the mail API key) | [worker/](worker/) |
+| Rendered-pixel contrast audit (manual) | [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) |
 | CI + website deploy | [.github/workflows/](.github/workflows/) |
 | Chrome i18n strings | [_locales/en/messages.json](_locales/en/messages.json) |
 

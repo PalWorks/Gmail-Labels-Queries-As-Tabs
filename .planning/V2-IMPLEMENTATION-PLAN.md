@@ -23,11 +23,11 @@ Same gate as v1 (see [AGENTS.md](../AGENTS.md)):
 
 | Phase | Title | Status |
 |-------|-------|--------|
-| 1 | Custom tab colors | [ ] |
-| 2 | Automation rule template library (one-click starter presets) | [ ] |
-| 3 | Docs, changelog, version bump | [ ] |
-| 4 | Check + master audit | [ ] |
-| 5 | Chrome Web Store publish prep | [ ] |
+| 1 | Custom tab colors | [x] shipped in v1.3.0 |
+| 2 | Automation rule template library (one-click starter presets) | [x] shipped in v1.3.0 |
+| 3 | Docs, changelog, version bump | [x] v1.3.0, then v1.4.0 for the feedback form |
+| 4 | Check + master audit | [x] 2026-09-21, see AUDIT.md refresh note |
+| 5 | Chrome Web Store publish prep | [ ] zip builds; submission is the product owner's call |
 
 ---
 

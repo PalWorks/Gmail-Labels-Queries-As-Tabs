@@ -8,7 +8,8 @@
 **Primary Use Case:** Power Gmail users who rely on labels and saved searches can navigate between views without digging through the sidebar. Tabs are persistent, reorderable via drag-and-drop, and synced across devices via `chrome.storage.sync`.
 
 **Key Differentiators:**
-- Zero external network requests (privacy-first)
+- No background network requests (privacy-first); the only outbound call is the feedback
+  message a user chooses to send
 - Multi-account support (per-email settings)
 - Real-time unread counts via XHR interception of Gmail's internal API
 - Full theme support (System / Light / Dark)
@@ -23,59 +24,62 @@ Gmail-Labels-As-Tabs/
 ├── manifest.json              # Chrome Extension MV3 manifest (entry point for Chrome)
 ├── package.json               # Node dependencies & scripts
 ├── tsconfig.json              # TypeScript compiler config (ES2022, strict)
-├── build.js                   # esbuild bundler config (4 entry points)
-├── jest.config.js             # Test config (ts-jest, jsdom)
+├── build.js                   # esbuild bundler config (5 entry points)
+├── jest.config.js             # Test config (ts-jest, jsdom) + coverage thresholds
 ├── generate_icons.py          # Utility to generate icon sizes from source
-├── README.md                  # User-facing README
-├── LICENSE                    # MIT License
 │
 ├── src/                       # ★ ALL EXTENSION SOURCE CODE
-│   ├── content.ts             # ★ Main content script (2141 lines — the "brain")
+│   ├── content.ts             # Orchestrator: injection lifecycle, listeners, wiring (382 lines)
 │   ├── background.ts          # Service worker (downloads, install hooks, action click)
 │   ├── xhrInterceptor.ts      # MAIN world script (XHR monkey-patch for unread counts)
-│   ├── welcome.ts             # Onboarding page logic
-│   ├── welcome.html           # Onboarding page markup
-│   ├── welcome.css            # Onboarding page styles
-│   ├── xhrInterceptor.test.ts # Tests for XHR interception logic
+│   ├── options.ts/.html/.css  # Options page: settings, rules, privacy, feedback
+│   ├── welcome.ts/.html/.css  # Onboarding page
+│   ├── modules/               # ★ Feature modules, one concern each
+│   │   ├── tabs.ts            # Tab bar rendering, dropdowns, keyboard and aria
+│   │   ├── unread.ts          # Unread waterfall: Atom feed (cached) → XHR → DOM
+│   │   ├── dragdrop.ts        # Drag-and-drop reordering, bar and modal
+│   │   ├── tabManager.ts      # Shared add-tab parsing + managed list behavior
+│   │   ├── rules.ts           # Apps Script generation from rules
+│   │   ├── ruleTemplates.ts   # One-click rule presets, behind a feature flag
+│   │   ├── colorPicker.ts     # Shared accessible color swatch control
+│   │   ├── feedback.ts        # In-product feedback: validation, diagnostics, submit
+│   │   ├── theme.ts           # Theme resolution from Gmail's own rendered theme
+│   │   ├── state.ts           # Encapsulated module state behind accessors
+│   │   └── modals/            # One file per dialog (edit, delete, pin, import, …)
 │   ├── utils/
-│   │   └── storage.ts         # ★ Chrome Storage API wrapper (multi-account settings)
+│   │   ├── storage.ts         # ★ chrome.storage wrapper (multi-account) + migrations
+│   │   ├── importExport.ts    # Export / import serialization and validation
+│   │   ├── tabListRenderer.ts # Shared tab-row rendering for bar and options
+│   │   ├── colors.ts          # Tab color palette tokens and validation
+│   │   └── selectors.ts       # Gmail DOM selectors, in one place
 │   ├── ui/
-│   │   └── toolbar.css        # ★ Complete design system (CSS custom properties, theming)
+│   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
-│   └── experimental/
-│       └── LabelMenuIntegration.ts  # Archived/experimental code (not in build)
+│   └── experimental/          # Archived code, excluded from build and coverage
 │
-├── test/
-│   └── storage.test.ts        # Unit tests for storage utils (legacy API)
+├── test/                      # 26 suites, mirroring src/ one file per module
+│   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
+├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
+├── scripts/                   # Manual tooling (rendered-pixel contrast audit)
 ├── _locales/                  # i18n (internationalization) strings
-│
 ├── dist/                      # Build output (loaded into Chrome)
-│
-├── website/                   # ★ SEPARATE marketing website (Vite + React)
-│   ├── index.html             # HTML entry point
-│   ├── index.tsx              # React root
-│   ├── App.tsx                # Router (Home, Privacy, Terms, Changelog)
-│   ├── vite.config.ts         # Vite config with base path
-│   ├── constants.ts           # Website copy content
-│   ├── components/            # Navbar, Footer, Button
-│   ├── pages/                 # Home, Privacy, Terms, Changelog
-│   └── public/                # Static assets (images, og-image)
-│
-└── .github/workflows/
-    └── deploy_website.yml     # GitHub Pages CI/CD for website
+├── website/                   # SEPARATE marketing website (Vite + React)
+└── .github/workflows/         # CI (manual dispatch) and website deploy
 ```
 
 ### Responsibility Summary
 
 | Folder/File | Responsibility |
 |---|---|
-| `src/content.ts` | **God module.** DOM injection, tab rendering, drag-and-drop, navigation, modals, unread counts, settings UI, theme management |
+| `src/content.ts` | Orchestrator: bootstraps the content script, owns the injection lifecycle and storage listeners, delegates everything else to modules |
+| `src/modules/` | Feature modules, one concern per file. Nothing here reaches into another module's state; shared state goes through `state.ts` |
+| `src/utils/` | Leaf utilities with no module dependencies: storage, import/export, rendering, colors, selectors |
 | `src/background.ts` | Service worker: file downloads, install hooks, uninstall URL, action button forwarding |
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
-| `src/utils/storage.ts` | Data layer: CRUD operations on `chrome.storage.sync` with multi-account key-namespacing |
-| `src/ui/toolbar.css` | Visual layer: complete CSS design system with light/dark theming via custom properties |
-| `website/` | Independent React+Vite project for the Chrome Web Store listing page |
+| `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
+| `worker/` | The one server-side piece: relays user-submitted feedback to email, so no API key ships in the extension |
+| `website/` | Independent React+Vite project for the marketing site |
 
 ---
 
@@ -156,22 +160,22 @@ Gmail-Labels-As-Tabs/
 
 ## 5. Core Modules & Relationships
 
-### `content.ts` — The Orchestrator (2141 lines)
+### `content.ts` — The Orchestrator (382 lines)
 
-This is effectively a monolith that handles:
+Since v1.2.0 this is a thin coordinator, not a monolith. It owns only what must be
+owned centrally:
 
 | Responsibility | Key Functions |
 |---|---|
 | **Initialization** | `init()`, `initializeFromDOM()`, `loadInboxSDK()`, `finalizeInit()` |
-| **Tab Bar DOM** | `createTabsBar()`, `renderTabs()`, `attemptInjection()` |
-| **Navigation** | `updateActiveTab()`, `handleUrlChange()`, hash-based routing |
-| **Unread Counts** | `updateUnreadCount()`, `handleUnreadUpdates()`, `getUnreadCountFromDOM()`, `buildLabelMapFromDOM()` |
-| **Drag & Drop** | `handleDragStart/Over/Enter/Leave/Drop/End`, `handleSmartDragOver/Drop` (multi-row aware) |
-| **Modals** | `showPinModal()`, `showEditModal()`, `showDeleteModal()`, `createSettingsModal()`, `showImportModal()`, `showUninstallModal()` |
-| **Export/Import** | `exportSettings()`, `exportAllAccounts()`, `showImportModal()` |
-| **Theming** | `applyTheme()` |
+| **Injection lifecycle** | `attemptInjection()`, bounded retries, `MutationObserver` fallback |
+| **Account registration** | `ensureAccountRegistered()` so the options page sees the account |
+| **Cross-surface listeners** | `chrome.storage.onChanged` (account-scoped), `popstate`, theme watcher |
 
-### `storage.ts` — Data Layer (247 lines)
+Everything else lives in `src/modules/`: rendering in `tabs.ts`, counts in `unread.ts`,
+reordering in `dragdrop.ts`, dialogs in `modals/`, theme resolution in `theme.ts`.
+
+### `storage.ts` — Data Layer (518 lines)
 
 Provides a typed CRUD API over `chrome.storage.sync`:
 
@@ -181,7 +185,7 @@ Provides a typed CRUD API over `chrome.storage.sync`:
 - `migrateLegacySettingsIfNeeded` — One-time migration from v0 global format
 - `getAllAccounts()` — Enumerates all stored account keys
 
-### `xhrInterceptor.ts` — Passive Listener (177 lines)
+### `xhrInterceptor.ts` — Passive Listener (206 lines)
 
 Runs in Gmail's **MAIN world** (same JS context as Gmail):
 
@@ -191,7 +195,7 @@ Runs in Gmail's **MAIN world** (same JS context as Gmail):
 - Recursively searches response arrays for `[labelId, count]` tuples
 - Dispatches results as `CustomEvent` back to the content script
 
-### `background.ts` — Service Worker (111 lines)
+### `background.ts` — Service Worker (104 lines)
 
 Handles privileged Chrome APIs:
 - `chrome.downloads.download()` for config export
@@ -249,26 +253,28 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 ### Current State
 
-| File | Coverage | What It Tests |
+| Layer | Where | What it covers |
 |---|---|---|
-| [storage.test.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/test/storage.test.ts) | Storage CRUD | `addLabel`, `removeLabel`, `getSettings` — **uses legacy API names** (stale) |
-| [xhrInterceptor.test.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/xhrInterceptor.test.ts) | XHR parsing | Simulates Gmail sync response, verifies `CustomEvent` dispatch with correct label/count pairs |
+| Unit suites | `test/*.test.ts`, one per module | 26 suites, 478 tests: storage and migrations, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Palette guard | [test/contrast.test.ts](test/contrast.test.ts) | Reads the CSS tokens and fails if any text color drops below WCAG AA, if a retired low-contrast value returns, or if helper text goes back to fading with opacity |
+| Rendered pixels | [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) | Manual: measures real composited output in Chrome, which token math cannot see |
 
 ### Framework
 
 - **Jest** with `ts-jest` preset and `jsdom` test environment
 - Path alias: `@/` → `src/`
 - Chrome APIs mocked manually (`global.chrome = {...}`)
+- Coverage thresholds enforced in [jest.config.js](jest.config.js): 65% statements, 50% branches, 65% functions, 65% lines
 
-### Coverage Gaps
+### Known gaps
 
-> [!WARNING]
-> - **`content.ts`** (2141 lines, ~80% of logic) has **zero test coverage**
-> - `storage.test.ts` imports `addLabel`/`removeLabel` which no longer exist (API changed to `addTab`/`removeTab`) — **tests are broken/stale**
-> - No integration tests, E2E tests, or visual regression tests
-> - No CI test runner configured
+> [!NOTE]
+> - No end-to-end or visual regression tests. The contrast script is the only browser-driven
+>   check, and it is run by hand.
+> - CI runs on manual dispatch only (`gh workflow run ci.yml`), by product-owner decision, so
+>   a push does not verify itself.
+> - `src/experimental/` is excluded from both the build and coverage.
 
----
 
 ## 9. Extension Points & Safe Modification Guide
 
@@ -304,20 +310,17 @@ The `website/` directory is completely independent. Edit React components in `we
 
 | Issue | Impact | Location |
 |---|---|---|
-| **Giant monolith** | `content.ts` is 2141 lines handling UI, logic, data, and modals | `src/content.ts` |
-| **Stale tests** | `storage.test.ts` imports functions that no longer exist (`addLabel`/`removeLabel`) | `test/storage.test.ts` |
 | **XHR heuristic fragility** | Gmail's internal JSON format is undocumented and changes without notice | `xhrInterceptor.ts` |
+| **Storage has no compare-and-swap** | Two surfaces saving at the same instant can clobber each other's write; `chrome.storage` offers no transaction to prevent it | `src/utils/storage.ts` |
 
 ### 🟡 Moderate
 
 | Issue | Impact | Location |
 |---|---|---|
-| **No separation of concerns** | Rendering, business logic, event handling, and DOM manipulation all in one file | `content.ts` |
-| **`@ts-ignore` usage** | 3 instances suppress type checking for XHR monkey-patching | `xhrInterceptor.ts`, `content.ts` |
+| **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference | `src/modules/theme.ts` |
 | **InboxSDK coupling** | SDK is used for 2 features (email detection, route listening) but adds ~200KB to bundle | `content.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` etc. are Gmail's obfuscated class names that can change | `content.ts` |
-| **No error boundary** | If `content.ts` throws during init, the entire extension silently breaks | `content.ts` |
-| **Duplicated drag logic** | Tab bar and settings modal have nearly identical drag-and-drop implementations | `content.ts` |
+| **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 
 ### 🟢 Low
 
@@ -382,4 +385,4 @@ post-build: copies @inboxsdk/core/pageWorld.js           ▶  dist/pageWorld.js
 
 **Unread counts:** Three-strategy waterfall — Atom feed → XHR interception → DOM scraping. The XHR interceptor is the most novel: it monkey-patches `XMLHttpRequest` in Gmail's page context, parses Gmail's proprietary JSON, and ferries `[label, count]` tuples back via `CustomEvent`.
 
-**Where to start contributing:** Read `storage.ts` first (cleanest module, 247 lines). Then understand `content.ts`'s `init()` flow. The biggest ROI refactoring would be breaking `content.ts` into `tabs/`, `modals/`, `dragdrop/`, and `unread/` modules.
+**Where to start contributing:** Read `storage.ts` first (the data layer, 518 lines), then `content.ts`'s `init()` flow, which is short and delegates to `src/modules/`. Each module has a mirrored test file, so the test is usually the fastest way to understand one.

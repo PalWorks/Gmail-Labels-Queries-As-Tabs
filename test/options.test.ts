@@ -11,6 +11,9 @@
  * manually dispatch DOMContentLoaded after setting up the DOM.
  */
 
+export {};
+import { flush } from './helpers/async';
+
 // ---------------------------------------------------------------------------
 // Mock dependencies
 // ---------------------------------------------------------------------------
@@ -187,21 +190,15 @@ function buildOptionsDOM(): void {
 }
 
 /**
- * Flush all pending microtasks and macro-tasks.
- * Chains multiple Promise.resolve() and setTimeout rounds
- * to handle deeply nested async/await in loadSettings().
+ * Flush pending microtasks and macro-tasks.
+ *
+ * Turn-based rather than time-based: loadSettings() awaits mocked storage that
+ * resolves immediately, so what it needs is event-loop turns. Sleeping a fixed
+ * 50ms instead made the suite fail under coverage instrumentation and on a
+ * loaded machine.
  */
 function flushAsync(): Promise<void> {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            Promise.resolve()
-                .then(() => Promise.resolve())
-                .then(() => Promise.resolve())
-                .then(() => {
-                    setTimeout(resolve, 50);
-                });
-        }, 0);
-    });
+    return flush();
 }
 
 /**
@@ -532,7 +529,7 @@ describe('add tab smart detection', () => {
         input.dispatchEvent(new Event('input'));
         addBtn.click();
 
-        await new Promise((r) => setTimeout(r, 150));
+        await flush(30);
 
         expect(mockAddTab).toHaveBeenCalledWith('user@gmail.com', 'Newsletters', 'Newsletters', 'label');
     });
@@ -550,7 +547,7 @@ describe('add tab smart detection', () => {
         titleInput.value = 'Unread';
         addBtn.click();
 
-        await new Promise((r) => setTimeout(r, 150));
+        await flush(30);
 
         expect(mockAddTab).toHaveBeenCalledWith('user@gmail.com', 'Unread', '#search/is:unread', 'hash');
     });
@@ -566,7 +563,7 @@ describe('add tab smart detection', () => {
         input.dispatchEvent(new Event('input'));
         addBtn.click();
 
-        await new Promise((r) => setTimeout(r, 150));
+        await flush(30);
 
         expect(input.value).toBe('');
         expect(addBtn.disabled).toBe(true);
@@ -598,7 +595,7 @@ describe('preferences', () => {
         checkbox.checked = true;
         checkbox.dispatchEvent(new Event('change'));
 
-        await new Promise((r) => setTimeout(r, 150));
+        await flush(30);
 
         expect(mockSaveSettings).toHaveBeenCalledWith(
             'user@gmail.com',

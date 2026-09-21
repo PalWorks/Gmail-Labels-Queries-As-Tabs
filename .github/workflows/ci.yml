@@ -38,6 +38,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # The relay is the only server-side code in the repo and has its own
+      # tsconfig, so the extension's typecheck does not cover it.
+      - name: Typecheck the feedback worker
+        working-directory: worker
+        run: |
+          npm ci
+          npm run typecheck
+
       - name: Build extension
         run: npm run build
 

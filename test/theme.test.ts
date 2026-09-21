@@ -316,6 +316,31 @@ describe('watchGmailTheme', () => {
         jest.useRealTimers();
     });
 
+    test('a late paint after the settle ladder is still picked up on load', () => {
+        jest.useFakeTimers();
+        const map = new Map<Element, string>();
+        // Nothing readable yet: this is what a slow connection looks like.
+        map.set(document.body, 'transparent');
+        map.set(document.documentElement, 'transparent');
+        mockComputedStyle(map);
+        mockMatchMedia(true); // OS says dark, Gmail will say light
+
+        Object.defineProperty(document, 'readyState', { value: 'loading', configurable: true });
+        const stop = watchGmailTheme(() => 'system');
+
+        // Ladder runs out with Gmail still unpainted.
+        jest.advanceTimersByTime(11000);
+
+        // Gmail finally paints a light surface, via a stylesheet rather than an
+        // attribute the observer watches.
+        map.set(document.body, 'rgb(248, 250, 253)');
+        window.dispatchEvent(new Event('load'));
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        stop();
+        jest.useRealTimers();
+    });
+
     test('leaves an explicit light/dark preference alone', () => {
         jest.useFakeTimers();
         const map = new Map<Element, string>();

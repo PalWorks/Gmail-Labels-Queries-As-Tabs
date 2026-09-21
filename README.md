@@ -55,7 +55,7 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 |----------|-----|
 | **Power Gmail users** | Navigate labels and saved searches without the sidebar |
 | **Multi-account users** | Independent tab configurations per Gmail account |
-| **Privacy-focused users** | Fully client-side tool with zero external network requests |
+| **Privacy-focused users** | Client-side tool with no background network requests; the only outbound call is feedback you choose to send |
 | **Teams** | Exportable configs let you share tab setups across team members |
 
 ## Features
@@ -75,7 +75,7 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 | **Options Dashboard** | Full-featured settings page with theme control, tab management, automation rules, user guide, privacy info, and logging |
 | **Welcome Onboarding** | Guided setup for first-time users |
 | **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
-| **Privacy First** | Zero external network requests, everything stays local |
+| **Privacy First** | No background network requests, no telemetry; everything stays local |
 
 ## Architecture
 
@@ -432,7 +432,7 @@ npx jest test/modals/
 | Welcome | `welcome.test.ts` | Onboarding page logic |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 20 test files, 290+ test cases.**
+**Total: 26 test files, 478 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -460,7 +460,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage` (Jest, 290+ tests) |
+| **Test** | `npm test --coverage` (Jest, 478 tests) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -582,7 +582,7 @@ Quick start:
 
 - TypeScript strict mode is enforced; avoid `any` unless absolutely necessary
 - All user-facing strings must be HTML escaped (XSS prevention)
-- No external network requests (privacy-first principle)
+- No background network requests (privacy-first principle). The single user-initiated exception is the feedback relay; see ADR-012 in DECISIONS.md
 - Production builds strip all `console.log` via esbuild's `drop` option
 - Keep modules focused with a single responsibility per file
 - Format code with Prettier before committing: `npm run format`
@@ -594,7 +594,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (365 tests across 21 suites)
+npm test          # Jest (478 tests across 26 suites)
 npm run build     # Verify production build
 ```
 
@@ -602,7 +602,8 @@ npm run build     # Verify production build
 
 This extension is designed with privacy as a non-negotiable principle:
 
-- **Zero external requests**: No analytics, no telemetry, no third-party servers
+- **No background requests**: No analytics, no telemetry, no remote config
+- **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: The extension has no server, no database, no tracking
 - **Minimal permissions**: Only `storage`, `downloads`, and `management`

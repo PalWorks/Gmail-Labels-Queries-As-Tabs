@@ -5,6 +5,31 @@
  * Dark-theme admin panel with sidebar navigation.
  */
 
+/* ── Color tokens ──────────────────────────────────────────────────
+ * Dark is the base theme; `body.theme-light` re-points the same tokens.
+ * Every value here clears WCAG AA (4.5:1) against this theme's page and
+ * card surfaces. test/contrast.test.ts reads these declarations and fails
+ * if a future edit drops one below the threshold, so change them there
+ * rather than sprinkling new hex values through the file.
+ */
+:root {
+    --surface-page: #1a1a2e;
+    --surface-card: #16213e;
+    /* Accent for links, active nav and secondary buttons. */
+    --text-accent: #4fc3f7;
+    /* Secondary text: subtitles, hints, row action glyphs, version tag. */
+    --text-muted: #9aa4b8;
+    --text-danger: #f56565;
+}
+
+body.theme-light {
+    --surface-page: #f5f6fa;
+    --surface-card: #ffffff;
+    --text-accent: #1967d2;
+    --text-muted: #5f6b7c;
+    --text-danger: #c5221f;
+}
+
 /* ── Reset & Base ──────────────────────────────────────────────── */
 *,
 *::before,
@@ -117,8 +142,8 @@ a:hover {
 
 .nav-item.active {
     background: rgba(79, 195, 247, 0.08);
-    color: #4fc3f7;
-    border-left-color: #4fc3f7;
+    color: var(--text-accent);
+    border-left-color: var(--text-accent);
 }
 
 .nav-icon {
@@ -155,7 +180,7 @@ a:hover {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     cursor: pointer;
-    color: #718096;
+    color: var(--text-muted);
     transition: all 0.15s ease;
     padding: 0;
 }
@@ -188,7 +213,7 @@ a:hover {
 
 .version-tag {
     font-size: 11px;
-    color: #8b95a8;
+    color: var(--text-muted);
     font-weight: 500;
 }
 
@@ -233,7 +258,7 @@ a:hover {
 }
 
 .section-subtitle {
-    color: #718096;
+    color: var(--text-muted);
     font-size: 14px;
 }
 
@@ -268,7 +293,7 @@ a:hover {
 }
 
 .muted {
-    color: #8b95a8;
+    color: var(--text-muted);
     font-size: 13px;
 }
 
@@ -392,7 +417,9 @@ input:checked+.toggle-slider::before {
 }
 
 .btn-primary.success {
-    background: linear-gradient(135deg, #2d6a4f, #40916c);
+    /* Light end held at #2c7a52 (5.23:1 against white) — #40916c measured
+       3.83:1 and this state carries text the user needs to read. */
+    background: linear-gradient(135deg, #2d6a4f, #2c7a52);
 }
 
 .btn-secondary {
@@ -429,7 +456,7 @@ input:checked+.toggle-slider::before {
 .link-subtle {
     display: block;
     margin-top: 12px;
-    color: #718096;
+    color: var(--text-muted);
     font-size: 13px;
 }
 
@@ -536,7 +563,7 @@ input:checked+.toggle-slider::before {
 
 .drag-handle {
     display: flex;
-    color: #8b95a8;
+    color: var(--text-muted);
     cursor: grab;
     flex-shrink: 0;
 }
@@ -554,7 +581,7 @@ input:checked+.toggle-slider::before {
 }
 
 .tab-info-text .tab-type-hint {
-    color: #8b95a8;
+    color: var(--text-muted);
     font-size: 12px;
     margin-left: 4px;
 }
@@ -567,7 +594,7 @@ input:checked+.toggle-slider::before {
 .tab-action-btn {
     background: transparent;
     border: none;
-    color: #718096;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 14px;
     padding: 4px 6px;
@@ -596,7 +623,7 @@ input:checked+.toggle-slider::before {
     align-items: center;
     gap: 6px;
     background: transparent;
-    color: #f56565;
+    color: var(--text-danger);
     border: 1px solid rgba(245, 101, 101, 0.3);
     border-radius: 6px;
     padding: 8px 16px;
@@ -743,7 +770,7 @@ body.theme-light .account-selector-bar.is-empty {
 }
 
 .rule-target-row .label {
-    color: #718096;
+    color: var(--text-muted);
     font-size: 13px;
     white-space: nowrap;
 }
@@ -751,33 +778,6 @@ body.theme-light .account-selector-bar.is-empty {
 .rule-target-row .input-text {
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* ── Tab List Display ─────────────────────────────────────────── */
-.tab-list-display {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.tab-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(79, 195, 247, 0.08);
-    border: 1px solid rgba(79, 195, 247, 0.2);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 13px;
-    color: #4fc3f7;
-    font-weight: 500;
-}
-
-.tab-chip-type {
-    font-size: 11px;
-    color: #8b95a8;
-    font-weight: 400;
 }
 
 /* ── Card Divider ─────────────────────────────────────────────── */
@@ -949,7 +949,7 @@ kbd {
 .empty-state {
     text-align: center;
     padding: 32px 0;
-    color: #8b95a8;
+    color: var(--text-muted);
 }
 
 .empty-state .empty-icon {
@@ -1034,8 +1034,8 @@ body.theme-light .nav-item:hover {
 
 body.theme-light .nav-item.active {
     background: rgba(49, 130, 206, 0.08);
-    color: #3182ce;
-    border-left-color: #3182ce;
+    color: var(--text-accent);
+    border-left-color: var(--text-accent);
 }
 
 body.theme-light .sidebar-footer {
@@ -1044,7 +1044,6 @@ body.theme-light .sidebar-footer {
 
 body.theme-light .sidebar-icon-btn {
     border-color: #e2e8f0;
-    color: #718096;
 }
 
 body.theme-light .sidebar-icon-btn:hover {
@@ -1061,9 +1060,6 @@ body.theme-light .section-header h1 {
     color: #1a202c;
 }
 
-body.theme-light .section-subtitle {
-    color: #718096;
-}
 
 body.theme-light .card h3 {
     color: #1a202c;
@@ -1077,9 +1073,6 @@ body.theme-light .card p {
     color: #4a5568;
 }
 
-body.theme-light .muted {
-    color: #718096;
-}
 
 body.theme-light .pref-row {
     color: #2d3748;
@@ -1107,8 +1100,8 @@ body.theme-light .theme-btn:hover {
 
 body.theme-light .theme-btn.active {
     background: rgba(49, 130, 206, 0.1);
-    border-color: #3182ce;
-    color: #3182ce;
+    border-color: var(--text-accent);
+    color: var(--text-accent);
 }
 
 body.theme-light .toggle-slider {
@@ -1134,12 +1127,6 @@ body.theme-light .rule-row:nth-child(even) {
 
 body.theme-light .rule-tab-name {
     color: #2d3748;
-}
-
-body.theme-light .tab-chip {
-    background: rgba(49, 130, 206, 0.06);
-    border-color: rgba(49, 130, 206, 0.2);
-    color: #3182ce;
 }
 
 body.theme-light .settings-tab-list li {
@@ -1184,7 +1171,7 @@ body.theme-light .privacy-list li {
 }
 
 body.theme-light .privacy-list li strong {
-    color: #3182ce;
+    color: var(--text-accent);
 }
 
 body.theme-light kbd {
@@ -1194,12 +1181,9 @@ body.theme-light kbd {
 }
 
 body.theme-light a {
-    color: #3182ce;
+    color: var(--text-accent);
 }
 
-body.theme-light .version-tag {
-    color: #718096;
-}
 
 body.theme-light .card-divider {
     border-top-color: #e2e8f0;
@@ -1216,24 +1200,26 @@ body.theme-light .account-select {
 }
 
 body.theme-light .account-select:focus {
-    border-color: #3182ce;
+    border-color: var(--text-accent);
 }
 
 body.theme-light .account-select:hover {
     border-color: rgba(49, 130, 206, 0.4);
 }
 
+/* White label on this gradient must clear 4.5:1 at BOTH ends, so the light
+   end is capped at #1967d2 (5.37:1) rather than the old #4299e1 (3.05:1). */
 body.theme-light .btn-primary {
-    background: linear-gradient(135deg, #3182ce, #4299e1);
+    background: linear-gradient(135deg, #1557b0, #1967d2);
 }
 
 body.theme-light .btn-primary:hover {
-    background: linear-gradient(135deg, #2b6cb0, #3182ce);
-    box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+    background: linear-gradient(135deg, #10458d, #1557b0);
+    box-shadow: 0 4px 12px rgba(21, 87, 176, 0.3);
 }
 
 body.theme-light .btn-secondary {
-    color: #3182ce;
+    color: var(--text-accent);
     border-color: rgba(49, 130, 206, 0.3);
 }
 
@@ -1242,7 +1228,7 @@ body.theme-light .btn-secondary:hover {
 }
 
 body.theme-light .btn-danger {
-    color: #e53e3e;
+    color: var(--text-danger);
     border-color: rgba(229, 62, 62, 0.3);
 }
 
@@ -1250,29 +1236,17 @@ body.theme-light .btn-danger:hover {
     background: rgba(229, 62, 62, 0.06);
 }
 
-body.theme-light .drag-handle {
-    color: #718096;
-}
 
-body.theme-light .tab-action-btn {
-    color: #718096;
-}
 
 body.theme-light .tab-action-btn:hover {
     background: #edf2f7;
     color: #2d3748;
 }
 
-body.theme-light .empty-state {
-    color: #718096;
-}
 
-body.theme-light .link-subtle {
-    color: #718096;
-}
 
 body.theme-light .link-subtle:hover {
-    color: #3182ce;
+    color: var(--text-accent);
 }
 
 body.theme-light .contact-support-card h3,
@@ -1414,12 +1388,12 @@ body.theme-light .rule-template-card {
 
 .rule-template-card .rt-desc {
     font-size: 13px;
-    opacity: 0.75;
+    color: var(--text-muted);
 }
 
 .rule-template-card .rt-meta {
     font-size: 12px;
-    opacity: 0.6;
+    color: var(--text-muted);
     font-family: monospace;
 }
 
@@ -1457,7 +1431,7 @@ body.theme-light .rule-template-card {
 
 .feedback-optional {
     font-weight: 400;
-    opacity: 0.6;
+    color: var(--text-muted);
 }
 
 .feedback-select,
@@ -1496,7 +1470,7 @@ body.theme-light .feedback-textarea {
 
 .feedback-hint {
     font-size: 12px;
-    opacity: 0.6;
+    color: var(--text-muted);
 }
 
 .feedback-checkbox {
@@ -1551,7 +1525,7 @@ body.theme-light .feedback-status.is-success {
 .feedback-footnote {
     margin-top: 14px;
     font-size: 12px;
-    opacity: 0.65;
+    color: var(--text-muted);
 }
 
 #feedback-submit[disabled] {

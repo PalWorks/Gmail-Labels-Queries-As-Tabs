@@ -199,27 +199,6 @@ body.force-light {
     font-weight: 500;
 }
 
-.add-tab-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    color: var(--gmail-add-btn-text);
-    cursor: pointer;
-    /* margin-left: 8px; Removed in favor of gap */
-    transition: background-color 0.2s;
-    font-size: 20px;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.add-tab-btn:hover {
-    background-color: var(--gmail-add-btn-hover-bg);
-    color: var(--gmail-add-btn-hover-text);
-}
-
 /* Modal Styles */
 .gmail-tabs-modal {
     position: fixed;
@@ -640,28 +619,6 @@ body.force-light {
 
 .force-dark .save-view-btn:hover {
     background-color: rgba(138, 180, 248, 0.1);
-}
-
-/* Modal Drag and Drop Styles */
-.modal-drag-handle {
-    cursor: grab;
-    color: var(--gmail-tab-text);
-    margin-right: 8px;
-    display: flex;
-    align-items: center;
-    padding: 4px;
-    border-radius: 4px;
-}
-
-.modal-drag-handle:hover {
-    background-color: var(--gmail-tab-hover-bg);
-    color: var(--gmail-tab-hover-text);
-}
-
-.modal-drag-handle svg {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
 }
 
 #modal-labels-list li {
