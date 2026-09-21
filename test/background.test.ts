@@ -249,17 +249,32 @@ describe('action click handler', () => {
 // ---------------------------------------------------------------------------
 
 describe('uninstall URL', () => {
-    test('none is set, so uninstalling tells no third party', () => {
-        // Removed in v1.5.0. It pointed at a third-party form and was
-        // disclosed nowhere, which is the kind of thing a privacy-first
-        // extension must not do quietly.
-        expect(mockSetUninstallURL).not.toHaveBeenCalled();
+    test('is set, so uninstalling can ask why', () => {
+        expect(mockSetUninstallURL).toHaveBeenCalledTimes(1);
+        expect(mockSetUninstallURL.mock.calls[0][0]).toMatch(/^https:\/\//);
     });
 
-    test('no third-party origin is referenced by the service worker at all', () => {
+    test('carries no account address, settings or identifier in the URL', () => {
+        // Chrome appends nothing of its own, so whatever is in this string is
+        // the entire payload. It must stay a bare form link: the host is
+        // entitled to learn that someone uninstalled, not who.
+        const url = new URL(mockSetUninstallURL.mock.calls[0][0]);
+        for (const [key, value] of url.searchParams) {
+            expect(value).not.toMatch(/@/); // no email
+            expect(key).not.toMatch(/mail|user|account|id$|token/i);
+        }
+        expect(url.pathname + url.search).not.toMatch(/@/);
+    });
+
+    test('is the only third-party host the service worker names', () => {
+        // `mail.google.com` is the extension's own operating origin, declared
+        // in the manifest. Anything else is a third party and must be here on
+        // purpose, not by accident.
         const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'background.ts'), 'utf8');
-        // Comments explaining the removal are fine; a live call is not.
-        expect(source).not.toMatch(/setUninstallURL\s*\(/);
+        const urls = source.match(/https?:\/\/[^\s'"`)]+/g) ?? [];
+        const hosts = new Set(urls.map((u) => new URL(u).host));
+        hosts.delete('mail.google.com');
+        expect([...hosts]).toEqual([new URL(mockSetUninstallURL.mock.calls[0][0]).host]);
     });
 });
 

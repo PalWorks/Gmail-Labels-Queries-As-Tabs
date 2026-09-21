@@ -70,6 +70,10 @@ your message, your optional reply address, and (if you leave the box ticked) the
 version, your browser build, and how many tabs, rules and accounts you have. Never your
 label names, tab names, contacts or mail.
 
+One page opens after you have already left: uninstalling opens a short feedback form at
+tally.so, so we can learn why. The link carries no email address, no settings and no
+identifier, nothing is sent from the extension, and closing the tab answers nothing.
+
 We ask for three permissions and use each for one thing: storage to save your tabs,
 downloads to let you export a backup file, and management so the uninstall button in
 Settings can remove the extension cleanly.
@@ -82,7 +86,7 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 479 automated tests covering storage,
+The full source is public and auditable, with 571 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs
@@ -208,9 +212,15 @@ Certifications to tick:
 
 **Important:** these answers changed in 1.4.0, when the feedback form shipped. Earlier
 versions transmitted nothing at all. They are unchanged in 1.5.0, which adds no permission
-and no new outbound request, and removes one: the uninstall URL (ADR-014).
+and no new outbound request.
 The in-product feedback form is the reason "Personally identifiable information" is now
 Yes. If the form is ever removed, the answer goes back to No.
+
+The uninstall URL (`tally.so`, ADR-014) does not change any answer above. Chrome navigates
+to it after removal and the extension attaches nothing to it, so no user data is collected
+or transferred by us. It is listed here because a reviewer will see
+`chrome.runtime.setUninstallURL` in the service worker and is entitled to an explanation
+without having to ask.
 
 ### Privacy policy URL
 
@@ -287,8 +297,8 @@ can arrive after the extension has already drawn.
 
 Accessibility: two remaining colors now meet WCAG AA contrast.
 
-Privacy: uninstalling no longer opens a third-party feedback page. Use the Support &
-Feedback page inside the extension instead.
+Privacy: the privacy page now spells out exactly what the uninstall feedback form is and
+what it does not carry.
 ```
 
 Regenerating the Apps Script is worth calling out in the listing text as well as here: an
@@ -307,5 +317,6 @@ existing script on someone's account keeps the old, unquoted query until they re
 - [ ] Test the packaged zip in a clean Chrome profile before uploading
 - [ ] Confirm the permissions list still reads storage, downloads, management and
       `https://mail.google.com/*` only. 1.5.0 adds none.
-- [ ] Confirm no uninstall URL is set: uninstalling should open nothing (removed in 1.5.0,
-      see ADR-014). The data declaration no longer needs to account for it.
+- [ ] Confirm the uninstall URL still opens the feedback form and carries no query
+      parameter identifying the user (ADR-014); the disclosure guard in
+      `test/repoConsistency.test.ts` covers the documents, not the live behaviour.

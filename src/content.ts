@@ -250,6 +250,20 @@ async function initializeFromDOM(): Promise<void> {
     }
 }
 
+/**
+ * Intended as a fallback for account detection and route changes.
+ *
+ * It does neither today. `InboxSDK.load()` resolves only after the SDK's
+ * `pageWorld.js` sets an attribute on <head>, and injecting that file needs
+ * the `scripting` permission this extension does not declare, so the promise
+ * never settles — and never rejects, so the catch below never fires either.
+ * The only symptom is one console error per Gmail load.
+ *
+ * Both jobs are covered by code we own: `initializeFromDOM()` plus the poller
+ * for the account address, and the body MutationObserver plus `popstate` for
+ * routes. Removing the dependency is a pending product decision; see
+ * ARCHITECTURE.md section 10.
+ */
 async function loadInboxSDK(): Promise<void> {
     try {
         console.log('Gmail Tabs: Attempting to load InboxSDK (Background)...');

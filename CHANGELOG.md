@@ -68,13 +68,14 @@ guards that stop each defect coming back.
 - Rule fields that accept free text coalesce their writes over 250ms and flush when the page
   is hidden.
 
-### Removed
+### Disclosed
 
-- **The uninstall URL.** Uninstalling used to open a third-party form, telling a company we
-  have no relationship with that someone had just removed the extension. It was disclosed
-  nowhere: not in SECURITY.md, not on the privacy page, not in the store listing, and not in
-  the Web Store data declaration. Removed rather than disclosed; the in-product feedback form
-  is the channel now, and the product is back to exactly one outbound origin. See ADR-014.
+- **The uninstall URL.** Uninstalling opens a third-party feedback form, and until now that
+  was disclosed nowhere: not in SECURITY.md, not on the privacy page, not in the store
+  listing, and not in the Web Store data declaration. It is kept, because uninstall is the
+  one moment the in-product form cannot reach, and it is now stated in all four places. The
+  link carries no address, no settings and no identifier. A guard fails the build if the
+  service worker names an outbound host that any of those documents omits. See ADR-014.
 
 ### Added (tests and guards)
 
@@ -94,6 +95,12 @@ guards that stop each defect coming back.
   service-worker fallback path ([test/settingsOps.test.ts](test/settingsOps.test.ts)).
 - CI now runs the suite a second time serially. Both intermittent failures this suite has had
   appeared only when timing shifted, so one green run was never evidence of a stable suite.
+- A guard that fails the build if the service worker names an outbound host that is missing
+  from SECURITY.md, the in-extension privacy page or STORE_LISTING.md. The uninstall URL went
+  four versions undisclosed; a promise not to repeat that is worth less than a failing test
+  ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
+- A guard that fails when live documents disagree about how many tests there are. Four of them
+  stated four different totals within this release, each correct when written.
 
 ## [1.4.0] - 2026-09-21
 

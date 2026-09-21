@@ -163,6 +163,11 @@ export function listenForSystemThemeChanges(getCurrentTheme: () => ThemeMode): v
 // Gmail paints its real background well after injection, and the user can flip
 // the Gmail theme without a reload, so 'system' mode re-checks on a short
 // settling ladder and then on anything that could repaint the page.
+//
+// The ladder always runs all five steps. Stopping early once two consecutive
+// detections agree was considered and rejected: five timers over ten seconds
+// cost nothing measurable, and an early stop trades real robustness on a slow
+// connection for an imaginary saving. See ADR-015.
 const SETTLE_DELAYS_MS = [250, 750, 2000, 5000, 10000];
 
 /** Debounce for observer-driven re-checks, so a burst of DOM churn costs one check. */

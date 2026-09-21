@@ -28,7 +28,7 @@
 > theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
 > failures. Four guard suites were added so each class of defect fails CI rather than
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
-> `rulesProperty`. 30 suites, 563 tests.
+> `rulesProperty`. 30 suites, 571 tests.
 >
 > **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and its
 > page world never initialises, because injecting it needs `chrome.scripting` and that
@@ -345,11 +345,27 @@ state.ts ──► storage (types only)
 
 ### InboxSDK Usage
 
-InboxSDK is used for two purposes:
-1. **Email detection:** `sdk.User.getEmailAddress()` as a reliable fallback when DOM extraction fails.
+InboxSDK is *intended* for two purposes, and achieves neither:
+
+1. **Email detection:** `sdk.User.getEmailAddress()` as a fallback when DOM extraction fails.
 2. **Route tracking:** `sdk.Router.handleAllRoutes()` to detect Gmail navigation changes.
 
-The extension gracefully degrades if InboxSDK fails to load (non-fatal). DOM-based initialization runs in parallel.
+**Neither has ever run in a shipped build.** `InboxSDK.load()` returns `driver.onready`,
+which chains off `injectScript()`, which resolves only once `pageWorld.js` sets
+`data-inboxsdk-user-email-address` on `<head>`. Injecting `pageWorld.js` requires the
+`scripting` permission, which this extension does not declare, so the SDK's own background
+handler answers `false`, nothing is injected, and the promise never settles. It does not
+reject either, so the `catch` in `loadInboxSDK()` has never fired: the only symptom is one
+console error per Gmail load.
+
+Verified live on 2026-09-21 in a signed-in Gmail tab: `data-inboxsdk-script-injected` is
+`"true"`, `data-inboxsdk-user-email-address` is `null`, `window.__InboxSDKImpLoader` is
+`undefined`, and the console carries "Couldn't inject pageWorld.js".
+
+The extension works regardless, because `initializeFromDOM()` and the DOM poller detect the
+account and the body `MutationObserver` plus `popstate` track routes. The cost is ~1.03 MB
+of the 1.09 MB content script. `test/content.test.ts` mocks `load()` to resolve, so the
+green tests around the fallback describe our glue, not production behaviour.
 
 ## 8. Testing Strategy
 

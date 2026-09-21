@@ -263,7 +263,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Package | Purpose | Why |
 |---|---|---|
-| `@inboxsdk/core` | Gmail SDK for route detection and user identity | Provides `Router.handleAllRoutes` and `User.getEmailAddress` as enhancement (non-critical) |
+| `@inboxsdk/core` | Gmail SDK for route detection and user identity | Intended as a non-critical enhancement; in practice inert, because its page world is never injected. See section 10 |
 | `esbuild` | Build tool | Fast TypeScript bundling (4 entry points → `dist/js/`) |
 | `typescript` | Language | Strict-mode TypeScript compilation |
 | `jest` + `ts-jest` + `jest-environment-jsdom` | Testing | Unit tests with JSDOM for browser APIs |
@@ -281,7 +281,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 30 suites, 564 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 30 suites, 571 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -347,7 +347,7 @@ The `website/` directory is completely independent. Edit React components in `we
 | Issue | Impact | Location |
 |---|---|---|
 | **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference | `src/modules/theme.ts` |
-| **InboxSDK is 95% of the content script and its page world never loads** | The bundle is 1.09 MB, of which ~1.03 MB is InboxSDK. Its page-world half is never injected because `chrome.scripting` is not in `permissions`, so it logs an error on every Gmail load. Both features it provides are already covered: email detection by `extractEmailFromDOM()`, route changes by the body `MutationObserver` and `popstate`. Measured: removing it builds a 54.6 KB content script and every behaviour still works | `content.ts` |
+| **InboxSDK is 95% of the content script and neither of its two features has ever run** | The bundle is 1.09 MB, of which ~1.03 MB is InboxSDK. `InboxSDK.load()` awaits `pageWorld.js` setting a `<head>` attribute, and injecting `pageWorld.js` needs the `scripting` permission we do not declare, so the promise never settles and never rejects: `sdk.User.getEmailAddress()` and `sdk.Router.handleAllRoutes()` are unreachable, and the only symptom is one console error per Gmail load. Both features are covered anyway: email by `extractEmailFromDOM()` and the DOM poller, routes by the body `MutationObserver` and `popstate`. Measured: removing it builds a 54.6 KB content script and every behaviour still works. Live-verified 2026-09-21 | `content.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` etc. are Gmail's obfuscated class names that can change | `content.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 

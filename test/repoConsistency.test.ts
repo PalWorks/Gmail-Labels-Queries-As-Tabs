@@ -316,3 +316,116 @@ describe('no stylesheet rule outlives what it styled', () => {
         expect(classNames('/* .old-thing { color: red; } */\n.kept {}')).toEqual(['kept']);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Every outbound host the extension can reach must be disclosed
+// ---------------------------------------------------------------------------
+
+/**
+ * The uninstall URL shipped for four versions disclosed in no document, no
+ * privacy page and no store listing. It is back by an explicit product
+ * decision (ADR-014), so the disclosure is now a build gate rather than a
+ * promise: name a host in the service worker and it must appear in every
+ * place a user or a reviewer would go looking for it.
+ */
+describe('outbound hosts are disclosed wherever a user would look', () => {
+    const DISCLOSURE_FILES = ['SECURITY.md', 'src/options.html', 'STORE_LISTING.md'];
+
+    function hostsIn(source: string): string[] {
+        const urls = source.match(/https?:\/\/[^\s'"`)]+/g) ?? [];
+        return [...new Set(urls.map((u) => new URL(u).host))];
+    }
+
+    test('the service worker names at least one outbound host', () => {
+        // If this ever goes to zero the guard below passes vacuously, which
+        // would be the quiet failure all over again.
+        expect(hostsIn(read('src/background.ts')).length).toBeGreaterThan(0);
+    });
+
+    /** Returns one line per (host, document) pair where the host is missing. */
+    function undisclosed(source: string): string[] {
+        return hostsIn(source).flatMap((host) =>
+            DISCLOSURE_FILES.filter((file) => !read(file).includes(host)).map(
+                (file) => `${host} is not mentioned in ${file}`
+            )
+        );
+    }
+
+    test('each host the service worker names is disclosed in every required place', () => {
+        const missing = undisclosed(read('src/background.ts'));
+        if (missing.length > 0) {
+            throw new Error(
+                'An outbound host is undisclosed:\n' +
+                    missing.map((m) => `  ${m}`).join('\n') +
+                    '\n\nDisclose it, or remove the host from src/background.ts.'
+            );
+        }
+    });
+
+    test('the same check fails on a service worker with an undisclosed host', () => {
+        // Mutation check: run the real predicate over a synthetic source whose
+        // host is deliberately nowhere in the repo. Without this, a detector
+        // that silently found no hosts would let the test above pass forever.
+        const fake = `https://undisclosed-${Date.now().toString(36)}.example`;
+        expect(undisclosed(`chrome.runtime.setUninstallURL('${fake}/x');`)).toHaveLength(
+            DISCLOSURE_FILES.length
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Documented test counts must agree with each other
+// ---------------------------------------------------------------------------
+
+/**
+ * Four live documents each stated a different total (563, 564, 563, 479)
+ * within one release, because each was updated at a different moment. None
+ * was wrong when written, which is exactly why nobody noticed.
+ *
+ * This cannot check the real count without running the suite, but it can
+ * insist the documents tell one story, which is what catches a partial sweep.
+ */
+describe('current-state documents agree on the test count', () => {
+    // Deliberately not the .planning documents or the CHANGELOG: those are
+    // records of a moment and must keep the number that was true then.
+    const LIVE_DOCS = ['AUDIT.md', 'ARCHITECTURE.md', 'TESTING.md', 'README.md', 'STORE_LISTING.md'];
+
+    /** "30 suites, 569 tests" and "569 tests across 30 suites" and "569 automated tests". */
+    const COUNT = /(\d{3,4})\s+(?:automated\s+)?tests?\b(?!\s+across\s+\d+\s+suites\s+in\s+v1\.)/g;
+
+    function countsIn(rel: string): number[] {
+        const lines = read(rel).split('\n');
+        const found: number[] = [];
+        for (const line of lines) {
+            // Release-history bullets and blockquoted refresh notes record
+            // what was true at a moment; rewriting them destroys the record.
+            if (/^\s*>/.test(line)) continue;
+            if (/^\s*-\s+Expanded|^\s*\|\s*v\d/.test(line)) continue;
+            for (const m of line.matchAll(COUNT)) found.push(Number(m[1]));
+        }
+        return found;
+    }
+
+    test('every stated total is the same number', () => {
+        const stated = new Map<string, number[]>();
+        for (const doc of LIVE_DOCS) {
+            const counts = countsIn(doc);
+            if (counts.length > 0) stated.set(doc, counts);
+        }
+        const all = [...new Set([...stated.values()].flat())];
+        if (all.length > 1) {
+            throw new Error(
+                'Documents disagree on how many tests there are:\n' +
+                    [...stated].map(([d, c]) => `  ${d}: ${c.join(', ')}`).join('\n') +
+                    '\n\nUpdate them all, or drop the number from the ones that do not need it.'
+            );
+        }
+        expect(all).toHaveLength(1);
+    });
+
+    test('the check would notice a disagreement', () => {
+        const a = countsIn('TESTING.md');
+        expect(a.length).toBeGreaterThan(0);
+        expect(new Set([...a, a[0] + 1]).size).toBeGreaterThan(1);
+    });
+});

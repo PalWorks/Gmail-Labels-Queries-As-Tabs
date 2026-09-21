@@ -18,10 +18,15 @@ Never label names, tab titles, contacts or mail. It goes to the relay in [worker
 which holds the mail provider's API key precisely so the extension does not have to, and
 which stores nothing.
 
-Uninstalling opens nothing. Until v1.5.0 the extension set an uninstall URL pointing at a
-third-party form, so removing it told a company we have no relationship with that you had
-done so. That was disclosed in no document and no store declaration, and it is gone rather
-than disclosed. See ADR-014.
+One further outbound page exists, and only after you have already left: uninstalling opens
+a short feedback form at `tally.so`, hosted by Tally. Chrome opens it in a new tab once the
+extension is removed. Nothing is sent from the extension; the URL carries no address, no
+settings and no identifier, so the form host learns only that somebody uninstalled, and
+only you decide whether to answer it. See ADR-014.
+
+The disclosure is enforced rather than promised: `test/repoConsistency.test.ts` fails the
+build if the service worker names an outbound host that is missing from this file, the
+in-extension privacy page or [STORE_LISTING.md](STORE_LISTING.md).
 
 Any other request to a non `mail.google.com` origin, and any request the user did not
 explicitly trigger, is a blocking defect. See [DECISIONS.md](DECISIONS.md) ADR-008 as

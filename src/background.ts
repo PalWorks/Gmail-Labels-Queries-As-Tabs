@@ -99,22 +99,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
 });
 
-// No uninstall URL.
+// Uninstall URL: the one moment the in-product feedback form cannot reach.
 //
-// Until v1.5.0 this set one, pointing at a third-party form, so uninstalling
-// opened that form in a new tab and told a company we have no relationship
-// with that someone had just removed this extension. It was disclosed
-// nowhere: not in SECURITY.md, not on the privacy page, not in the store
-// listing, and not in the Web Store data declaration.
+// Chrome opens this page in a new tab after the extension is removed, which
+// is the only chance to ask why. Nothing is sent from here: Chrome navigates
+// to a static form and the user chooses whether to fill it in. No account
+// address, no settings and no identifier is attached to the URL, so the form
+// host learns only that someone, somewhere, uninstalled.
 //
-// It is gone rather than disclosed. The extension now carries its own
-// feedback form (Settings -> Support & Feedback), which is a better channel
-// and already documented, and removing this leaves exactly one outbound
-// origin in the whole product: our own relay, contacted only when someone
-// presses Send. That is a privacy story that fits on one line.
-//
-// If uninstall feedback is ever wanted again, it belongs on our own domain
-// and in the privacy page before the first byte is sent.
+// This is a third-party host, so it is disclosed rather than quiet: in
+// SECURITY.md, on the in-extension privacy page (Settings -> Privacy), in
+// STORE_LISTING.md and in the Web Store data declaration. A test in
+// test/repoConsistency.test.ts fails the build if this URL's host is present
+// here and missing from any of those, so it cannot go undisclosed again.
+// See ADR-014.
+const UNINSTALL_FEEDBACK_URL = 'https://tally.so/r/D4BBRR?transparentBackground=1&formEventsForwarding=1';
+if (chrome.runtime.setUninstallURL) {
+    chrome.runtime.setUninstallURL(UNINSTALL_FEEDBACK_URL, () => {
+        if (chrome.runtime.lastError) {
+            console.warn('Background: could not set uninstall URL:', chrome.runtime.lastError);
+        }
+    });
+}
 
 chrome.action.onClicked.addListener((tab) => {
     if (tab.id) {
