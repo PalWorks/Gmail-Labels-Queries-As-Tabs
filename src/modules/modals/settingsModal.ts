@@ -30,6 +30,23 @@ export function toggleSettingsModal(): void {
     }
 }
 
+/**
+ * Open the extension's own options page in a new tab.
+ *
+ * Reached from two places in this modal, so it lives here rather than being
+ * written twice. `chrome.runtime.getURL` throws once the extension context is
+ * invalidated, which happens on every reload during development and on an
+ * update in the wild, and there is nothing useful to do about it from a page
+ * that is already orphaned.
+ */
+function openOptionsPage(): void {
+    try {
+        window.open(chrome.runtime.getURL('options.html'), '_blank');
+    } catch {
+        /* non-fatal: extension context may be unavailable */
+    }
+}
+
 function createSettingsModal(): void {
     console.log('Gmail Tabs: Creating settings modal (v2)');
     const modal = document.createElement('div');
@@ -40,7 +57,14 @@ function createSettingsModal(): void {
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Configure Tabs</h3>
-                <button class="close-btn" aria-label="Close settings">✕</button>
+                <div class="modal-header-actions">
+                    <button type="button" id="modal-open-options" class="header-icon-btn"
+                        aria-label="Open the full settings page in a new tab"
+                        title="Open the full settings page: all accounts, automation rules, privacy and logs">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H600v-80h240v240h-80v-104L388-332Z"/></svg>
+                    </button>
+                    <button type="button" class="close-btn" aria-label="Close settings">✕</button>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="form-group theme-selector-group">
@@ -96,9 +120,9 @@ function createSettingsModal(): void {
             </div>
             <div class="modal-footer" style="padding: 16px; background: var(--disabled-input-bg); border-top: 1px solid var(--list-border); font-size: 0.8em; color: var(--modal-text); display: flex; justify-content: space-between; align-items: center;">
                 <span>Connected as: <span id="modal-account-email" style="font-weight: bold;">Detecting...</span> &middot; <a href="#" id="modal-manage-accounts" style="color: inherit;">Manage all accounts</a></span>
-                <div id="modal-help-btn" style="cursor: pointer; color: var(--modal-close-btn); display: flex; align-items: center;" title="Help & Support">
-                    <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-18 22.5-39t53.5-21q32 0 48 17.5t16 38.5q0 20-13 37t-53 49q-27.5 23-40.5 46T442-394ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
-                </div>
+                <button type="button" id="modal-help-btn" class="header-icon-btn" aria-label="Help and support" title="Help &amp; Support">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-18 22.5-39t53.5-21q32 0 48 17.5t16 38.5q0 20-13 37t-53 49q-27.5 23-40.5 46T442-394ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
+                </button>
             </div>
         </div>
     `;
@@ -145,14 +169,16 @@ function createSettingsModal(): void {
         window.open(SITE_CONTACT_URL, '_blank');
     });
 
+    // Header shortcut to the full options dashboard. The footer already has a
+    // "Manage all accounts" link to the same place, but it sits below the fold
+    // of a tall modal and reads as an account control rather than a way out to
+    // everything this modal does not show: rules, privacy and logs.
+    modal.querySelector('#modal-open-options')?.addEventListener('click', () => openOptionsPage());
+
     // "Manage all accounts" opens the full options dashboard (multi-account).
     modal.querySelector('#modal-manage-accounts')?.addEventListener('click', (e) => {
         e.preventDefault();
-        try {
-            window.open(chrome.runtime.getURL('options.html'), '_blank');
-        } catch {
-            /* non-fatal: extension context may be unavailable */
-        }
+        openOptionsPage();
     });
 
     // Set Account Email

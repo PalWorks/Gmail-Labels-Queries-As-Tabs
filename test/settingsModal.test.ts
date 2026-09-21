@@ -231,4 +231,48 @@ describe('settings modal behavior', () => {
         expect(openSpy).toHaveBeenCalledWith('chrome-extension://id/options.html', '_blank');
         openSpy.mockRestore();
     });
+
+    test('the header button opens the options page too', () => {
+        (global as any).chrome = { runtime: { getURL: (p: string) => `chrome-extension://id/${p}` } };
+        const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+
+        toggleSettingsModal();
+        (document.querySelector('#modal-open-options') as HTMLElement).click();
+
+        expect(openSpy).toHaveBeenCalledWith('chrome-extension://id/options.html', '_blank');
+        openSpy.mockRestore();
+    });
+
+    test('the header button survives an invalidated extension context', () => {
+        // getURL throws once the extension reloads under a still-open Gmail
+        // tab. The modal must not take the page down with it.
+        (global as any).chrome = {
+            runtime: {
+                getURL: () => {
+                    throw new Error('Extension context invalidated.');
+                },
+            },
+        };
+        toggleSettingsModal();
+        expect(() => (document.querySelector('#modal-open-options') as HTMLElement).click()).not.toThrow();
+    });
+
+    test('every icon-only control in the modal is a focusable button with a label', () => {
+        // An <svg> with no text is announced as nothing, and a <div> with a
+        // title attribute is not reachable by keyboard at all. The footer help
+        // control was exactly that until v1.5.0.
+        toggleSettingsModal();
+        const modal = document.getElementById('gmail-tabs-settings-modal')!;
+        const iconControls = ['#modal-open-options', '#modal-help-btn'];
+
+        for (const selector of iconControls) {
+            const el = modal.querySelector(selector);
+            expect(el).not.toBeNull();
+            expect(el!.tagName).toBe('BUTTON');
+            expect(el!.getAttribute('aria-label')).toBeTruthy();
+            expect(el!.getAttribute('title')).toBeTruthy();
+            // The icon itself must not be read out alongside the label.
+            expect(el!.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+        }
+    });
 });

@@ -237,12 +237,50 @@ body.force-light {
     color: var(--modal-text);
 }
 
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
 .close-btn {
     background: none;
     border: none;
     font-size: 20px;
     cursor: pointer;
     color: var(--modal-close-btn);
+}
+
+/*
+ * Icon-only controls in the modal header and footer. Both carry an
+ * aria-label, because an SVG with no text is announced as nothing, and both
+ * are <button> so they are reachable by keyboard; the footer help control was
+ * a <div> until v1.5.0 and neither reachable nor announced.
+ */
+.header-icon-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--action-btn-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background: var(--action-btn-hover-bg);
+    color: var(--action-btn-hover-text);
+}
+
+/*
+ * A visible focus ring, not just the hover tint: a keyboard user gets no
+ * hover, and these are the only way out of this modal to the full page.
+ */
+.header-icon-btn:focus-visible {
+    outline: 2px solid var(--primary-btn-bg);
+    outline-offset: 1px;
 }
 
 .modal-body {

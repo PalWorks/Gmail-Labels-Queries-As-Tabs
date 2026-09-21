@@ -86,7 +86,7 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 577 automated tests covering storage,
+The full source is public and auditable, with 580 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/

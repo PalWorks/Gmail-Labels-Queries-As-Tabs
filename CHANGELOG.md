@@ -6,10 +6,27 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 ## [1.5.0] - 2026-09-21
 
-A hardening release. No new features; the changes are correctness, safety and the
-guards that stop each defect coming back.
+Mostly a hardening release: correctness, safety, and the guards that stop each defect
+coming back. One small addition, in the modal people actually use.
+
+### Added
+
+- **A way to reach the full settings page from the in-Gmail modal's header.** Configure
+  Tabs only offers what fits in an overlay; automation rules, the privacy page, the user
+  guide and logs live on the options page. The route there existed, as a "Manage all
+  accounts" link in the footer, but it sat below the fold of a tall modal and read as an
+  account control rather than a way out to everything the modal does not show. There is
+  now an icon in the header, beside the close button, labelled and tooltipped for what it
+  actually does ([src/modules/modals/settingsModal.ts](src/modules/modals/settingsModal.ts)).
 
 ### Fixed
+
+- **The help control in the modal footer was a `<div>`**, so it was unreachable by keyboard
+  and announced as nothing: its icon is an `<svg>` with no text and its only description
+  was a `title` attribute. It is a `<button>` with an `aria-label` now, as is the new header
+  icon, and both hide their glyph from the accessibility tree. A test asserts that every
+  icon-only control in this modal is a focusable, labelled button, so the next one cannot
+  ship as a div.
 
 - **Automation rules could act on the wrong mail.** The generated Apps Script put the label
   into the Gmail search unquoted, so a label named `Old Stuff` produced a query Gmail reads
