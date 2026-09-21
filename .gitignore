@@ -2,6 +2,8 @@ node_modules/
 .DS_Store
 dist/
 extension.zip
+# Version-named copy of extension.zip, made for a Web Store upload.
+gmail-labels-as-tabs-*.zip
 *.log
 coverage/
 .env
