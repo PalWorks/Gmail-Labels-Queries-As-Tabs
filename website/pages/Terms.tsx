@@ -1,6 +1,10 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 
+// Updated by hand, so the page never claims to be fresher than the last
+// time somebody actually read it. Same reason as in Privacy.tsx.
+const LAST_UPDATED = '21 September 2026';
+
 export const Terms: React.FC = () => {
   return (
     <div className="bg-[#F6F8FC] min-h-screen pt-24 pb-16">
@@ -14,7 +18,7 @@ export const Terms: React.FC = () => {
           </div>
 
           <div className="prose prose-slate prose-lg text-[#444746]">
-            <p className="mb-6">Last updated: {new Date().toLocaleDateString()}</p>
+            <p className="mb-6">Last updated: {LAST_UPDATED}</p>
 
             <h2 className="text-xl font-medium text-[#1F1F1F] mt-8 mb-4">1. Acceptance of Terms</h2>
             <p className="mb-4">
