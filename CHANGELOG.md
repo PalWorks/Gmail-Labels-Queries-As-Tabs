@@ -4,6 +4,29 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [Unreleased]
+
+### Added
+
+- In-product feedback form on the Support & Feedback page. Pick a category, write a message, add
+  an optional reply address, and send without leaving the extension. Diagnostics (extension
+  version, browser build, and tab/rule/account counts) are opt-in via a ticked checkbox and
+  never include label names, tab titles, addresses or mail content
+  ([src/modules/feedback.ts](src/modules/feedback.ts)).
+- Feedback relay Worker under [worker/](worker/): a small Cloudflare Worker that holds the
+  Resend API key and sends one email per submission. It validates hard, rate limits to 5
+  messages per IP per hour, carries a honeypot field, and stores nothing. Deployed to
+  `gmail-tabs-feedback.sunmooncal.workers.dev`.
+
+### Changed
+
+- The Privacy page no longer claims "zero external network requests" in the absolute. It now
+  states that there are no background requests at all, and describes the single user-initiated
+  exception in plain terms (ADR-008 amended by ADR-012 in [DECISIONS.md](DECISIONS.md)).
+- "Get in Touch" is now "Support & Feedback", and the section carries the form itself instead
+  of a link out to the external support form; a
+  `mailto:` fallback remains beneath it.
+
 ## [1.3.0] - 2026-07-09
 
 ### Added

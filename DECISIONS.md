@@ -96,6 +96,9 @@ timers. See [src/content.ts](src/content.ts) and [src/modules/unread.ts](src/mod
 **Consequences.** No analytics or remote config is possible. Unread data must come from
 Gmail's feed, XHR, or DOM only. This is a hard constraint, see [SECURITY.md](SECURITY.md).
 
+**Amended by ADR-012.** The single exception is feedback the user types and submits.
+Nothing is sent in the background, ever.
+
 ## ADR-009: esbuild with console dropped, TypeScript strict
 
 **Decision.** Bundle five entry points with esbuild, minified, with `drop: ['console']`;
@@ -135,3 +138,24 @@ the flag removes all UI with no other code change, and the module can be deleted
 
 **Consequences.** The options page renders the templates gallery only when the flag is on.
 Applying is atomic, so a tab is never created without its rule.
+
+## ADR-012: In-product feedback via a relay, the one exception to ADR-008
+
+**Decision.** The options page carries a feedback form that POSTs to a small Cloudflare
+Worker ([worker/](worker/)), which sends one email via Resend. This is the only origin the
+extension contacts besides `mail.google.com`, and it is contacted only when the user presses
+Send.
+
+**Context.** Feedback previously required leaving the extension for an external form, and
+most people did not. Calling the mail provider straight from the extension is not an option:
+a published CRX is a zip anyone can unpack, so an API key inside it is a public key that
+would let a stranger send mail as our domain. A relay holds the key instead.
+
+**Consequences.** The "zero external network requests" claim becomes "no telemetry, and no
+request at all unless you submit feedback", which the Privacy page now states in those
+terms. The Chrome Web Store data disclosure must declare that a message, an optional email
+address, and opt-in diagnostics are transmitted. Diagnostics are counts, the extension
+version and the browser build only: never label names, tab titles, addresses or mail
+content. The relay validates hard, rate limits per IP, and stores nothing. If the Worker is
+ever taken down, the form degrades to an error message and the `mailto:` fallback beneath
+it still works.

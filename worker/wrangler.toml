@@ -1,0 +1,21 @@
+name = "gmail-tabs-feedback"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+account_id = "96ec2a311affbd387b884673c0e84eb8"
+
+# Served on workers.dev. Preview URLs are off: one public endpoint is enough
+# surface for an unauthenticated form.
+workers_dev = true
+preview_urls = false
+
+# Secrets (set with `wrangler secret put <NAME>`, never committed):
+#   RESEND_API_KEY   sending-only Resend key
+[vars]
+FEEDBACK_FROM = "GmailLabelsAsTabs.Support@palworks.ai"
+FEEDBACK_TO = "support@palworks.ai"
+
+# Per-IP rate-limit counters only; no message content is ever stored.
+# Created with: wrangler kv namespace create FEEDBACK_RATE_LIMIT
+[[kv_namespaces]]
+binding = "FEEDBACK_RATE_LIMIT"
+id = "447448e1c37644eaa73fdbed6a78ce69"
