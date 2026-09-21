@@ -25,6 +25,7 @@ import {
     computeKnownLabelTokens,
 } from '../src/modules/unread';
 import { Tab } from '../src/utils/storage';
+import { microtasks } from './helpers/async';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -415,21 +416,185 @@ describe('updateUnreadCount feed selection', () => {
 
             const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
             const first = updateUnreadCount(tab, makeTabEl());
+            // The fetch waits for a concurrency slot before it starts its own
+            // clock, so let that microtask land before advancing time.
+            await microtasks();
             jest.advanceTimersByTime(10_000);
             await first;
 
-            // The timed-out attempt settles as "no count" and is cached for the
-            // usual TTL, which doubles as backoff. Past the TTL the label
+            // The timed-out attempt settles as "no count", is recorded as a
+            // failure and backed off. Past the backoff window the label
             // recovers on its own, which is the part that used to be
             // impossible: the in-flight slot never cleared, so every later
             // render re-awaited a promise that would never settle.
             (global as any).fetch = fetchMock;
-            jest.advanceTimersByTime(31_000);
+            jest.advanceTimersByTime(6_000);
             await updateUnreadCount(tab, makeTabEl());
             expect(fetchMock).toHaveBeenCalledTimes(1);
         } finally {
             jest.useRealTimers();
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Slow and failing networks
+// ---------------------------------------------------------------------------
+
+describe('unread counts on a bad network', () => {
+    function makeTabEl(): HTMLElement {
+        const el = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = 'unread-count';
+        el.appendChild(span);
+        return el;
+    }
+
+    const inbox: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+
+    function feedReturning(count: number): jest.Mock {
+        return jest.fn().mockResolvedValue({
+            ok: true,
+            text: async () => `<feed><fullcount>${count}</fullcount></feed>`,
+        });
+    }
+
+    beforeEach(() => {
+        clearUnreadCountCache();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    test('a failure keeps the last count on screen instead of blanking it', async () => {
+        // The old cache stored a failure as the number 0, so a single dropped
+        // request made a busy label look empty for the next 30 seconds.
+        (global as any).fetch = feedReturning(12);
+        const good = makeTabEl();
+        await updateUnreadCount(inbox, good);
+        expect(good.querySelector('.unread-count')!.textContent).toBe('12');
+
+        jest.useFakeTimers();
+        (global as any).fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+        // Past the success TTL, so this really does re-fetch and really does fail.
+        jest.advanceTimersByTime(31_000);
+        const afterFailure = makeTabEl();
+        await updateUnreadCount(inbox, afterFailure);
+        expect(afterFailure.querySelector('.unread-count')!.textContent).toBe('12');
+    });
+
+    test('a failure is not cached as zero, so recovery is not blocked for the full TTL', async () => {
+        jest.useFakeTimers();
+        (global as any).fetch = jest.fn().mockRejectedValue(new Error('offline'));
+        await updateUnreadCount(inbox, makeTabEl());
+
+        const recovered = feedReturning(4);
+        (global as any).fetch = recovered;
+
+        // First backoff step is 5s, well short of the 30s success TTL.
+        jest.advanceTimersByTime(6_000);
+        const el = makeTabEl();
+        await updateUnreadCount(inbox, el);
+
+        expect(recovered).toHaveBeenCalledTimes(1);
+        expect(el.querySelector('.unread-count')!.textContent).toBe('4');
+    });
+
+    test('backs off further on each consecutive failure', async () => {
+        jest.useFakeTimers();
+        const failing = jest.fn().mockRejectedValue(new Error('offline'));
+        (global as any).fetch = failing;
+
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(failing).toHaveBeenCalledTimes(1);
+
+        // Inside the 5s window: no second attempt.
+        jest.advanceTimersByTime(4_000);
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(failing).toHaveBeenCalledTimes(1);
+
+        // Past it: second attempt, which pushes the window out to 10s.
+        jest.advanceTimersByTime(2_000);
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(failing).toHaveBeenCalledTimes(2);
+
+        jest.advanceTimersByTime(6_000);
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(failing).toHaveBeenCalledTimes(2);
+
+        jest.advanceTimersByTime(5_000);
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(failing).toHaveBeenCalledTimes(3);
+    });
+
+    test('an http error is a failure, not a count of zero', async () => {
+        (global as any).fetch = feedReturning(7);
+        const el1 = makeTabEl();
+        await updateUnreadCount(inbox, el1);
+        expect(el1.querySelector('.unread-count')!.textContent).toBe('7');
+
+        jest.useFakeTimers();
+        (global as any).fetch = jest.fn().mockResolvedValue({ ok: false, text: async () => '' });
+        jest.advanceTimersByTime(31_000);
+
+        const el2 = makeTabEl();
+        await updateUnreadCount(inbox, el2);
+        expect(el2.querySelector('.unread-count')!.textContent).toBe('7');
+    });
+
+    test('a genuine zero is still a zero, not a failure', async () => {
+        (global as any).fetch = feedReturning(0);
+        const el = makeTabEl();
+        await updateUnreadCount(inbox, el);
+        expect(el.querySelector('.unread-count')!.textContent).toBe('');
+
+        // No failure recorded, so the normal 30s TTL applies rather than a
+        // 5s backoff: a second render must not re-fetch.
+        const before = ((global as any).fetch as jest.Mock).mock.calls.length;
+        await updateUnreadCount(inbox, makeTabEl());
+        expect(((global as any).fetch as jest.Mock).mock.calls.length).toBe(before);
+    });
+
+    test('never opens more than four feed connections at once', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        const release: Array<() => void> = [];
+
+        (global as any).fetch = jest.fn(
+            () =>
+                new Promise((resolve) => {
+                    inFlight++;
+                    peak = Math.max(peak, inFlight);
+                    release.push(() => {
+                        inFlight--;
+                        resolve({ ok: true, text: async () => '<feed><fullcount>1</fullcount></feed>' });
+                    });
+                })
+        );
+
+        const tabs: Tab[] = Array.from({ length: 12 }, (_, i) => ({
+            id: `t${i}`,
+            title: `L${i}`,
+            type: 'label',
+            value: `Label${i}`,
+        }));
+
+        const pending = tabs.map((t) => updateUnreadCount(t, makeTabEl()));
+
+        // Let the first wave start, then drain one at a time.
+        await microtasks(10);
+        expect(peak).toBeLessThanOrEqual(4);
+
+        while (release.length > 0) {
+            release.shift()!();
+            await microtasks(10);
+            expect(peak).toBeLessThanOrEqual(4);
+        }
+
+        await Promise.all(pending);
+        expect((global as any).fetch).toHaveBeenCalledTimes(12);
     });
 });
 

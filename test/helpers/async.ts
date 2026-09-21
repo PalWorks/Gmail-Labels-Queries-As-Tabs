@@ -23,6 +23,19 @@ export async function flush(turns = 20): Promise<void> {
 }
 
 /**
+ * Yield microtasks only, for tests running under jest fake timers.
+ *
+ * `flush` above goes through setTimeout, which fake timers replace, so awaiting
+ * it inside a fake-timer test hangs forever. This is the version to use when
+ * you need pending `await`s to resume before calling advanceTimersByTime.
+ */
+export async function microtasks(turns = 5): Promise<void> {
+    for (let i = 0; i < turns; i++) {
+        await Promise.resolve();
+    }
+}
+
+/**
  * Poll until `predicate` is true, or fail with a readable message.
  *
  * Use it when the code under test genuinely waits on a timer (an injection
