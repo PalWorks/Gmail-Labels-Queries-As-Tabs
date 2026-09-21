@@ -429,3 +429,38 @@ describe('current-state documents agree on the test count', () => {
         expect(new Set([...a, a[0] + 1]).size).toBeGreaterThan(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// The store listing must point at the site this repository deploys
+// ---------------------------------------------------------------------------
+
+/**
+ * Two GitHub Pages sites answer for this product. The listing pointed its
+ * privacy policy URL at the one this repository does not build, so the
+ * declared policy was four versions behind the shipped behaviour and nobody
+ * could have fixed it from here.
+ */
+describe('store listing URLs match the deployed site', () => {
+    const base = /base:\s*'([^']+)'/.exec(read('website/vite.config.ts'))?.[1];
+
+    test('the vite base path is readable', () => {
+        expect(base).toMatch(/^\/[A-Za-z0-9-]+\/$/);
+    });
+
+    test('every palworks.github.io URL in the listing uses that base path', () => {
+        const wrong = (read('STORE_LISTING.md').match(/https:\/\/palworks\.github\.io\/[^\s`)|]*/g) ?? [])
+            .filter((u) => !u.startsWith(`https://palworks.github.io${base}`));
+        if (wrong.length > 0) {
+            throw new Error(
+                `The listing points at a site this repository does not deploy:\n` +
+                    [...new Set(wrong)].map((u) => `  ${u}`).join('\n') +
+                    `\n\nExpected everything under https://palworks.github.io${base}`
+            );
+        }
+    });
+
+    test('the privacy policy route exists in the app', () => {
+        expect(read('website/App.tsx')).toContain('path="/privacy"');
+        expect(read('STORE_LISTING.md')).toContain(`https://palworks.github.io${base}#/privacy`);
+    });
+});

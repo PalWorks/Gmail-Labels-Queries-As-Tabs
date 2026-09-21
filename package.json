@@ -6,7 +6,7 @@
         "clean": "rm -rf dist",
         "build": "npm run clean && node build.js && npm run copy-assets",
         "watch": "node build.js --watch",
-        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp LICENSE dist/ && cp src/ui/*.css dist/css/ && cp src/welcome.html dist/ && cp src/welcome.css dist/css/ && cp src/options.html dist/ && cp src/options.css dist/css/ && cp -r _locales dist/ && cp src/icons/*.png dist/icons/",
+        "copy-assets": "mkdir -p dist/css dist/icons && cp manifest.json dist/ && cp LICENSE dist/ && cp src/ui/*.css dist/css/ && cp src/welcome.html dist/ && cp src/welcome.css dist/css/ && cp src/options.html dist/ && cp src/options.css dist/css/ && cp -r _locales dist/ && cp src/icons/icon16.png src/icons/icon32.png src/icons/icon48.png src/icons/icon128.png dist/icons/",
         "lint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
         "lint:fix": "eslint 'src/**/*.ts' 'test/**/*.ts' --fix",
         "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",

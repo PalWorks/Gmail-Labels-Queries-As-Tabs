@@ -229,7 +229,7 @@ const SCREENSHOTS = [
         img: raw('options-privacy-light.png'),
         offset: -120,
         head: 'No analytics. No telemetry.',
-        sub: 'Nothing leaves your browser unless you press Send Feedback.',
+        sub: 'Read the whole policy in the extension: what is stored, and the two things that ever leave.',
     },
 ];
 

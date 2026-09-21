@@ -101,6 +101,32 @@ guards that stop each defect coming back.
   ([test/repoConsistency.test.ts](test/repoConsistency.test.ts)).
 - A guard that fails when live documents disagree about how many tests there are. Four of them
   stated four different totals within this release, each correct when written.
+- A guard that fails when STORE_LISTING names a `palworks.github.io` URL outside the path
+  [website/vite.config.ts](website/vite.config.ts) actually deploys to. The listing pointed
+  its privacy policy at a second, stale site that this repository does not build.
+
+### Changed (website and store assets)
+
+- The public privacy policy was rewritten. It had not been touched since before the feedback
+  form shipped: it claimed nothing was ever transmitted, listed two of the four permissions,
+  and mentioned neither the feedback relay nor the uninstall page. It now states the storage
+  model, both outbound paths in full, every permission, the Apps Script boundary, and the
+  fact that the marketing site itself uses analytics while the extension does not
+  ([website/pages/Privacy.tsx](website/pages/Privacy.tsx)).
+- The public changelog covered v1.0.0 only. It now runs through 1.5.0
+  ([website/pages/Changelog.tsx](website/pages/Changelog.tsx)).
+- Store screenshots regenerated against the shipping build, and the privacy caption no longer
+  says nothing leaves the browser unless you press Send Feedback, which stopped being true
+  the moment the uninstall URL came back.
+
+### Removed (package)
+
+- **Two promo tiles that were shipping inside the extension.** `Marquee Promo Tile.png` and
+  `Small Promo Tile.png` sat in `src/icons/`, which `copy-assets` copied wholesale, so every
+  user downloaded 398 KB of store graphics the manifest never names and no page loads. They
+  are also the superseded AI mockups that `store-assets/README.md` records as replaced. The
+  package drops from 898,996 to 500,113 bytes, 44% smaller, with no change to behaviour. A
+  new CI step fails the build if `dist/icons/` gains a file the manifest does not declare.
 
 ## [1.4.0] - 2026-09-21
 

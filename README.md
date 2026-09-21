@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Install from Chrome Web Store</a> · 
-  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
+  <a href="https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/">Website</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
 </p>
 
@@ -432,7 +432,7 @@ npx jest test/modals/
 | Welcome | `welcome.test.ts` | Onboarding page logic |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 30 test files, 571 test cases.**
+**Total: 30 test files, 574 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -460,7 +460,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 571 tests across 30 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 574 tests across 30 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -596,7 +596,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (571 tests across 30 suites)
+npm test          # Jest (574 tests across 30 suites)
 npm run build     # Verify production build
 ```
 
@@ -629,7 +629,7 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 
 <p align="center">
   <strong>Built with care for Gmail power users</strong><br>
-  <a href="https://palworks.github.io/Gmail-Labels-As-Tabs">Website</a> · 
+  <a href="https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/">Website</a> · 
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Chrome Web Store</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Request Feature</a>

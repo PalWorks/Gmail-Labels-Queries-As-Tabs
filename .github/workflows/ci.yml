@@ -141,6 +141,33 @@ jobs:
           fi
           echo "All required files present in dist/"
 
+      # 5.6  Nothing unreferenced ships to users
+      #
+      # Until 1.5.0 the package carried two promo tiles from src/icons/ that
+      # the manifest never names and no page loads: 398 KB, 44% of the zip,
+      # and the repo's own store-assets README calls them superseded mockups.
+      # They shipped because copy-assets globbed the directory.
+      - name: Verify dist/icons contains only icons the manifest declares
+        run: |
+          declared=$(node -e "
+            const m = require('./dist/manifest.json');
+            const names = new Set();
+            for (const group of [m.icons, m.action && m.action.default_icon]) {
+              for (const p of Object.values(group || {})) names.add(p.replace(/^icons\//, ''));
+            }
+            console.log([...names].join('\n'));
+          ")
+          echo "Declared: $(echo "$declared" | tr '\n' ' ')"
+          status=0
+          for f in dist/icons/*; do
+            name=$(basename "$f")
+            if ! echo "$declared" | grep -qx "$name"; then
+              echo "::error::dist/icons/$name is not declared in manifest.json and would ship to users"
+              status=1
+            fi
+          done
+          exit $status
+
       # ------------------------------------------------------------------
       # Artifact uploads
       # ------------------------------------------------------------------

@@ -86,10 +86,10 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 571 automated tests covering storage,
+The full source is public and auditable, with 574 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
-Website: https://palworks.github.io/Gmail-Labels-As-Tabs
+Website: https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/
 Support: support@palworks.ai
 ```
 
@@ -225,11 +225,23 @@ without having to ask.
 ### Privacy policy URL
 
 ```
-https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
+https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/#/privacy
 ```
 
-Before submitting, confirm that page states the feedback exception in the same words as the
-extension's own Privacy tab. A mismatch between the two is a common rejection reason.
+**This changed in 1.5.0 and it matters.** Two sites are live: this one, built from
+[website/](website/) in this repository, and an older `palworks.github.io/Gmail-Labels-As-Tabs`
+built from somewhere else. Earlier versions of this file pointed the listing at the older
+one, whose privacy policy is still the pre-1.4.0 text: it claims nothing is ever transmitted,
+lists only two of the four permissions, and mentions neither the feedback form nor the
+uninstall page. Submitting against that URL means the declared policy contradicts the
+shipped behaviour, which is a rejection reason and a fair one.
+
+The URL above is the site this repository deploys and can keep accurate. It was rewritten
+for 1.5.0 and states the storage model, both outbound paths, all four permissions and the
+Apps Script boundary in the same terms as the extension's own Privacy tab.
+
+Deal with the older site separately: redirect it here, or take it down. Until then, do not
+use its URL anywhere.
 
 ---
 
@@ -237,8 +249,8 @@ extension's own Privacy tab. A mismatch between the two is a common rejection re
 
 | Field | Value |
 |---|---|
-| Homepage URL | `https://palworks.github.io/Gmail-Labels-As-Tabs` |
-| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs` |
+| Homepage URL | `https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/` |
+| Support URL | `https://palworks.github.io/Gmail-Labels-Queries-As-Tabs/` |
 | Support email | `support@palworks.ai` |
 
 The site has four routes (`/`, `/privacy`, `/terms`, `/changelog`) and no contact page, so
@@ -271,7 +283,7 @@ Screenshot captions, in upload order:
 2. Color-code the views you care about
 3. One-click cleanup rules that run in your own account
 4. Light, dark, and following Gmail's own theme
-5. No analytics, no telemetry, no servers
+5. The whole privacy policy, in plain words, inside the extension
 
 ---
 
@@ -308,15 +320,31 @@ existing script on someone's account keeps the old, unquoted query until they re
 
 ## 7. Pre-submission checklist
 
-- [ ] `npm run package` produces `extension.zip` from a clean `main`
-- [ ] `manifest.json` and `package.json` both read 1.5.0
-- [ ] Privacy policy page updated with the feedback exception before submitting
-- [ ] Data usage answers updated (PII: Yes, because of the feedback form)
-- [ ] Screenshots contain no real inbox content, sender names or subject lines
-- [ ] Feedback relay reachable: `curl https://gmail-tabs-feedback.sunmooncal.workers.dev/health`
-- [ ] Test the packaged zip in a clean Chrome profile before uploading
-- [ ] Confirm the permissions list still reads storage, downloads, management and
-      `https://mail.google.com/*` only. 1.5.0 adds none.
-- [ ] Confirm the uninstall URL still opens the feedback form and carries no query
-      parameter identifying the user (ADR-014); the disclosure guard in
-      `test/repoConsistency.test.ts` covers the documents, not the live behaviour.
+Verified on 2026-09-21 against `main` at the 1.5.0 release commit.
+
+- [x] `npm run package` produces `extension.zip` from a clean `main`
+- [x] `manifest.json` and `package.json` both read 1.5.0 (CI checks parity)
+- [x] Privacy policy page rewritten for 1.5.0: storage model, both outbound paths, all four
+      permissions, the Apps Script boundary, and the site's own analytics stated separately
+      ([website/pages/Privacy.tsx](website/pages/Privacy.tsx))
+- [x] Privacy policy URL now points at the site this repository deploys, not the stale one.
+      Guarded by `test/repoConsistency.test.ts`
+- [x] Public changelog updated through 1.5.0 ([website/pages/Changelog.tsx](website/pages/Changelog.tsx))
+- [x] Screenshots regenerated against the shipping build; all five are 1280x800 and contain
+      only demo data (Inbox, Clients, Invoices, Newsletters)
+- [x] Feedback relay reachable: `/health` returns `{"ok":true}`
+- [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
+- [x] The uninstall URL is set, is a bare form link, and carries no identifying parameter
+      (asserted in `test/background.test.ts`; disclosure asserted in
+      `test/repoConsistency.test.ts`)
+- [x] Data usage answers reviewed: unchanged from 1.4.0, PII stays Yes because of the
+      feedback form
+
+Still to do by hand, because none of them can be verified from this repository:
+
+- [ ] Deploy the website so the new privacy policy is live **before** submitting. It
+      deploys from `main` on any change under `website/`
+- [ ] Load `extension.zip` in a clean Chrome profile and click through once
+- [ ] Redirect or take down `palworks.github.io/Gmail-Labels-As-Tabs`, whose privacy policy
+      is pre-1.4.0 text and now contradicts the shipped product
+- [ ] Upload, paste the 1.5.0 release notes from section 6, and submit
