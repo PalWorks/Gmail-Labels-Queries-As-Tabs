@@ -4,7 +4,7 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
-## [Unreleased]
+## [1.4.0] - 2026-09-21
 
 ### Added
 
