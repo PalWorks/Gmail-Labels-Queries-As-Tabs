@@ -153,8 +153,37 @@ export async function getSettings(accountId: string): Promise<Settings> {
  * defaults once and is a no-op afterwards.
  */
 export async function ensureAccountRegistered(accountId: string): Promise<void> {
-    const key = getAccountKey(accountId);
-    const exists = await new Promise<boolean>((resolve) => {
+    const inFlight = registrationsInFlight.get(accountId);
+    if (inFlight) return inFlight;
+
+    const run = (async () => {
+        const key = getAccountKey(accountId);
+        if (await accountExists(key)) return;
+
+        // Re-read immediately before writing. chrome.storage has no
+        // compare-and-swap, so this only narrows the window rather than
+        // closing it: another Gmail tab initialising at the same instant, or
+        // the options page saving a first tab, could still land between the
+        // two. Losing that race costs a just-written default, never existing
+        // user data, because this is the only path that writes defaults.
+        if (await accountExists(key)) return;
+
+        await saveSettings(accountId, {});
+    })().finally(() => {
+        registrationsInFlight.delete(accountId);
+    });
+
+    registrationsInFlight.set(accountId, run);
+    return run;
+}
+
+// One registration attempt per account per page: init paths can fire more than
+// once (retries, SPA navigation) and there is no point racing ourselves.
+const registrationsInFlight = new Map<string, Promise<void>>();
+
+/** True when this account already has a stored settings object. */
+async function accountExists(key: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
         try {
             chrome.storage.sync.get([key], (items) => {
                 resolve(!chrome.runtime.lastError && items[key] !== undefined);
@@ -163,10 +192,6 @@ export async function ensureAccountRegistered(accountId: string): Promise<void> 
             resolve(true); // Storage unavailable: do not write blindly.
         }
     });
-    if (exists) return;
-
-    // saveSettings merges over the defaults, so an empty patch persists them.
-    await saveSettings(accountId, {});
 }
 
 /**

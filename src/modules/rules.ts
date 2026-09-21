@@ -180,8 +180,12 @@ function buildRuleConfigLine(rule: EnrichedRule): string {
     parts.push(`targetLabel: '${escapeForScript(rule.targetLabel)}'`);
   }
 
-  // Include tab title as comment for readability
-  return `{ ${parts.join(', ')} } /* ${escapeForScript(rule.tabTitle)} */`;
+  // Include tab title as comment for readability. The title is user data and
+  // can arrive from an imported config, so it is sanitised for a comment
+  // context, not a string one: a title containing `*/` would otherwise close
+  // the comment and inject statements into a script the user runs under their
+  // own Google account.
+  return `{ ${parts.join(', ')} } /* ${escapeForComment(rule.tabTitle)} */`;
 }
 
 /**
@@ -253,8 +257,29 @@ function logToSheet(results) {
 }
 
 /**
- * Escapes characters that could break the generated script string.
+ * Escapes characters that could break a single-quoted string in the generated
+ * script. Carriage returns and the Unicode line separators matter as much as
+ * newlines: JavaScript treats U+2028 and U+2029 as line terminators, so an
+ * unescaped one ends the string literal.
  */
 function escapeForScript(str: string): string {
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * Makes a string safe to drop inside a /* ... *\/ comment. Block comments have
+ * no escape sequence, so the delimiters are broken up rather than escaped, and
+ * line breaks are flattened so the comment cannot spill onto the next line.
+ */
+function escapeForComment(str: string): string {
+  return str
+    .replace(/\*\//g, '* /')
+    .replace(/\/\*/g, '/ *')
+    .replace(/[\r\n\u2028\u2029]+/g, ' ');
 }

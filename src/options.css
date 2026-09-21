@@ -780,33 +780,6 @@ body.theme-light .account-selector-bar.is-empty {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ── Tab List Display ─────────────────────────────────────────── */
-.tab-list-display {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.tab-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(79, 195, 247, 0.08);
-    border: 1px solid rgba(79, 195, 247, 0.2);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 13px;
-    color: #4fc3f7;
-    font-weight: 500;
-}
-
-.tab-chip-type {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-weight: 400;
-}
-
 /* ── Card Divider ─────────────────────────────────────────────── */
 .card-divider {
     border: none;
@@ -1154,12 +1127,6 @@ body.theme-light .rule-row:nth-child(even) {
 
 body.theme-light .rule-tab-name {
     color: #2d3748;
-}
-
-body.theme-light .tab-chip {
-    background: rgba(49, 130, 206, 0.06);
-    border-color: rgba(49, 130, 206, 0.2);
-    color: var(--text-accent);
 }
 
 body.theme-light .settings-tab-list li {

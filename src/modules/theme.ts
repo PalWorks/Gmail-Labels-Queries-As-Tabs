@@ -163,7 +163,7 @@ export function listenForSystemThemeChanges(getCurrentTheme: () => ThemeMode): v
 // Gmail paints its real background well after injection, and the user can flip
 // the Gmail theme without a reload, so 'system' mode re-checks on a short
 // settling ladder and then on DOM attribute changes.
-const SETTLE_DELAYS_MS = [250, 750, 2000, 5000];
+const SETTLE_DELAYS_MS = [250, 750, 2000, 5000, 10000];
 
 /**
  * Keep 'system' mode in step with Gmail's own theme: re-detect while the page
@@ -197,10 +197,18 @@ export function watchGmailTheme(getCurrentTheme: () => ThemeMode): () => void {
     observer.observe(document.documentElement, options);
     if (document.body) observer.observe(document.body, options);
 
+    // On a slow connection Gmail can still be painting when the ladder runs
+    // out, and its background often arrives via a stylesheet rather than an
+    // attribute the observer watches. `load` is the backstop.
+    if (document.readyState !== 'complete') {
+        window.addEventListener('load', check, { once: true });
+    }
+
     check();
 
     return () => {
         timers.forEach(clearTimeout);
         observer.disconnect();
+        window.removeEventListener('load', check);
     };
 }

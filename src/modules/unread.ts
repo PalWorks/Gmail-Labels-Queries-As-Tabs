@@ -257,13 +257,21 @@ export function clearUnreadCountCache(): void {
     inFlightFeeds.clear();
 }
 
+// A stalled connection must not hold the in-flight slot open: without this,
+// one hung request froze that label's count until the page was reloaded,
+// because the coalescing entry is only cleared when the promise settles.
+const FEED_FETCH_TIMEOUT_MS = 10_000;
+
 /** Fetch + parse the Atom feed for a label, returning the unread count (0 on any failure). */
 async function fetchFeedCount(labelForFeed: string): Promise<number> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FEED_FETCH_TIMEOUT_MS);
+
     try {
         const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
         const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
 
-        const response = await fetch(feedUrl);
+        const response = await fetch(feedUrl, { signal: controller.signal });
         if (!response.ok) return 0;
 
         const text = await response.text();
@@ -277,6 +285,8 @@ async function fetchFeedCount(labelForFeed: string): Promise<number> {
     } catch (e) {
         console.warn('Gmail Tabs: Failed to fetch atom feed for', labelForFeed, e);
         return 0;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 

@@ -257,3 +257,64 @@ describe('generateAppsScript with non-label tabs', () => {
         expect(script).toContain("label: 'Team Updates'");
     });
 });
+
+// ---------------------------------------------------------------------------
+// Script generation — untrusted strings
+// ---------------------------------------------------------------------------
+//
+// Tab titles and labels are user data, and an imported config can carry
+// anything. The generated script is pasted into Apps Script and run under the
+// user's own Google account, so nothing in it may break out of its context.
+
+describe('generateAppsScript escaping', () => {
+    test('a title containing */ cannot close the comment it sits in', () => {
+        const tabs: Tab[] = [
+            { id: 'evil', title: 'Work */ ; DriveApp.getFiles(); /*', type: 'label', value: 'work' },
+        ];
+        const script = generateAppsScript(tabs, [makeRule({ tabId: 'evil', action: 'archive' })], 'u@gmail.com');
+
+        // The payload must not appear as live code between the config line and
+        // the end of its comment.
+        expect(script).not.toContain('*/ ; DriveApp.getFiles();');
+        expect(script).toContain('* / ; DriveApp.getFiles(); / *');
+
+        // Every block comment opened in the generated script is closed exactly
+        // once, so nothing downstream is swallowed or exposed.
+        const opens = (script.match(/\/\*/g) || []).length;
+        const closes = (script.match(/\*\//g) || []).length;
+        expect(opens).toBe(closes);
+    });
+
+    test('a label containing a quote cannot close the string it sits in', () => {
+        const tabs: Tab[] = [
+            { id: 'q', title: 'Quote', type: 'label', value: "work'; DriveApp.getFiles(); var x='" },
+        ];
+        const script = generateAppsScript(tabs, [makeRule({ tabId: 'q', action: 'trash' })], 'u@gmail.com');
+
+        expect(script).toContain("\\'");
+        expect(script).not.toMatch(/label: 'work'; DriveApp/);
+    });
+
+    test('line terminators in a label are escaped, including U+2028 and U+2029', () => {
+        const tabs: Tab[] = [
+            { id: 'nl', title: 'Lines', type: 'label', value: 'a\nb\rc d e' },
+        ];
+        const script = generateAppsScript(tabs, [makeRule({ tabId: 'nl', action: 'trash' })], 'u@gmail.com');
+
+        const configLine = script.split('\n').find((l) => l.includes('label:'))!;
+        expect(configLine).toContain('\\n');
+        expect(configLine).toContain('\\r');
+        expect(configLine).toContain('\\u2028');
+        expect(configLine).toContain('\\u2029');
+    });
+
+    test('a multi-line title cannot spill out of its comment', () => {
+        const tabs: Tab[] = [
+            { id: 'ml', title: 'First line\nDriveApp.getFiles();', type: 'label', value: 'work' },
+        ];
+        const script = generateAppsScript(tabs, [makeRule({ tabId: 'ml', action: 'trash' })], 'u@gmail.com');
+
+        const configLine = script.split('\n').find((l) => l.includes('label:'))!;
+        expect(configLine).toContain('First line DriveApp.getFiles();');
+    });
+});

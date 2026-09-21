@@ -390,6 +390,47 @@ describe('updateUnreadCount feed selection', () => {
         ]);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    test('passes an abort signal so a stalled feed cannot hang forever', async () => {
+        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        await updateUnreadCount(tab, makeTabEl());
+
+        const init = fetchMock.mock.calls[0][1];
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        expect(init.signal.aborted).toBe(false);
+    });
+
+    test('a stalled feed releases its in-flight slot once it times out', async () => {
+        jest.useFakeTimers();
+        try {
+            // A fetch that only settles when its signal aborts, which is what a
+            // dead connection looks like from here.
+            const stalled = jest.fn(
+                (_url: string, init: RequestInit) =>
+                    new Promise((_resolve, reject) => {
+                        init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+                    })
+            );
+            (global as any).fetch = stalled;
+
+            const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+            const first = updateUnreadCount(tab, makeTabEl());
+            jest.advanceTimersByTime(10_000);
+            await first;
+
+            // The timed-out attempt settles as "no count" and is cached for the
+            // usual TTL, which doubles as backoff. Past the TTL the label
+            // recovers on its own, which is the part that used to be
+            // impossible: the in-flight slot never cleared, so every later
+            // render re-awaited a promise that would never settle.
+            (global as any).fetch = fetchMock;
+            jest.advanceTimersByTime(31_000);
+            await updateUnreadCount(tab, makeTabEl());
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });
 
 // ---------------------------------------------------------------------------
