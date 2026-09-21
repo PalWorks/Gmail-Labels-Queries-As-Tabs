@@ -616,43 +616,97 @@ input:checked+.toggle-slider::before {
 /* ── Account Selector ──────────────────────────────────────── */
 .account-selector-bar {
     position: absolute;
-    top: 36px;
+    top: 30px;
     right: 48px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    padding: 8px 14px 8px 12px;
+    border-radius: 10px;
+    /* The account you are editing is the most consequential piece of state on
+       this page, so the chip is a filled surface, not a bare dropdown. */
+    background: #1f3a5f;
+    border: 1px solid #4fc3f7;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
     z-index: 1;
 }
 
+body.theme-light .account-selector-bar {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    box-shadow: 0 1px 4px rgba(26, 115, 232, 0.18);
+}
+
+.account-chip-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.account-chip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
 .account-selector-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: #a0aec0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8ab4f8;
     white-space: nowrap;
 }
 
+body.theme-light .account-selector-label {
+    color: #1a73e8;
+}
+
 .account-select {
-    min-width: 280px;
-    background: #1a1a2e;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    color: #e0e0e0;
-    padding: 10px 14px;
+    min-width: 240px;
+    max-width: 320px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    padding: 0;
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 600;
     font-family: inherit;
     outline: none;
     cursor: pointer;
-    transition: border-color 0.15s ease;
     appearance: auto;
 }
 
-.account-select:focus {
-    border-color: #4fc3f7;
+body.theme-light .account-select {
+    color: #0b3d91;
 }
 
-.account-select:hover {
-    border-color: rgba(79, 195, 247, 0.4);
+.account-select:focus-visible {
+    outline: 2px solid #8ab4f8;
+    outline-offset: 2px;
+}
+
+/* Only one account: nothing to switch between, so drop the affordance but
+   keep the identity visible. */
+.account-selector-bar.is-single .account-select {
+    cursor: default;
+}
+
+.account-selector-bar.is-empty {
+    background: transparent;
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: none;
+}
+
+body.theme-light .account-selector-bar.is-empty {
+    border-color: #c6cbd4;
+}
+
+.account-selector-bar.is-empty .account-select {
+    color: #9aa0a6;
+    font-weight: 500;
+    cursor: not-allowed;
 }
 
 /* ── Rule Row ───────────────────────────────────────────────── */

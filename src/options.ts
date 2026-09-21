@@ -49,7 +49,9 @@ import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl
 
 const SECTIONS = ['settings', 'rules', 'guide', 'privacy', 'contact', 'logs'] as const;
 type SectionId = (typeof SECTIONS)[number];
-const ACCOUNT_SECTIONS: readonly SectionId[] = ['settings', 'rules'];
+// The account chip stays on every section: which account you are editing is
+// context you need on the Rules page as much as on Settings, and losing it
+// when you navigate is how people edit the wrong account.
 
 function navigateToSection(sectionId: SectionId): void {
     document.querySelectorAll('.nav-item').forEach((item) => {
@@ -59,10 +61,7 @@ function navigateToSection(sectionId: SectionId): void {
         const el = document.getElementById(`section-${id}`);
         if (el) el.classList.toggle('hidden', id !== sectionId);
     });
-    const selectorBar = document.getElementById('account-selector-bar');
-    if (selectorBar) {
-        selectorBar.classList.toggle('hidden', !ACCOUNT_SECTIONS.includes(sectionId));
-    }
+
 }
 
 function handleHashChange(): void {
@@ -90,7 +89,11 @@ async function loadSettings(): Promise<void> {
         const accounts = await getAllAccounts();
 
         if (accounts.length === 0) {
-            showEmptyState('settings-tab-list', 'No accounts found. Open Gmail first to set up.');
+            populateAccountSelector([]);
+            showEmptyState(
+                'settings-tab-list',
+                'No account yet. Open Gmail in a tab and the extension will set this up automatically.'
+            );
             return;
         }
 
@@ -694,9 +697,26 @@ function setupScriptGeneration(): void {
 
 function populateAccountSelector(accounts: string[]): void {
     const select = document.getElementById('account-select') as HTMLSelectElement | null;
+    const bar = document.getElementById('account-selector-bar');
     if (!select) return;
 
     select.innerHTML = '';
+
+    // No account yet: say so in the chip itself rather than leaving an empty
+    // dropdown that looks broken.
+    if (accounts.length === 0) {
+        const option = document.createElement('option');
+        option.textContent = 'No account yet — open Gmail';
+        select.appendChild(option);
+        select.disabled = true;
+        bar?.classList.add('is-empty');
+        return;
+    }
+
+    select.disabled = false;
+    bar?.classList.remove('is-empty');
+    bar?.classList.toggle('is-single', accounts.length === 1);
+
     accounts.forEach((email) => {
         const option = document.createElement('option');
         option.value = email;

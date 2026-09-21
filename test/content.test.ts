@@ -23,6 +23,7 @@ const mockMigrate = jest.fn().mockResolvedValue(undefined);
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
 const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
 const mockMigrateTheme = jest.fn().mockResolvedValue(undefined);
+const mockEnsureAccountRegistered = jest.fn().mockResolvedValue(undefined);
 const mockRenderTabs = jest.fn();
 const mockUpdateActiveTab = jest.fn();
 const mockApplyTheme = jest.fn();
@@ -110,6 +111,7 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
                     saveSettings: mockSaveSettings,
                     getGlobalTheme: mockGetGlobalTheme,
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
                 }));
 
@@ -231,6 +233,7 @@ describe('storage change listener', () => {
                     saveSettings: mockSaveSettings,
                     getGlobalTheme: mockGetGlobalTheme,
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
                 }));
 
@@ -340,6 +343,7 @@ describe('injection and theme', () => {
                     saveSettings: mockSaveSettings,
                     getGlobalTheme: mockGetGlobalTheme,
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
                 }));
                 jest.doMock('../src/modules/state', () => ({
