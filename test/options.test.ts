@@ -140,7 +140,9 @@ function buildOptionsDOM(): void {
             <a class="nav-item" data-section="logs" href="#">Logs</a>
         </nav>
 
-        <select id="account-select"></select>
+        <div class="account-selector-bar" id="account-selector-bar">
+            <select id="account-select"></select>
+        </div>
 
         <section id="section-settings">
             <div id="settings-theme-group">
@@ -309,7 +311,31 @@ describe('loadSettings', () => {
         await loadOptionsPage();
 
         const list = document.getElementById('settings-tab-list');
-        expect(list?.innerHTML).toContain('No accounts found');
+        // The copy tells the user what to do, since the extension registers the
+        // account itself the moment Gmail is opened.
+        expect(list?.innerHTML).toContain('No account yet');
+        expect(list?.innerHTML).toContain('Open Gmail');
+    });
+
+    test('marks the account chip empty and disables it when there is no account', async () => {
+        mockGetAllAccounts.mockResolvedValue([]);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        const bar = document.getElementById('account-selector-bar') as HTMLElement;
+        expect(bar.classList.contains('is-empty')).toBe(true);
+        expect(select.disabled).toBe(true);
+        expect(select.options[0].textContent).toMatch(/no account yet/i);
+    });
+
+    test('marks the chip single when exactly one account exists', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const bar = document.getElementById('account-selector-bar') as HTMLElement;
+        expect(bar.classList.contains('is-single')).toBe(true);
+        expect(bar.classList.contains('is-empty')).toBe(false);
     });
 });
 

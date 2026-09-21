@@ -14,6 +14,7 @@ import {
     updateTabOrder,
     getSettings,
     getAllAccounts,
+    ensureAccountRegistered,
     migrateLegacySettingsIfNeeded,
     getGlobalTheme,
     setGlobalTheme,
@@ -143,6 +144,35 @@ describe('getSettings', () => {
         expect(settings.tabs[1]).not.toHaveProperty('color');
         // The rest of the tab survives untouched.
         expect(settings.tabs[0].title).toBe('Work');
+    });
+});
+
+// ------ ensureAccountRegistered ------
+
+describe('ensureAccountRegistered', () => {
+    test('writes defaults so a never-customised account is discoverable', async () => {
+        expect(await getAllAccounts()).toEqual([]);
+
+        await ensureAccountRegistered('fresh@gmail.com');
+
+        expect(await getAllAccounts()).toEqual(['fresh@gmail.com']);
+        const settings = await getSettings('fresh@gmail.com');
+        expect(settings.tabs).toHaveLength(2); // Inbox + Sent defaults
+    });
+
+    test('leaves an existing account untouched', async () => {
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [{ id: 'tab1', title: 'Work', type: 'label', value: 'Work' }],
+            rules: [],
+            theme: 'dark',
+            showUnreadCount: false,
+        };
+
+        await ensureAccountRegistered('user@gmail.com');
+
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.tabs).toHaveLength(1);
+        expect(settings.theme).toBe('dark');
     });
 });
 

@@ -17,6 +17,7 @@
 import * as InboxSDK from '@inboxsdk/core';
 import {
     getSettings,
+    ensureAccountRegistered,
     migrateLegacySettingsIfNeeded,
     getGlobalTheme,
     migrateThemeToGlobalIfNeeded,
@@ -195,6 +196,10 @@ async function finalizeInit(email: string): Promise<void> {
         // account's per-account theme), then apply it. Theme is global across
         // all accounts in the window, not per-account.
         await migrateThemeToGlobalIfNeeded(email);
+
+        // Make this account visible to the options page even if the user never
+        // changes a setting.
+        await ensureAccountRegistered(email);
 
         setAppSettings(await getSettings(email));
         console.log('Gmail Tabs: Settings loaded for', email, getAppSettings());

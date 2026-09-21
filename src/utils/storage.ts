@@ -144,6 +144,32 @@ export async function getSettings(accountId: string): Promise<Settings> {
 }
 
 /**
+ * Make sure this account exists in storage.
+ *
+ * Reading settings returns defaults without writing anything, so an account
+ * the user never customised was invisible to `getAllAccounts()` — the options
+ * page said "No accounts found" for someone who had been using the extension
+ * happily for weeks. Registering on first Gmail load fixes that; it writes the
+ * defaults once and is a no-op afterwards.
+ */
+export async function ensureAccountRegistered(accountId: string): Promise<void> {
+    const key = getAccountKey(accountId);
+    const exists = await new Promise<boolean>((resolve) => {
+        try {
+            chrome.storage.sync.get([key], (items) => {
+                resolve(!chrome.runtime.lastError && items[key] !== undefined);
+            });
+        } catch {
+            resolve(true); // Storage unavailable: do not write blindly.
+        }
+    });
+    if (exists) return;
+
+    // saveSettings merges over the defaults, so an empty patch persists them.
+    await saveSettings(accountId, {});
+}
+
+/**
  * Retrieves all stored accounts (keys starting with account_).
  */
 export async function getAllAccounts(): Promise<string[]> {
