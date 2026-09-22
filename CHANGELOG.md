@@ -4,6 +4,57 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.6.0] - 2026-09-22
+
+Onboarding, rebuilt. The old welcome page listed three things the extension
+does; this one shows them.
+
+### Added
+
+- **A tour that demonstrates rather than describes.** Six slides, each pairing a
+  sentence with a working miniature of the tab bar directly above it: labels
+  rising out of the sidebar, a search being saved as a tab, unread counts
+  filling in, a tab being dragged, the Apps Script a cleanup rule generates, and
+  a theme chooser. An earlier draft animated the real Gmail page behind a dimmed
+  scrim, which asked the reader to look in one place and watch in another, and
+  then dimmed the half they were meant to watch. See ADR-018.
+- **It runs over Gmail.** The tour opens as a modal on the Gmail page whenever
+  there is one, which buys something the old page could not: picking a theme on
+  the last slide retints the user's real tab bar, behind the panel, as they
+  choose. The standalone page is now the fallback for a browser with no Gmail
+  open, and it mounts the same wizard rather than a second copy of the copy.
+- **Four ways in, not one.** The tour was previously reachable exactly once, on
+  install, so anyone who dismissed it had no route back. It is now also in the
+  toolbar menu, on the options page under Settings, and reachable by message.
+- **A menu behind the toolbar icon.** Configure tabs, Show me around, All
+  settings, Help & support. Outside Gmail, "Configure tabs" says it will open
+  Gmail first rather than silently doing nothing, which is what clicking the
+  icon did anywhere but Gmail before.
+- **Contrast cover for the wizard's palette.** It carries its own tokens so it
+  can render in two hosts, and nothing else reads them, so nothing else would
+  have noticed them drifting. Both themes are now checked.
+
+### Changed
+
+- **Clicking the toolbar icon opens the menu instead of toggling the settings
+  modal.** That costs the most common action one extra click, which is why
+  "Configure tabs" is the first and largest entry. It buys a home for the tour
+  and for help, and it makes the icon do something useful on a non-Gmail tab.
+- **The welcome page is now a thin host.** Its three step-cards and its own
+  theme radios are gone; everything explanatory lives in the shared wizard.
+
+### Fixed
+
+- **A theme chosen before the wizard finished reading storage was silently
+  reverted.** The initial read resolves while the wizard is already
+  interactive, and its result overwrote the user's choice a moment later — the
+  value saved, the wrong card pressed. Found by a test, not by a person.
+- **First-run onboarding no longer races the content script.** On install the
+  worker cannot message an open Gmail tab, because that tab is running no
+  content script until it reloads. It leaves a flag that the freshly injected
+  script consumes, and the flag is cleared as it is read, so the tour opens in
+  one tab rather than in all four of someone's Gmail tabs.
+
 ## [1.5.0] - 2026-09-21
 
 Mostly a hardening release: correctness, safety, and the guards that stop each defect

@@ -4,9 +4,9 @@ Everything the CWS Dashboard asks for, in the order the dashboard asks for it. C
 block verbatim. Character counts are the store's limits, and the counts shown are what the
 text below actually uses.
 
-**Version this listing describes:** 1.5.0
+**Version this listing describes:** 1.6.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
-**Last updated:** 2026-09-21
+**Last updated:** 2026-09-22
 
 ---
 
@@ -86,7 +86,7 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 626 automated tests covering storage,
+The full source is public and auditable, with 685 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
@@ -291,7 +291,28 @@ Screenshot captions, in upload order:
 
 ---
 
-## 6. Release notes for 1.5.0
+## 6. Release notes for 1.6.0
+
+```
+New: a one-minute tour that shows what the extension does instead of describing it. It
+opens over Gmail, and each step demonstrates the tab bar right there in the panel: labels
+moving up out of the sidebar, a search being saved as a tab, unread counts filling in,
+colours, dragging to reorder, and the cleanup script a rule generates. The last step is
+the theme picker, and your real tab bar changes behind the panel as you choose.
+
+New: a menu behind the toolbar icon, with Configure tabs, Show me around, All settings,
+and Help & support. Clicking the icon used to do nothing at all unless you were on Gmail.
+
+New: you can reopen the tour whenever you like, from that menu or from the Settings page.
+It used to appear once, on install, and never again.
+
+Fixed: choosing a theme in the first seconds after the tour opened could be silently
+undone by the saved value loading a moment later.
+```
+
+Everything from 1.5.0 is included; those notes are kept below for reference.
+
+## 6b. Release notes carried over from 1.5.0
 
 ```
 Important fix for automation rules: a label whose name contains a space, such as "Old
@@ -320,23 +341,27 @@ what it does not carry.
 Regenerating the Apps Script is worth calling out in the listing text as well as here: an
 existing script on someone's account keeps the old, unquoted query until they replace it.
 
+1.6.0 adds no permission and changes no data flow. The tour is drawn entirely from strings
+compiled into the extension; it fetches nothing.
+
 ---
 
 ## 7. Pre-submission checklist
 
-Verified on 2026-09-21 against `main` at the 1.5.0 release commit.
+Verified on 2026-09-22 against `main` at the 1.6.0 release commit.
 
 - [x] `npm run package` produces `extension.zip` from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.5.0 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.6.0 (CI checks parity)
 - [x] Privacy policy page rewritten for 1.5.0: storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics stated separately
 - [x] Privacy policy URL now points at the site this repository deploys, not the stale one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.5.0
+- [x] Public changelog updated through 1.6.0
 - [x] Screenshots regenerated against the shipping build; all five are 1280x800 and contain
       only demo data (Inbox, Clients, Invoices, Newsletters)
 - [x] Feedback relay reachable: `/health` returns `{"ok":true}`
-- [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
+- [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`.
+      1.6.0 adds `default_popup`, which is not a permission and needs no review answer
 - [x] The uninstall URL is set, is a bare form link, and carries no identifying parameter
       (asserted in `test/background.test.ts`; disclosure asserted in
       `test/repoConsistency.test.ts`)
@@ -345,8 +370,12 @@ Verified on 2026-09-21 against `main` at the 1.5.0 release commit.
 
 Still to do by hand:
 
-- [ ] Load `extension.zip` in a clean Chrome profile and click through once
-- [ ] Upload, paste the 1.5.0 release notes from section 6, and submit
+- [ ] Load `extension.zip` in a clean Chrome profile and click through once, including the
+      first-run tour (install with a Gmail tab open, then again with none, to see both
+      surfaces)
+- [ ] Re-shoot the store screenshots if the tour should appear in them; the five current
+      ones predate it
+- [ ] Upload, paste the 1.6.0 release notes from section 6, and submit
 
 A note for next time: the website deploys **manually** now, in both repositories. A change
 to the privacy policy is not live, and must not be described as live, until

@@ -2,13 +2,13 @@ export {};
 /**
  * welcome.test.ts
  *
- * Unit tests for the welcome/onboarding page logic.
- * Tests theme radio selection, theme persistence, and Open Gmail button.
+ * The standalone onboarding page.
+ *
+ * It is a thin host now: it mounts the shared wizard and differs from the
+ * in-Gmail modal in exactly two ways, so those two are what this file covers.
+ * The wizard's own behaviour lives in wizardView.test.ts and is not repeated
+ * here.
  */
-
-// ---------------------------------------------------------------------------
-// Mock chrome APIs
-// ---------------------------------------------------------------------------
 
 const mockStorageGet = jest.fn();
 const mockStorageSet = jest.fn();
@@ -19,14 +19,9 @@ const mockTabsReload = jest.fn();
 
 beforeAll(() => {
     (global as any).chrome = {
-        // Theme is now a browser-wide preference in chrome.storage.local.
-        storage: {
-            local: {
-                get: mockStorageGet,
-                set: mockStorageSet,
-            },
-        },
-        runtime: {},
+        // Theme is a browser-wide preference in chrome.storage.local.
+        storage: { local: { get: mockStorageGet, set: mockStorageSet } },
+        runtime: { id: 'abcdef', lastError: null },
         tabs: {
             query: mockTabsQuery,
             create: mockTabsCreate,
@@ -36,17 +31,8 @@ beforeAll(() => {
     };
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function setupWelcomeDOM(): void {
-    document.body.innerHTML = `
-        <input type="radio" name="theme" value="system">
-        <input type="radio" name="theme" value="light" checked>
-        <input type="radio" name="theme" value="dark">
-        <button id="open-gmail-btn">Open Gmail</button>
-    `;
+    document.body.innerHTML = '<main id="welcome-stage"></main>';
 }
 
 function loadWelcome(): void {
@@ -54,105 +40,135 @@ function loadWelcome(): void {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         require('../src/welcome');
     });
-    // Fire DOMContentLoaded
     document.dispatchEvent(new Event('DOMContentLoaded'));
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
+/** Let the two storage reads the page makes on open settle. */
+async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+}
 
 beforeEach(() => {
     jest.clearAllMocks();
-    document.body.innerHTML = '';
     document.documentElement.removeAttribute('data-theme');
-
-    mockStorageGet.mockImplementation((_keys: any, cb: (result: any) => void) => cb({}));
+    mockStorageGet.mockImplementation((_keys: any, cb: any) => cb({ globalTheme: 'light' }));
+    mockStorageSet.mockImplementation((_items: any, cb?: any) => cb?.());
+    setupWelcomeDOM();
 });
 
-// ---------------------------------------------------------------------------
-// Theme Logic
-// ---------------------------------------------------------------------------
+describe('the welcome page mounts the shared wizard', () => {
+    test('the tour is on the page, not a second copy of the copy', async () => {
+        loadWelcome();
+        await settle();
 
-describe('welcome page theme', () => {
-    test('loads saved theme from storage and applies it', async () => {
-        setupWelcomeDOM();
-        mockStorageGet.mockImplementation((_keys: any, cb: (result: any) => void) =>
-            cb({ globalTheme: 'dark' })
-        );
+        const wizard = document.querySelector('#welcome-stage .glt-ob');
+        expect(wizard).not.toBeNull();
+        expect(wizard!.querySelector('.glt-ob-title')?.textContent).toBe('Your labels, across the top');
+    });
+
+    test('it starts on the first slide', async () => {
+        loadWelcome();
+        await settle();
+
+        expect(document.querySelector('.glt-ob-step')?.textContent).toBe('Step 1 of 6');
+    });
+
+    test('there is no dismiss control, because this page is the whole experience', async () => {
+        // An X here would leave the user on an empty tab.
+        loadWelcome();
+        await settle();
+
+        expect(document.querySelector('.glt-ob-close')).toBeNull();
+    });
+});
+
+describe('theme, which this page applies to itself', () => {
+    test('opens on the saved theme', async () => {
+        mockStorageGet.mockImplementation((_keys: any, cb: any) => cb({ globalTheme: 'dark' }));
 
         loadWelcome();
-        await new Promise((r) => setTimeout(r, 0));
+        await settle();
 
         expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     });
 
-    test('defaults to light theme when none saved', async () => {
-        setupWelcomeDOM();
-        mockStorageGet.mockImplementation((_keys: any, cb: (result: any) => void) =>
-            cb({})
-        );
+    test("'system' clears the attribute rather than guessing", async () => {
+        mockStorageGet.mockImplementation((_keys: any, cb: any) => cb({ globalTheme: 'system' }));
 
         loadWelcome();
-        await new Promise((r) => setTimeout(r, 0));
+        await settle();
 
-        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
     });
 
-    test('saves theme to storage when radio is changed', () => {
-        setupWelcomeDOM();
+    test('choosing a theme repaints the page and persists it browser-wide', async () => {
         loadWelcome();
+        await settle();
 
-        const lightRadio = document.querySelector('input[value="light"]') as HTMLInputElement;
-        lightRadio.checked = true;
-        lightRadio.dispatchEvent(new Event('change', { bubbles: true }));
+        // The chooser is on the last slide.
+        for (let i = 0; i < 5; i++) (document.querySelector('.glt-ob-next') as HTMLElement).click();
+        const dark = document.querySelectorAll('.glt-ob-theme')[1] as HTMLElement;
+        dark.click();
+        await settle();
 
-        expect(mockStorageSet).toHaveBeenCalledWith({ globalTheme: 'light' }, expect.any(Function));
-        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        expect(mockStorageSet).toHaveBeenCalledWith({ globalTheme: 'dark' }, expect.any(Function));
     });
 
-    test('applies light theme via data-theme attribute', () => {
-        setupWelcomeDOM();
+    test('a failed write does not take the page down', async () => {
+        const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockStorageSet.mockImplementation(() => {
+            throw new Error('storage is gone');
+        });
+
         loadWelcome();
+        await settle();
+        for (let i = 0; i < 5; i++) (document.querySelector('.glt-ob-next') as HTMLElement).click();
 
-        const lightRadio = document.querySelector('input[value="light"]') as HTMLInputElement;
-        lightRadio.checked = true;
-        lightRadio.dispatchEvent(new Event('change', { bubbles: true }));
-
-        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        expect(() => (document.querySelectorAll('.glt-ob-theme')[1] as HTMLElement).click()).not.toThrow();
+        await settle();
+        expect(error).toHaveBeenCalled();
+        error.mockRestore();
     });
 });
 
-// ---------------------------------------------------------------------------
-// Open Gmail Button
-// ---------------------------------------------------------------------------
+describe('finishing the tour', () => {
+    /** Walk to the last slide and press the finish button. */
+    function finish(): void {
+        for (let i = 0; i < 5; i++) (document.querySelector('.glt-ob-next') as HTMLElement).click();
+        (document.querySelector('.glt-ob-next') as HTMLElement).click();
+    }
 
-describe('welcome page Open Gmail button', () => {
-    test('creates new Gmail tab when no existing tabs found', () => {
-        setupWelcomeDOM();
+    test('the final button says what happens next', async () => {
         loadWelcome();
+        await settle();
+        for (let i = 0; i < 5; i++) (document.querySelector('.glt-ob-next') as HTMLElement).click();
 
-        mockTabsQuery.mockImplementation((_query: any, cb: any) => cb([]));
-
-        const btn = document.getElementById('open-gmail-btn')!;
-        btn.click();
-
-        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'https://mail.google.com/' });
+        expect(document.querySelector('.glt-ob-next')?.textContent).toBe('Start using with Gmail');
     });
 
-    test('activates and reloads existing Gmail tab', () => {
-        setupWelcomeDOM();
+    test('focuses an existing Gmail tab and reloads it', async () => {
+        // Reloaded because that tab may predate the install and so be running
+        // no content script: arriving at a Gmail with no tab bar, straight
+        // after a tour promising one, is the worst possible first impression.
+        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5 }]));
+
         loadWelcome();
-
-        mockTabsQuery.mockImplementation((_query: any, cb: any) =>
-            cb([{ id: 5, active: false }])
-        );
-
-        const btn = document.getElementById('open-gmail-btn')!;
-        btn.click();
+        await settle();
+        finish();
 
         expect(mockTabsUpdate).toHaveBeenCalledWith(5, { active: true });
         expect(mockTabsReload).toHaveBeenCalledWith(5);
         expect(mockTabsCreate).not.toHaveBeenCalled();
+    });
+
+    test('opens Gmail when none is open', async () => {
+        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([]));
+
+        loadWelcome();
+        await settle();
+        finish();
+
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'https://mail.google.com/' });
     });
 });

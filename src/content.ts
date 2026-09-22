@@ -23,10 +23,12 @@ import {
     migrateThemeToGlobalIfNeeded,
     GLOBAL_THEME_STORAGE_KEY,
     Theme,
+    takePendingOnboarding,
 } from './utils/storage';
 
 // Module imports
 import { TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
+import { showOnboarding, SHOW_ONBOARDING_ACTION } from './modules/onboarding/onboardingModal';
 import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modules/theme';
 import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
@@ -381,6 +383,11 @@ async function init(): Promise<void> {
             toggleSettingsModal();
             return false;
         }
+        if (message.action === SHOW_ONBOARDING_ACTION) {
+            showOnboarding();
+            sendResponse({ ok: true });
+            return false;
+        }
         if (message.action === 'GET_ACCOUNT_INFO') {
             sendResponse({ account: getUserEmail() });
             return false;
@@ -397,6 +404,19 @@ async function init(): Promise<void> {
             handleUnreadUpdates(updates);
         }
     });
+
+    // Last, deliberately. This is the first run after install, and the tour is
+    // the least important thing this function does: every listener above it
+    // must be registered whether or not onboarding works at all.
+    takePendingOnboarding()
+        .then((pending) => {
+            // The flag is cleared as it is read, so the tour opens in one tab
+            // rather than in every Gmail tab the user happens to have open.
+            if (pending) showOnboarding();
+        })
+        .catch((err) => {
+            console.warn('Gmail Tabs: could not check for a pending tour', err);
+        });
 }
 
 // ---------------------------------------------------------------------------

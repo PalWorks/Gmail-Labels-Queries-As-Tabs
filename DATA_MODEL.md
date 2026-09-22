@@ -3,7 +3,7 @@
 Storage schema and data shapes for **Gmail Labels and Search Queries as Tabs**. The
 source of truth is [src/utils/storage.ts](src/utils/storage.ts); this file explains it.
 
-Last updated: 2026-09-21 (v1.5.0)
+Last updated: 2026-09-22 (v1.6.0)
 
 ## Storage areas
 

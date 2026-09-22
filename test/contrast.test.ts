@@ -185,20 +185,56 @@ describe('welcome page palette', () => {
         ['OS dark', readTokens('src/welcome.css', ':root:not([data-theme="light"])')],
     ];
 
-    test.each(scopes)('%s declares the selected-option text token', (_name, tokens) => {
-        expect(tokens['--option-selected-text']).toBeTruthy();
-    });
-
-    test.each(scopes)('%s selected theme label on its chip', (name, tokens) => {
-        expectContrast(`${name} selected option`, tokens['--option-selected-text'], tokens['--option-selected-bg'], AA_NORMAL);
-    });
-
     test.each(scopes)('%s secondary text on the page', (name, tokens) => {
         expectContrast(`${name} secondary text`, tokens['--text-secondary'], tokens['--bg-color'], AA_NORMAL);
     });
 
     test.each(scopes)('%s primary text on cards', (name, tokens) => {
         expectContrast(`${name} primary text`, tokens['--text-primary'], tokens['--card-bg'], AA_NORMAL);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding wizard palette
+//
+// The wizard renders in two hosts and carries its own tokens so it does not
+// depend on either. That independence is the reason it needs its own contrast
+// test: nothing else reads these values, so nothing else would notice them
+// drifting. The selected theme card in particular used to live in welcome.css
+// and was checked there.
+// ---------------------------------------------------------------------------
+
+describe('onboarding wizard palette', () => {
+    const scopes: Array<[string, Record<string, string>]> = [
+        ['light', readTokens('src/ui/onboarding.css', '.glt-ob')],
+        ['dark', readTokens('src/ui/onboarding.css', ".glt-ob[data-resolved='dark']")],
+    ];
+
+    test.each(scopes)('%s body copy on the panel', (name, tokens) => {
+        // The narration is --ob-tab-text, not --ob-text: it is deliberately
+        // quieter than the heading, which is exactly how text ends up failing.
+        expectContrast(`${name} wizard body`, tokens['--ob-tab-text'], tokens['--ob-surface'], AA_NORMAL);
+    });
+
+    test.each(scopes)('%s heading on the panel', (name, tokens) => {
+        expectContrast(`${name} wizard heading`, tokens['--ob-text'], tokens['--ob-surface'], AA_NORMAL);
+    });
+
+    test.each(scopes)('%s selected theme card', (name, tokens) => {
+        expectContrast(
+            `${name} selected theme card`,
+            tokens['--ob-tab-active-text'],
+            tokens['--ob-tab-active-bg'],
+            AA_NORMAL
+        );
+    });
+
+    test.each(scopes)('%s caption strip, which is white on the accent', (name, tokens) => {
+        expectContrast(`${name} wizard caption`, tokens['--ob-on-accent'], tokens['--ob-accent'], AA_NORMAL);
+    });
+
+    test.each(scopes)('%s tab label in the miniature', (name, tokens) => {
+        expectContrast(`${name} miniature tab`, tokens['--ob-tab-text'], tokens['--ob-bar-bg'], AA_NORMAL);
     });
 });
 

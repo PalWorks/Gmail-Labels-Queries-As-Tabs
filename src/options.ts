@@ -46,6 +46,7 @@ import {
 } from './modules/feedback';
 import { renderManagedTabList, parseTabInput, isUrlLikeInput, deriveTitleFromUrl } from './modules/tabManager';
 import { catchChromeError } from './modules/extensionContext';
+import { START_TOUR_ACTION } from './modules/messages';
 
 // ---------------------------------------------------------------------------
 // Navigation & Routing
@@ -396,6 +397,15 @@ function setupDataControls(): void {
     // Import
     document.getElementById('settings-import-btn')?.addEventListener('click', () => {
         showImportDialog();
+    });
+
+    // Tour. The fourth way in, after install, the toolbar menu and a direct
+    // message: someone who dismissed it on day one had no route back at all.
+    document.getElementById('settings-tour-btn')?.addEventListener('click', () => {
+        catchChromeError(chrome.runtime.sendMessage({ action: START_TOUR_ACTION }), (e) => {
+            console.error('Options: could not start the tour', e);
+            alert('The tour could not be opened. Please try again.');
+        });
     });
 
     // Uninstall

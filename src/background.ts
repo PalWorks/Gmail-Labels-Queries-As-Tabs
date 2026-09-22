@@ -12,16 +12,70 @@
  */
 
 import '@inboxsdk/core/background.js';
-import { MUTATE_SETTINGS_ACTION, createMutationQueue, MutateSettingsResponse } from './utils/storage';
+import {
+    MUTATE_SETTINGS_ACTION,
+    createMutationQueue,
+    MutateSettingsResponse,
+    setPendingOnboarding,
+} from './utils/storage';
 import { catchChromeError } from './modules/extensionContext';
+import { START_TOUR_ACTION, SHOW_ONBOARDING_ACTION, OPEN_OPTIONS_PAGE_ACTION } from './modules/messages';
 
 const mutationQueue = createMutationQueue();
+
+/** Matches every Gmail tab, in any window. */
+const GMAIL_MATCH = 'https://mail.google.com/*';
+
+/**
+ * Start the onboarding tour on whichever surface the user actually has.
+ *
+ * Over Gmail wherever possible, because that is the only place the theme
+ * chooser on the last slide can retint the real tab bar while the user
+ * watches. The standalone page is the fallback for a browser with no Gmail
+ * open, and for a Gmail tab old enough to predate this install and so to be
+ * running no content script yet.
+ */
+async function startTour(): Promise<void> {
+    let tabs: chrome.tabs.Tab[] = [];
+    try {
+        tabs = await chrome.tabs.query({ url: GMAIL_MATCH });
+    } catch (e: unknown) {
+        console.warn('Background: could not look for a Gmail tab:', e);
+    }
+
+    // Prefer the one the user is looking at.
+    const target = tabs.find((t) => t.active) ?? tabs[0];
+
+    if (target && target.id !== undefined) {
+        try {
+            await chrome.tabs.update(target.id, { active: true });
+            if (target.windowId !== undefined) {
+                await chrome.windows.update(target.windowId, { focused: true });
+            }
+            await chrome.tabs.sendMessage(target.id, { action: SHOW_ONBOARDING_ACTION });
+            return;
+        } catch (e: unknown) {
+            // No content script in that tab yet. Fall through to the page
+            // rather than leaving the user with nothing having happened.
+            console.warn('Background: the Gmail tab could not show the tour:', e);
+        }
+    }
+
+    await chrome.tabs.create({ url: 'welcome.html' });
+}
 
 /**
  * Open the options page, preferring Chrome's own opener so an already-open
  * tab is focused rather than duplicated.
  */
-async function openOptionsPage(): Promise<void> {
+async function openOptionsPage(hash?: string): Promise<void> {
+    // A hash targets one section, so "Help & support" in the toolbar menu
+    // lands on the contact form rather than on whatever section was last
+    // open. openOptionsPage() cannot carry one, so a hash means a real tab.
+    if (hash) {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') + hash });
+        return;
+    }
     if (chrome.runtime.openOptionsPage) {
         await chrome.runtime.openOptionsPage();
         return;
@@ -92,7 +146,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.action === 'OPEN_OPTIONS_PAGE') {
+    if (message.action === OPEN_OPTIONS_PAGE_ACTION) {
         // A content script cannot open this itself. `options.html` is not in
         // `web_accessible_resources`, so a navigation whose initiator is
         // mail.google.com is refused with ERR_BLOCKED_BY_CLIENT, which is how
@@ -103,10 +157,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Answered asynchronously, and deliberately. Both openers can reject
         // rather than throw, so the synchronous try/catch this replaced would
         // have reported ok: true for an options page that never opened.
-        openOptionsPage()
+        openOptionsPage(typeof message.hash === 'string' ? message.hash : undefined)
             .then(() => sendResponse({ ok: true }))
             .catch((e: unknown) => {
                 console.error('Background: could not open the options page:', e);
+                sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+            });
+        return true;
+    }
+
+    if (message.action === START_TOUR_ACTION) {
+        startTour()
+            .then(() => sendResponse({ ok: true }))
+            .catch((e: unknown) => {
+                console.error('Background: could not start the tour:', e);
                 sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
             });
         return true;
@@ -155,34 +219,55 @@ if (chrome.runtime.setUninstallURL) {
     });
 }
 
-chrome.action.onClicked.addListener((tab) => {
-    if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, { action: 'TOGGLE_SETTINGS' }).catch((err) => {
-            // Ignore errors if the content script isn't ready
-            console.warn('Could not send message to tab:', err);
-        });
+/**
+ * Decide where the first-run tour should appear, and make it happen.
+ *
+ * Reloading the open Gmail tabs is not new behaviour bolted on for the tour:
+ * it is what makes the tab bar appear at all without the user reloading by
+ * hand. The tour rides along with it.
+ */
+async function installOnboarding(): Promise<void> {
+    let tabs: chrome.tabs.Tab[] = [];
+    try {
+        tabs = await chrome.tabs.query({ url: GMAIL_MATCH });
+    } catch (e: unknown) {
+        console.warn('Background: could not look for Gmail tabs on install:', e);
     }
-});
 
-// Install hook: Open Welcome Page & Reload Gmail Tabs
+    if (tabs.length === 0) {
+        // Nothing to run it over: the standalone page is the whole experience.
+        await chrome.tabs.create({ url: 'welcome.html' });
+        return;
+    }
+
+    await setPendingOnboarding(true);
+
+    for (const tab of tabs) {
+        if (tab.id === undefined) continue;
+        // One discarded or closing tab must not stop the rest.
+        catchChromeError(chrome.tabs.reload(tab.id), (e) =>
+            console.warn('Background: could not reload Gmail tab', tab.id, e)
+        );
+    }
+
+    const focus = tabs.find((t) => t.active) ?? tabs[0];
+    if (focus && focus.id !== undefined) {
+        catchChromeError(chrome.tabs.update(focus.id, { active: true }), (e) =>
+            console.warn('Background: could not focus the Gmail tab:', e)
+        );
+    }
+}
+
+// Install hook: first-run tour + reload open Gmail tabs
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-        // 1. Open Welcome Page
-        catchChromeError(chrome.tabs.create({ url: 'welcome.html' }), (e) =>
-            console.warn('Background: could not open the welcome page:', e)
+        // The tour runs over Gmail when there is a Gmail tab to run it over,
+        // because only there can the theme chooser retint the real bar. The
+        // flag is how: an already-open Gmail tab is running no content script
+        // until it reloads, so a message sent now would reach nothing. The
+        // reload below injects the script, which then picks this up.
+        installOnboarding().catch((e: unknown) =>
+            console.warn('Background: could not set up the welcome tour:', e)
         );
-
-        // 2. Auto-Reload Open Gmail Tabs
-        // This ensures the content script is injected immediately
-        chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
-            tabs.forEach((tab) => {
-                if (tab.id) {
-                    // One discarded or closing tab must not stop the rest.
-                    catchChromeError(chrome.tabs.reload(tab.id), (e) =>
-                        console.warn('Background: could not reload Gmail tab', tab.id, e)
-                    );
-                }
-            });
-        });
     }
 });

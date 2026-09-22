@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-21 (v1.5.0)
+Last updated: 2026-09-22 (v1.6.0)
 
 ## The problem it solves
 

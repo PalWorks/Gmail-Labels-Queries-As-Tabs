@@ -73,7 +73,8 @@ Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by 
 | **Export / Import** | Backup and restore configuration as schema-validated JSON |
 | **Cross-Device Sync** | Settings sync across Chrome instances via `chrome.storage.sync` |
 | **Options Dashboard** | Full-featured settings page with theme control, tab management, automation rules, user guide, privacy info, and logging |
-| **Welcome Onboarding** | Guided setup for first-time users |
+| **Guided tour** | Six steps that demonstrate the tab bar in a working miniature inside the panel, not screenshots of it. Opens over Gmail so the theme step retints your real bar; falls back to a standalone page when no Gmail tab is open |
+| **Toolbar menu** | Configure tabs, Show me around, All settings, Help & support, behind the extension icon |
 | **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
 | **Privacy First** | No background network requests, no telemetry; everything stays local |
 
@@ -330,8 +331,9 @@ Gmail-Labels-As-Tabs/
 │   ├── options.ts                    # Options page logic
 │   ├── options.html                  # Options page markup (6 sections)
 │   ├── options.css                   # Options page styles
-│   ├── welcome.ts                    # Onboarding page logic
-│   ├── welcome.html / welcome.css    # Onboarding page markup & styles
+│   ├── welcome.ts                    # Standalone tour host (no Gmail tab open)
+│   ├── welcome.html / welcome.css    # …and its markup & surround
+│   ├── popup.ts / popup.html/.css    # The toolbar icon's menu
 │   │
 │   ├── modules/                      # Feature modules (extracted from content.ts)
 │   │   ├── state.ts                  # Shared state & DOM selectors
@@ -374,7 +376,9 @@ Gmail-Labels-As-Tabs/
 │   ├── rules.test.ts                 # Automation rules tests
 │   ├── options.test.ts               # Options page tests
 │   ├── settingsModal.test.ts         # Settings modal tests
-│   ├── welcome.test.ts               # Welcome page tests
+│   ├── welcome.test.ts               # Standalone tour host
+│   ├── popup.test.ts                 # Toolbar menu
+│   ├── onboarding/                   # The shared wizard and its in-Gmail host
 │   ├── xhrInterceptor.test.ts        # XHR interceptor tests
 │   └── modals/                       # Modal-specific tests
 │       ├── pinModal.test.ts
@@ -427,10 +431,13 @@ npx jest test/modals/
 | Rules | `rules.test.ts` | Apps Script generation, rule validation |
 | State | `state.test.ts` | Shared state, DOM selector management |
 | Tab List Renderer | `tabListRenderer.test.ts` | Reusable rendering logic |
-| Welcome | `welcome.test.ts` | Onboarding page logic |
+| Welcome | `welcome.test.ts` | Standalone tour host |
+| Popup | `popup.test.ts` | Toolbar menu entries and their fallbacks |
+| Onboarding | `onboarding/wizardView.test.ts` | The shared wizard: slides, captions, theme chooser |
+| Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 32 test files, 626 test cases.**
+**Total: 35 test files, 685 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -458,7 +465,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 626 tests across 32 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 685 tests across 35 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -516,7 +523,7 @@ That site deploys **manually**: `gh workflow run deploy.yml --repo PalWorks/Gmai
 - Multi-account support
 - Export and Import configuration
 - Cross-device sync
-- Welcome onboarding page
+- Guided tour, over Gmail or standalone
 
 ### v1.1: Shipped
 
@@ -601,7 +608,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (626 tests across 32 suites)
+npm test          # Jest (685 tests across 35 suites)
 npm run build     # Verify production build
 ```
 

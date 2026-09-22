@@ -764,6 +764,73 @@ export async function setGlobalTheme(theme: Theme): Promise<void> {
 /** The storage key used for the global theme (exported for listener checks). */
 export const GLOBAL_THEME_STORAGE_KEY = GLOBAL_THEME_KEY;
 
+// ---------------------------------------------------------------------------
+// Pending onboarding tour (chrome.storage.local)
+// ---------------------------------------------------------------------------
+
+/** Set on install; consumed by the first Gmail tab that sees it. */
+const PENDING_ONBOARDING_KEY = 'pendingOnboarding';
+
+/** Exported for listener checks and tests. */
+export const PENDING_ONBOARDING_STORAGE_KEY = PENDING_ONBOARDING_KEY;
+
+/**
+ * Flag the tour to run in the next Gmail tab that initialises.
+ *
+ * The service worker cannot simply message an open Gmail tab on install: that
+ * tab is still running no content script at all until it reloads, so the
+ * message goes nowhere. It reloads those tabs and leaves this behind instead,
+ * and the freshly injected script picks it up.
+ */
+export async function setPendingOnboarding(value: boolean): Promise<void> {
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.set({ [PENDING_ONBOARDING_KEY]: value }, () => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                    return;
+                }
+                resolve();
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+/**
+ * Read the flag and clear it in the same breath.
+ *
+ * Clearing on read is what stops the tour opening in all four of someone's
+ * Gmail tabs at once. It is not atomic across tabs, but the write lands well
+ * before a second tab finishes loading Gmail, and showing it twice is a far
+ * smaller failure than never clearing it.
+ *
+ * Never rejects: onboarding must not be able to break start-up.
+ */
+export async function takePendingOnboarding(): Promise<boolean> {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.get([PENDING_ONBOARDING_KEY], (items) => {
+                if (chrome.runtime.lastError || !items || items[PENDING_ONBOARDING_KEY] !== true) {
+                    resolve(false);
+                    return;
+                }
+                try {
+                    chrome.storage.local.remove(PENDING_ONBOARDING_KEY, () => {
+                        void chrome.runtime.lastError; // best-effort clear
+                        resolve(true);
+                    });
+                } catch {
+                    resolve(true);
+                }
+            });
+        } catch {
+            resolve(false);
+        }
+    });
+}
+
 /**
  * Seeds the global theme once, on first run after the per-account → global
  * migration. Priority: existing global value (no-op) > legacy sync 'theme'

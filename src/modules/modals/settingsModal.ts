@@ -15,9 +15,10 @@ import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
 import { isExtensionContextAlive, isContextInvalidatedError, catchChromeError } from '../extensionContext';
 import { renderContextInvalidatedNotice } from './contextNotice';
+import { OPEN_OPTIONS_PAGE_ACTION } from '../messages';
 
 /** Asks the service worker to open the options page. See `openOptionsPage`. */
-export const OPEN_OPTIONS_PAGE_ACTION = 'OPEN_OPTIONS_PAGE';
+export { OPEN_OPTIONS_PAGE_ACTION };
 
 /** Contact route on the marketing site (PalWorks/Gmail-Labels-As-Tabs). */
 export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact';

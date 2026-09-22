@@ -13,7 +13,8 @@ const commonConfig = {
         'src/background.ts',
         'src/xhrInterceptor.ts',
         'src/welcome.ts',
-        'src/options.ts'
+        'src/options.ts',
+        'src/popup.ts'
     ],
     bundle: true,
     outdir: 'dist/js',

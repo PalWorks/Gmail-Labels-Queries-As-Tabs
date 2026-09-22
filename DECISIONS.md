@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-21 (v1.5.0)
+Last updated: 2026-09-22 (v1.6.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -350,3 +350,77 @@ The linter cannot see two shapes, so they were fixed by hand and are called out 
 code: an `async` callback passed to `setInterval` (the account poller in
 [src/content.ts](src/content.ts)), which has nowhere to reject to, and a `.then()` chain
 whose rejection is handled by its eventual caller rather than in place.
+
+## ADR-018: Onboarding demonstrates inside the panel, over Gmail
+
+**Decision.** One wizard module
+([src/modules/onboarding/wizardView.ts](src/modules/onboarding/wizardView.ts))
+renders both onboarding surfaces. It carries a working miniature of the tab bar
+*inside* the panel, above the narration. It is shown as a modal over Gmail
+whenever a Gmail tab exists, and as the standalone welcome page when none does.
+The toolbar icon gains a popup menu so the tour has somewhere to live after
+install.
+
+**Context.** The old welcome page was a separate tab listing three things the
+extension does, in prose, next to three numbered cards. It made two bets that
+both lost: that a new user reads, and that they will still remember in Gmail
+what they read on another tab.
+
+The first attempt at fixing it animated the real Gmail page **behind** a dimmed
+modal, so the wizard narrated while the product demonstrated. On paper that is
+the strongest possible demo. In practice it splits attention across two places
+and then dims the half the reader is meant to watch, so whether the point lands
+depends on whether they happen to be looking at the right moment. The product
+owner spotted it immediately on the first preview. Moving the demonstration
+inside the panel is the correction: it sits a few lines under the sentence
+describing it, at full contrast, and there is nowhere else to look.
+
+Every slide also carries a caption naming what the miniature is doing. That is
+not decoration. It is the fallback for every case where motion does not land —
+the reader skipped ahead, the tab was in the background, or
+`prefers-reduced-motion` switched the animation off entirely. Motion may
+reinforce a message; it may never be the only thing carrying one.
+
+**Over Gmail** rather than in a tab, because it buys one thing a separate page
+cannot: choosing a theme on the last slide retints the user's real tab bar while
+they watch, since the write goes through `setGlobalTheme` and every open Gmail
+tab already listens on that key. The standalone page survives as the fallback,
+and mounts the same wizard — a second copy of the copy, the choreography and the
+chooser would have drifted within a release.
+
+**Consequences.** The toolbar icon now opens a menu instead of toggling the
+settings modal. That costs the most common action one extra click, which is why
+Configure tabs is first and largest. It buys a home for the tour, for help, and
+for an icon that does something useful on a non-Gmail tab; previously clicking
+it anywhere but Gmail did nothing at all.
+
+`chrome.action.onClicked` never fires once `default_popup` is set, so that
+listener was deleted rather than left as code that cannot run.
+
+On install the worker cannot message an open Gmail tab: until it reloads, that
+tab is running no content script and the message reaches nothing. It sets a flag
+in `chrome.storage.local` and reloads those tabs — which is what makes the tab
+bar appear at all — and the freshly injected script consumes the flag. The flag
+is cleared as it is read, so the tour opens in one tab rather than in every
+Gmail tab the user has open.
+
+The wizard declares its own colour tokens rather than inheriting toolbar.css,
+because the welcome page never loads toolbar.css and a wizard that looked right
+in only one of its two homes would be worse than no sharing at all. That
+independence is why it needed its own contrast test: nothing else reads those
+tokens, so nothing else would notice them drifting.
+
+Onboarding copy is structured data, not HTML strings, so every segment renders
+through `textContent`. No onboarding copy can reach `innerHTML`, which keeps the
+whole feature outside the blast radius of
+[test/htmlSinks.test.ts](test/htmlSinks.test.ts) rather than inside it with an
+exemption.
+
+Message names moved to [src/modules/messages.ts](src/modules/messages.ts), a
+leaf module with no imports. `OPEN_OPTIONS_PAGE_ACTION` had lived in
+`settingsModal.ts`; importing it into the popup would have pulled the settings
+modal, the tab manager and the import and uninstall modals into a page that
+renders four buttons. A message name is a contract between two bundles, and
+keeping it in a leaf is what stops the contract dragging an implementation with
+it. The popup bundle is 1 KB.
+

@@ -1,0 +1,146 @@
+/**
+ * popup.css
+ *
+ * The menu behind the toolbar icon.
+ *
+ * Until v1.6.0 clicking the icon toggled the settings modal directly, which
+ * worked only on a Gmail tab and offered nothing anywhere else. The menu costs
+ * that one action an extra click, so "Configure tabs" is first, largest and
+ * focused on open.
+ *
+ * Its palette follows the OS rather than the extension's own theme: this is
+ * browser chrome, not part of the Gmail page, and Chrome paints the popup's
+ * frame from the system theme either way.
+ */
+
+:root {
+    --pop-bg: #ffffff;
+    --pop-text: #202124;
+    --pop-text-soft: #5f6368;
+    --pop-hover: #f1f3f4;
+    --pop-line: #e8eaed;
+    --pop-accent: #1a73e8;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --pop-bg: #292a2d;
+        --pop-text: #e8eaed;
+        --pop-text-soft: #9aa0a6;
+        --pop-hover: #3c4043;
+        --pop-line: #3c4043;
+        --pop-accent: #8ab4f8;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    width: 272px;
+    background: var(--pop-bg);
+    color: var(--pop-text);
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.popup {
+    padding: 6px;
+}
+
+.popup-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px 10px;
+}
+
+.popup-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--pop-text);
+}
+
+.popup-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.popup-item {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--pop-text);
+    transition:
+        background-color 0.15s,
+        color 0.15s;
+}
+
+.popup-item svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    flex: 0 0 auto;
+    margin-top: 1px;
+    opacity: 0.85;
+}
+
+.popup-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.popup-label small {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--pop-text-soft);
+    line-height: 1.35;
+}
+
+.popup-item.is-quiet {
+    padding: 9px 10px;
+}
+
+.popup-item.is-quiet .popup-label {
+    font-weight: 400;
+}
+
+.popup-item:hover:not(:disabled) {
+    background: var(--pop-hover);
+}
+
+.popup-item:focus-visible {
+    outline: 2px solid var(--pop-accent);
+    outline-offset: -2px;
+}
+
+.popup-item:disabled {
+    cursor: default;
+    color: var(--pop-text-soft);
+}
+
+.popup-item:disabled svg {
+    opacity: 0.45;
+}
+
+.popup-sep {
+    height: 1px;
+    background: var(--pop-line);
+    margin: 5px 10px;
+}

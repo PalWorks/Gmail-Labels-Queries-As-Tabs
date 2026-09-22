@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-21 (v1.5.0)
+Last updated: 2026-09-22 (v1.6.0)
 
 ## Documentation index
 
@@ -44,6 +44,12 @@ Last updated: 2026-09-21 (v1.5.0)
 | Service worker (install, welcome page, uninstall URL) | [src/background.ts](src/background.ts) |
 | Options page logic (account selector, theme, rules, import/export) | [src/options.ts](src/options.ts) |
 | Onboarding page logic | [src/welcome.ts](src/welcome.ts) |
+| Onboarding copy and the miniature's data | [src/modules/onboarding/wizardContent.ts](src/modules/onboarding/wizardContent.ts) |
+| The onboarding wizard: narration plus a working miniature | [src/modules/onboarding/wizardView.ts](src/modules/onboarding/wizardView.ts) |
+| The tour as a modal over Gmail | [src/modules/onboarding/onboardingModal.ts](src/modules/onboarding/onboardingModal.ts) |
+| The tour as a standalone page, for a browser with no Gmail open | [src/welcome.ts](src/welcome.ts) |
+| The toolbar icon's menu | [src/popup.ts](src/popup.ts) |
+| Message names shared between surfaces, so a name drags no implementation | [src/modules/messages.ts](src/modules/messages.ts) |
 | Typed storage access + migrations + global theme | [src/utils/storage.ts](src/utils/storage.ts) |
 | Export / import serialization | [src/utils/importExport.ts](src/utils/importExport.ts) |
 | Gmail DOM selectors | [src/utils/selectors.ts](src/utils/selectors.ts) |

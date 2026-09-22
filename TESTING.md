@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-21 (v1.5.0)
+Last updated: 2026-09-22 (v1.6.0)
 
 ## Philosophy
 
@@ -44,12 +44,18 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 32 suites, 626 tests as of v1.5.0.
+- 35 suites, 685 tests as of v1.6.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
-  Apps Script generation, the options page, onboarding, modals, drag-and-drop, state
-  accessors, import/export, the shared tab manager, tab colors, rule templates, in-product
-  feedback, and the color-contrast palette.
+  Apps Script generation, the options page, the onboarding wizard and both of its hosts,
+  the toolbar menu, modals, drag-and-drop, state accessors, import/export, the shared tab
+  manager, tab colors, rule templates, in-product feedback, and the color-contrast palette.
+- The onboarding wizard is covered once, in
+  [test/onboarding/wizardView.test.ts](test/onboarding/wizardView.test.ts), because both
+  surfaces mount the same module. The two host suites
+  ([onboardingModal](test/onboarding/onboardingModal.test.ts) and
+  [welcome](test/welcome.test.ts)) cover only what differs: how a theme is persisted and
+  what finishing does.
 
 ### Guards, which are not unit tests
 

@@ -62,13 +62,26 @@ function makeArea(store: Record<string, any>) {
 
 let messageListeners: Array<(message: any, sender: any, sendResponse: any) => boolean> = [];
 let installedListeners: Array<(details: any) => void> = [];
-let actionClickListeners: Array<(tab: any) => void> = [];
 
 const mockDownload = jest.fn();
 const mockUninstallSelf = jest.fn();
-const mockTabsCreate = jest.fn();
-const mockTabsQuery = jest.fn();
-const mockTabsReload = jest.fn();
+const mockTabsCreate = jest.fn().mockResolvedValue({ id: 99 });
+/**
+ * The worker awaits chrome.tabs.query rather than passing a callback, so the
+ * double has to answer in the promise form. Tests set `gmailTabs` to say what
+ * is open.
+ */
+let gmailTabs: any[] = [];
+const mockTabsQuery = jest.fn((_query: any, cb?: any) => {
+    if (typeof cb === 'function') {
+        cb(gmailTabs);
+        return undefined;
+    }
+    return Promise.resolve(gmailTabs);
+});
+const mockTabsReload = jest.fn().mockResolvedValue(undefined);
+const mockTabsUpdate = jest.fn().mockResolvedValue(undefined);
+const mockWindowsUpdate = jest.fn().mockResolvedValue(undefined);
 const mockTabsSendMessage = jest.fn().mockResolvedValue(undefined);
 const mockSetUninstallURL = jest.fn();
 
@@ -77,7 +90,7 @@ function setupChromeMocks(): void {
     Object.keys(localStore).forEach((k) => delete localStore[k]);
     messageListeners = [];
     installedListeners = [];
-    actionClickListeners = [];
+    gmailTabs = [];
 
     (global as any).chrome = {
         runtime: {
@@ -88,14 +101,18 @@ function setupChromeMocks(): void {
         },
         downloads: { download: mockDownload },
         management: { uninstallSelf: mockUninstallSelf },
-        action: { onClicked: { addListener: jest.fn((cb: any) => actionClickListeners.push(cb)) } },
+        // The toolbar icon opens a popup now, so chrome.action.onClicked never
+        // fires. The stub stays so registering a listener would still be seen.
+        action: { onClicked: { addListener: jest.fn() } },
         storage: { sync: makeArea(syncStore), local: makeArea(localStore) },
         tabs: {
             create: mockTabsCreate,
             query: mockTabsQuery,
             reload: mockTabsReload,
+            update: mockTabsUpdate,
             sendMessage: mockTabsSendMessage,
         },
+        windows: { update: mockWindowsUpdate },
     };
 }
 
@@ -209,39 +226,118 @@ describe('UNINSTALL_SELF handler', () => {
 // ---------------------------------------------------------------------------
 
 describe('onInstalled handler', () => {
-    test('opens welcome page on fresh install', () => {
-        mockTabsQuery.mockImplementation((_query: any, cb: any) => cb([]));
+    test('opens the standalone page when there is no Gmail tab to run the tour over', async () => {
+        gmailTabs = [];
 
         installedListeners[0]({ reason: 'install' });
+        await flush();
 
         expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'welcome.html' });
     });
 
-    test('reloads open Gmail tabs on fresh install', () => {
-        mockTabsQuery.mockImplementation((_query: any, cb: any) => cb([{ id: 1 }, { id: 2 }]));
+    test('reloads open Gmail tabs, which is what makes the tab bar appear', async () => {
+        gmailTabs = [{ id: 1 }, { id: 2 }];
 
         installedListeners[0]({ reason: 'install' });
+        await flush();
 
         expect(mockTabsReload).toHaveBeenCalledWith(1);
         expect(mockTabsReload).toHaveBeenCalledWith(2);
     });
 
-    test('does nothing on update', () => {
-        installedListeners[0]({ reason: 'update' });
+    test('leaves the tour flag for the reloaded tab to pick up', async () => {
+        // The worker cannot message those tabs: until they reload they are
+        // running no content script, so the message would reach nothing.
+        gmailTabs = [{ id: 1, active: true }];
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
+
+        expect(localStore.pendingOnboarding).toBe(true);
+        expect(mockTabsSendMessage).not.toHaveBeenCalled();
+    });
+
+    test('does not also open the standalone page when Gmail is open', async () => {
+        gmailTabs = [{ id: 1 }];
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
 
         expect(mockTabsCreate).not.toHaveBeenCalled();
+    });
+
+    test('does nothing on update', async () => {
+        installedListeners[0]({ reason: 'update' });
+        await flush();
+
+        expect(mockTabsCreate).not.toHaveBeenCalled();
+        expect(localStore.pendingOnboarding).toBeUndefined();
     });
 });
 
 // ---------------------------------------------------------------------------
-// Action click handler
+// START_TOUR
+//
+// The toolbar menu and the options page both send this. Unlike install, the
+// content script is already running by now, so the tour can be shown directly.
 // ---------------------------------------------------------------------------
 
-describe('action click handler', () => {
-    test('sends TOGGLE_SETTINGS message to the active tab', () => {
-        actionClickListeners[0]({ id: 42 });
+describe('START_TOUR handler', () => {
+    test('shows the tour in the Gmail tab the user is looking at', async () => {
+        gmailTabs = [
+            { id: 7, windowId: 3 },
+            { id: 8, windowId: 4, active: true },
+        ];
+        const sendResponse = jest.fn();
 
-        expect(mockTabsSendMessage).toHaveBeenCalledWith(42, { action: 'TOGGLE_SETTINGS' });
+        const held = messageListeners[0]({ action: 'START_TOUR' }, {}, sendResponse);
+        await flush();
+
+        expect(held).toBe(true);
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(8, { action: 'SHOW_ONBOARDING' });
+        expect(mockTabsUpdate).toHaveBeenCalledWith(8, { active: true });
+        expect(mockWindowsUpdate).toHaveBeenCalledWith(4, { focused: true });
+        expect(mockTabsCreate).not.toHaveBeenCalled();
+    });
+
+    test('falls back to any Gmail tab when none is active', async () => {
+        gmailTabs = [{ id: 7, windowId: 3 }];
+
+        messageListeners[0]({ action: 'START_TOUR' }, {}, jest.fn());
+        await flush();
+
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(7, { action: 'SHOW_ONBOARDING' });
+    });
+
+    test('falls back to the standalone page when there is no Gmail tab', async () => {
+        gmailTabs = [];
+
+        messageListeners[0]({ action: 'START_TOUR' }, {}, jest.fn());
+        await flush();
+
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'welcome.html' });
+    });
+
+    test('falls back to the page when the Gmail tab has no content script yet', async () => {
+        // A tab open since before the install answers nothing. Doing nothing
+        // at all here is the failure mode this whole release is about.
+        gmailTabs = [{ id: 7, windowId: 3, active: true }];
+        mockTabsSendMessage.mockRejectedValueOnce(new Error('Receiving end does not exist.'));
+
+        messageListeners[0]({ action: 'START_TOUR' }, {}, jest.fn());
+        await flush();
+
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'welcome.html' });
+    });
+
+    test('answers, so the popup is not left waiting on a dead channel', async () => {
+        gmailTabs = [];
+        const sendResponse = jest.fn();
+
+        messageListeners[0]({ action: 'START_TOUR' }, {}, sendResponse);
+        await flush();
+
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true });
     });
 });
 

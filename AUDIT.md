@@ -28,7 +28,7 @@
 > theme gap when Gmail's background arrives by stylesheet; and two remaining WCAG AA
 > failures. Four guard suites were added so each class of defect fails CI rather than
 > review: `htmlSinks`, the colour-literal half of `contrast`, `repoConsistency` and
-> `rulesProperty`. 32 suites, 626 tests.
+> `rulesProperty`. 35 suites, 685 tests.
 >
 > Also on this date, and the most productive single finding of the pass: four separately
 > reported bugs turned out to be one. A promise rejected, no handler existed, and the

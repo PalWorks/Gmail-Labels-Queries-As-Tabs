@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gmail Labels and Search Queries as Tabs",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "__MSG_appDescription__",
   "default_locale": "en",
   "permissions": [
@@ -19,7 +19,8 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_popup": "popup.html"
   },
   "options_page": "options.html",
   "icons": {
@@ -37,7 +38,8 @@
         "js/content.js"
       ],
       "css": [
-        "css/toolbar.css"
+        "css/toolbar.css",
+        "css/onboarding.css"
       ],
       "run_at": "document_end"
     }

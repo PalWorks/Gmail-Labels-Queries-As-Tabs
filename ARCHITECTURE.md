@@ -46,6 +46,11 @@ Gmail-Labels-As-Tabs/
 │   │   ├── theme.ts           # Theme resolution from Gmail's own rendered theme
 │   │   ├── state.ts           # Encapsulated module state behind accessors
 │   │   ├── extensionContext.ts # ★ Is this content script still attached to the extension?
+│   │   ├── messages.ts        # Message names, in a leaf so they drag no code
+│   │   ├── onboarding/        # ★ The tour: one wizard, two hosts
+│   │   │   ├── wizardContent.ts   # Copy as data, so none of it can reach innerHTML
+│   │   │   ├── wizardView.ts      # Narration + a working miniature of the bar
+│   │   │   └── onboardingModal.ts # …as a modal over Gmail
 │   │   └── modals/            # One file per dialog (edit, delete, pin, import, …)
 │   │       └── contextNotice.ts # The one message a modal shows once orphaned
 │   ├── utils/
@@ -56,9 +61,10 @@ Gmail-Labels-As-Tabs/
 │   │   └── selectors.ts       # Gmail DOM selectors, in one place
 │   ├── ui/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
+│   ├── popup.html/.css/.ts    # The toolbar icon's menu (1 KB bundle)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 32 suites: one per module, plus four repo-wide guards
+├── test/                      # 35 suites: one per module, plus four repo-wide guards
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -75,7 +81,7 @@ Gmail-Labels-As-Tabs/
 | `src/content.ts` | Orchestrator: bootstraps the content script, owns the injection lifecycle and storage listeners, delegates everything else to modules |
 | `src/modules/` | Feature modules, one concern per file. Nothing here reaches into another module's state; shared state goes through `state.ts` |
 | `src/utils/` | Leaf utilities with no module dependencies: storage, import/export, rendering, colors, selectors |
-| `src/background.ts` | Service worker: file downloads, install hooks, uninstall URL, action button forwarding |
+| `src/background.ts` | Service worker: file downloads, install hooks, uninstall URL, and picking which surface the onboarding tour opens on |
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
 | `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
 | `worker/` | The one server-side piece: relays user-submitted feedback to email, so no API key ships in the extension |
@@ -292,7 +298,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 32 suites, 626 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 35 suites, 685 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |

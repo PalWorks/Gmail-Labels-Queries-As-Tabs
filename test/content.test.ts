@@ -18,6 +18,9 @@ import { flush } from './helpers/async';
 
 // Store references to listeners registered during module import
 let storageChangeListeners: Array<(changes: Record<string, any>, area: string) => void> = [];
+
+/** The first-run tour flag. False in every test but the one that covers it. */
+const mockTakePendingOnboarding = jest.fn().mockResolvedValue(false);
 let messageListeners: Array<(message: any, sender: any, sendResponse: any) => void> = [];
 
 const mockGetSettings = jest.fn();
@@ -115,6 +118,7 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
                     ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
+                    takePendingOnboarding: mockTakePendingOnboarding,
                 }));
 
                 jest.doMock('../src/modules/state', () => ({
@@ -237,6 +241,7 @@ describe('storage change listener', () => {
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
                     ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
+                    takePendingOnboarding: mockTakePendingOnboarding,
                 }));
 
                 jest.doMock('../src/modules/state', () => ({
@@ -347,6 +352,7 @@ describe('injection and theme', () => {
                     migrateThemeToGlobalIfNeeded: mockMigrateTheme,
                     ensureAccountRegistered: mockEnsureAccountRegistered,
                     GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
+                    takePendingOnboarding: mockTakePendingOnboarding,
                 }));
                 jest.doMock('../src/modules/state', () => ({
                     state: mockState,
