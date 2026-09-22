@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -489,3 +489,93 @@ could name both and still get the order wrong. Ordering is covered by unit
 tests per surface instead, each asserting the reporter's configuration: OS dark,
 Gmail light, 'system' selected, result light.
 
+
+## ADR-020: An unknown theme is drawn as nothing, and a page opens in what it last painted
+
+**Date:** 2026-09-22
+**Status:** Accepted
+**Context:** v1.6.2
+
+Two reports, a day apart, of the same shape. The tab bar appeared over Gmail as
+a black slab, settled to the real theme, and only then filled with tabs. The
+options page opened black, drew its elements, and then turned light.
+
+Neither was a wrong final state. Both were a surface painting a colour before
+it had any right to one, and then contradicting itself in front of the user.
+
+There are three windows where that can happen, and they have different causes:
+
+1. **Injection runs ahead of theming.** `attemptInjection()` inserts the tab bar
+   the moment it finds somewhere to put it; `finalizeInit()` reads the stored
+   theme on its own schedule. Measured on a real Gmail load: 318ms with no
+   theme class on `<body>` at all.
+2. **'System' can be applied and still be a guess.** Gmail paints its own
+   background late, so `detectGmailTheme()` returns null at first and the only
+   answer available is the OS preference — which ADR-019 exists because it is
+   so often wrong.
+3. **Every `chrome.storage` read yields.** An extension page must paint
+   something between "HTML parsed" and "storage answered", and painted its
+   stylesheet's default. For the options page, whose base tokens are dark, that
+   default is a black page.
+
+### Decision
+
+**Where the surface sits on top of something else, draw nothing.** The tab bar
+has a background only when the theme is known: transparent before that, so what
+shows through is the Gmail already on screen, with a 250ms fade when the real
+colour arrives. A guessed 'system' resolution is marked `theme-unresolved` and
+keeps the bar transparent even though a class has been applied.
+
+**Where the surface is the whole page, open in what this browser last painted.**
+`localStorage` is the only storage a page can read without yielding, so
+[src/themeBoot.ts](src/themeBoot.ts) reads a cached resolved theme and stamps it
+as the first thing inside `<body>`, before any content is parsed.
+
+**With nothing cached, open light.** Not the OS. `getGlobalTheme()` returns
+`light` when nothing is stored, so light is what the extension is actually set
+to; asking `prefers-color-scheme` there would be ADR-019's bug in the one place
+that has no chance to correct itself before the user sees it.
+
+### Consequences
+
+Transparency cannot get stuck. `watchGmailTheme` tracks whether Gmail's
+background was ever readable and commits the guess when the settle ladder runs
+out, because a bar that stays invisible looks broken where a bar of the wrong
+colour merely looks wrong.
+
+The cache can go stale in exactly one way: the theme changed from the in-Gmail
+modal, which is another origin and cannot write it. One frame, then corrected.
+
+A guessed theme is no longer published as `detectedGmailTheme`. That key is how
+the toolbar menu and the welcome page learn what Gmail looks like when they
+have no Gmail DOM of their own, and they were being handed the desktop's
+preference labelled as Gmail's, in exactly the case they needed telling about.
+An absent key already meant "fall back to the OS".
+
+### Alternatives considered
+
+**Paint the guess faster.** A synchronous `chrome.storage` read does not exist,
+and a faster wrong colour is still a wrong colour.
+
+**Hide the page until themed** (`visibility: hidden` until a class lands). It
+trades a flash for a blank page, and a blank page that never resolves is a
+worse failure than a wrong colour. Rejected for the same reason the ladder
+commits its guess.
+
+**Invert the options page stylesheet so light is the base.** It would fix the
+common case and break the dark one, and it means rewriting every
+`body.theme-light` override in an 1,100-line file to no benefit a cache does not
+already give.
+
+### What is guarded
+
+The position of the boot script, not its presence: the same script deferred, at
+the foot of the page, or folded into the page's own bundle fixes nothing and
+looks identical in review. `test/repoConsistency.test.ts` fails if it is not the
+first thing inside `<body>` on any extension page, and the check is mutation
+tested against a page that loads it late.
+
+What no guard can prove is the absence of a flash, which is a frame rather than
+a value. That was verified by sampling the computed background on every
+animation frame, before and after, in the reported configuration: 4 dark frames
+before and 0 after on the tab bar, 2 and 0 on the options page.

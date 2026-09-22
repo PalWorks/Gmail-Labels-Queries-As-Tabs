@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## The problem it solves
 
@@ -26,6 +26,12 @@ away, and it can automate routine cleanup of those labels.
 - **Global theme.** A single browser-wide appearance preference (`system`, `light`, or
   `dark`) shared by every account in the profile. Default is `light`. Stored in
   `chrome.storage.local` under `globalTheme`. It is intentionally not device-synced.
+- **Resolved theme.** What `system` actually means right now: `light` or `dark`, read from
+  **Gmail's own rendered background**, because Gmail's theme is an account setting and a
+  dark desktop says nothing about the inbox the bar sits in. The desktop is consulted only
+  when Gmail has not painted yet, and an answer that came from the desktop is treated as a
+  guess rather than a fact: nothing paints a background until the guess is resolved or
+  abandoned. See ADR-019 and ADR-020.
 - **Unread count.** The number of unread messages for a tab's target, shown as a badge
   when the account's `showUnreadCount` preference is on.
 - **Rule.** A per-tab automation instruction that becomes Google Apps Script. It targets
@@ -58,7 +64,9 @@ away, and it can automate routine cleanup of those labels.
    3. DOM scraping of Gmail's own unread indicators.
 5. **Theme applies to the whole window, not one account.** Changing the theme in any
    account (or the options page or onboarding) propagates to every open Gmail tab in the
-   profile via a `chrome.storage.local` change event.
+   profile via a `chrome.storage.local` change event. An extension page opened afterwards
+   paints the last resolved theme on its first frame, from a synchronous cache, because
+   correcting the colour in front of the user is a defect rather than a detail.
 6. **A settings change is described, not performed.** Every surface that can edit settings
    sends a `SettingsOp` to the service worker, which applies them one at a time per
    account. Nothing reads settings, edits the object and saves it back; that is what used

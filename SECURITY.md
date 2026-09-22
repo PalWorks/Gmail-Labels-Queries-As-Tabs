@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Privacy promise
 
@@ -37,6 +37,7 @@ amended by ADR-012.
 | Permission | Purpose |
 |------------|---------|
 | `storage` | Persist per-account tabs and rules, and the global theme |
+| _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |

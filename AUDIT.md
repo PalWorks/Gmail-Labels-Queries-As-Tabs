@@ -18,6 +18,24 @@
 > (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
 > CHANGELOG).
 
+> **Refresh note (2026-09-22, v1.6.2):** onboarding was rebuilt as a tour that
+> demonstrates rather than describes, running over Gmail and reachable four ways
+> (ADR-018); a toolbar menu replaced an icon that did nothing outside Gmail; and two
+> classes of theme defect were closed. First, every surface now resolves 'system'
+> through Gmail's own rendered theme rather than the desktop's, with a guard that says
+> so (ADR-019) — the wizard added a day earlier had asked the OS, and an audit found
+> three more places doing the same, none of them reported. Second, nothing paints a
+> theme it is still guessing at (ADR-020): the tab bar carries no background until the
+> theme is known, and extension pages open in the theme the browser last painted,
+> stamped synchronously before any content is parsed. Both of the second pair were
+> reported as a black flash, and neither could have been caught by any assertion about a
+> final state, because every final state was already correct. 36 suites, 721 tests.
+>
+> The website in the sibling repository now runs this extension's own tour, vendored
+> rather than re-created, and its FAQ and structured data were aligned with the store
+> listing. The store assets were regenerated, which found a seventh defect nobody had
+> reported: the screenshot about tab colours had never contained a colour picker.
+
 > **Refresh note (2026-09-21, v1.5.0):** a hardening pass. Settings writes are now
 > serialized through the service worker as `SettingsOp` values rather than
 > read-modify-saved (ADR-013); the uninstall URL is kept and its disclosure is now a build gate (ADR-014); the theme settling ladder stays fixed by decision (ADR-015); and the duplicate marketing site was deleted so only one privacy policy exists (ADR-016). Fixed on this date: an

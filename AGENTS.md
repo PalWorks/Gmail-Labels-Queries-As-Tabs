@@ -4,7 +4,7 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## What this project is
 
@@ -107,6 +107,15 @@ Orientation reading order for a new agent:
     `detectedGmailTheme` from `chrome.storage.local` and fall back to
     `prefers-color-scheme` only when it is absent. A guard fails any `src/` module that
     reads the media query without naming a Gmail source. See ADR-019.
+
+16. **Never paint a theme you are guessing at.** A surface that sits on top of Gmail draws
+    no background until the theme is known: `.gmail-tabs-bar` is transparent by default,
+    and a guessed 'system' resolution keeps it transparent by marking `<body>` with
+    `theme-unresolved`. A surface that *is* the page opens in the theme this browser last
+    painted, stamped synchronously by [src/themeBoot.ts](src/themeBoot.ts) before any
+    content is parsed; with nothing cached it opens light, because that is what
+    `getGlobalTheme()` returns when nothing is stored, not because the OS said so. Any
+    guessed state must have something that ends it. See ADR-020.
 
 ## Coding conventions
 

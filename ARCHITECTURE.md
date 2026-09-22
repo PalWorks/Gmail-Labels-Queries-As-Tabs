@@ -24,7 +24,7 @@ Gmail-Labels-As-Tabs/
 ├── manifest.json              # Chrome Extension MV3 manifest (entry point for Chrome)
 ├── package.json               # Node dependencies & scripts
 ├── tsconfig.json              # TypeScript compiler config (ES2022, strict)
-├── build.js                   # esbuild bundler config (5 entry points)
+├── build.js                   # esbuild bundler config (7 entry points)
 ├── jest.config.js             # Test config (ts-jest, jsdom) + coverage thresholds
 ├── generate_icons.py          # Utility to generate icon sizes from source
 │
@@ -34,6 +34,8 @@ Gmail-Labels-As-Tabs/
 │   ├── xhrInterceptor.ts      # MAIN world script (XHR monkey-patch for unread counts)
 │   ├── options.ts/.html/.css  # Options page: settings, rules, privacy, feedback
 │   ├── welcome.ts/.html/.css  # Onboarding page
+│   ├── popup.ts/.html/.css    # The toolbar icon's menu
+│   ├── themeBoot.ts           # ★ Stamps the theme before a page paints anything
 │   ├── modules/               # ★ Feature modules, one concern each
 │   │   ├── tabs.ts            # Tab bar rendering, dropdowns, keyboard and aria
 │   │   ├── unread.ts          # Unread waterfall: Atom feed (cached) → XHR → DOM
@@ -44,6 +46,7 @@ Gmail-Labels-As-Tabs/
 │   │   ├── colorPicker.ts     # Shared accessible color swatch control
 │   │   ├── feedback.ts        # In-product feedback: validation, diagnostics, submit
 │   │   ├── theme.ts           # Theme resolution from Gmail's own rendered theme
+│   │   ├── themeMirror.ts    # ★ The last painted theme, readable without yielding
 │   │   ├── state.ts           # Encapsulated module state behind accessors
 │   │   ├── extensionContext.ts # ★ Is this content script still attached to the extension?
 │   │   ├── messages.ts        # Message names, in a leaf so they drag no code
@@ -84,6 +87,7 @@ Gmail-Labels-As-Tabs/
 | `src/background.ts` | Service worker: file downloads, install hooks, uninstall URL, and picking which surface the onboarding tour opens on |
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
 | `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
+| `src/themeBoot.ts` | Loaded synchronously as the first thing inside `<body>` on every extension page, so the page opens in the right colour instead of correcting itself in front of the user. See ADR-020 |
 | `worker/` | The one server-side piece: relays user-submitted feedback to email, so no API key ships in the extension |
 | _(none)_ | The marketing site is a separate repository: [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) |
 
@@ -138,8 +142,13 @@ Gmail-Labels-As-Tabs/
    - **Whichever finds email first** → calls `finalizeInit(email)`:
      - Migrates legacy settings if needed
      - Loads settings from `chrome.storage.sync`
-     - Calls `renderTabs()` → creates the tab bar DOM
-     - Applies theme
+     - **Applies the theme, then** calls `renderTabs()`. That order is the fix
+       from 1.6.1: rendering first left the bar on toolbar.css's own media
+       query for a frame, which on a dark desktop is a dark bar over a light
+       Gmail
+     - Note that `attemptInjection()` can have inserted the bar before any of
+       this, so the bar carries no background until a theme class exists. See
+       ADR-020
 5. **Tab bar injection**: Finds Gmail's `.G-atb` toolbar → inserts tab bar `afterend`
 6. **`MutationObserver`** watches for Gmail's DOM changes → re-injects if bar goes missing
 7. **Unread counts**: Dual strategy:
@@ -343,6 +352,11 @@ options-page link *passed*, because they mocked the call that was failing. See A
 1. Add CSS custom property overrides in `toolbar.css` under a new `body.force-{name}` selector
 2. Extend `Settings.theme` type in `storage.ts`
 3. Add button in `createSettingsModal()` theme selector
+4. Give the tab bar its background under that selector too. `.gmail-tabs-bar` is
+   transparent by default on purpose: a surface with no theme paints nothing
+   rather than guessing. See ADR-020
+5. If the new theme resolves to something other than light or dark, extend
+   `MirroredTheme` in `themeMirror.ts`, or pages will open in the wrong one
 
 ### Adding New Settings
 1. Add field to `Settings` interface in `storage.ts`
@@ -372,7 +386,8 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 
 | Issue | Impact | Location |
 |---|---|---|
-| **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference | `src/modules/theme.ts` |
+| **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference. Since 1.6.2 that fallback is marked rather than painted, so a wrong guess shows as no background rather than the wrong one, and is committed only once the settle ladder gives up | `src/modules/theme.ts` |
+| **The first-frame theme is a cache, and one writer cannot reach it** | `localStorage` is per-origin, so the Gmail content script cannot update it. Change the theme in the in-Gmail modal and the next extension page can open in the previous theme for one frame. Costs a frame, never a final state | `src/modules/themeMirror.ts` |
 | **InboxSDK is 95% of the content script and neither of its two features has ever run** | The bundle is 1.09 MB, of which ~1.03 MB is InboxSDK. `InboxSDK.load()` awaits `pageWorld.js` setting a `<head>` attribute, and injecting `pageWorld.js` needs the `scripting` permission we do not declare, so the promise never settles and never rejects: `sdk.User.getEmailAddress()` and `sdk.Router.handleAllRoutes()` are unreachable, and the only symptom is one console error per Gmail load. Both features are covered anyway: email by `extractEmailFromDOM()` and the DOM poller, routes by the body `MutationObserver` and `popstate`. Measured: removing it builds a 54.6 KB content script and every behaviour still works. Live-verified 2026-09-21 | `content.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` etc. are Gmail's obfuscated class names that can change | `content.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |

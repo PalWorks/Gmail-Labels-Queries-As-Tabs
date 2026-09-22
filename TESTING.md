@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Philosophy
 
@@ -73,12 +73,34 @@ test.
 | ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
 | ... also: a module reads `prefers-color-scheme` without consulting Gmail's own theme | 'system' means Gmail's theme, not the OS. The 1.6.0 wizard asked the OS and rendered dark over a light Gmail. Twenty theme assertions existed; every one set an explicit Light or Dark, so none could have caught it. See ADR-019 |
+| ... also: an extension page loads `themeBoot.js` late, or not at all, or the options page markup loses its default theme class | The same script deferred, at the foot of the page, or folded into the page's own bundle fixes nothing and looks identical in review. Its whole value is its position. See ADR-020 |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
 | ... also: the floating-promise lint rules are removed, downgraded to a warning, or lose their type information | A rule that reports nothing looks exactly like a rule that is absent. `npm run lint` tolerates warnings, so "warn" would have retired the guard silently. See ADR-017 |
 
 Each guard is mutation tested: it contains a case proving it still rejects what it is
 supposed to reject. A guard that cannot fail is worse than no guard, because it reads like
 coverage.
+
+### What no guard here can see
+
+Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
+correct, so no assertion about the end of a render could have caught either one, and the
+721 tests below would all have passed on the broken build.
+
+They were verified by sampling the computed background on every animation frame through a
+real load, before and after, in the configuration that was reported:
+
+| Surface | Before | After |
+|---|---|---|
+| Tab bar over Gmail, dark desktop, light Gmail | `rgb(32, 33, 36)` for 318ms, no tabs on screen | transparent throughout, 0 dark frames |
+| Options page, first load | `rgb(26, 26, 46)` for 166ms with the cards already drawn | correct theme on the first frame, 0 dark frames |
+| Options page, a user who chose Dark | n/a | dark at +59ms, 0 light-flash frames |
+
+That measurement is not in the suite. It needs a real browser, a real Gmail and a
+frame-accurate sampler, and it is recorded here so the next person does not have to
+invent it. The unit tests cover the mechanism the fix introduced: that a guess is marked,
+dropped when a real reading arrives, committed when none ever does, and never published as
+though it came from Gmail.
 
 ### Two gates that cannot live in jest
 

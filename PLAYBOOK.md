@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Local setup
 
@@ -97,6 +97,7 @@ almost always in the code or the document it points at.
 | `repoConsistency` retired site link | Something links to the Pages site deleted in v1.5.0. Use `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
 | `repoConsistency` `website/` exists | The duplicate marketing site came back. It belongs in the other repository |
 | `repoConsistency` workflow trigger | A `push:` or `pull_request:` trigger reappeared. Actions here are manual only |
+| `repoConsistency` theme boot position | An extension page loads `themeBoot.js` late or not at all, or the options page markup lost `class="theme-light"`. The script must be the first thing inside `<body>`; anywhere later and the page has already painted |
 | CI: `dist/icons` undeclared | `copy-assets` swept up a file the manifest does not name. Two promo tiles shipped to users that way |
 | CI: published privacy policy | The live page no longer describes this code. Fix the page in the other repository and dispatch its deploy |
 | `rulesProperty` | The escaping is wrong for one of the generator's four output languages. The failure prints the seed case |

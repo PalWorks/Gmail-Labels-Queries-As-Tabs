@@ -67,42 +67,44 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
   Only real readings are published now; an absent key already means "fall back
   to the OS".
 
-## [Unreleased]
+### Store listing and assets
 
-Store assets and listing copy. Nothing here ships to a user: the extension
-package is unchanged at 1.6.1.
+Nothing in this section ships inside the package; it is what goes to the Web
+Store alongside it.
 
-### Added
-
-- **A sixth store screenshot: the tour, open over a real inbox**, with the real
-  tab bar in frame above the panel. Captured from the running product by
-  sending the content script the same `SHOW_ONBOARDING` message the toolbar
-  menu sends, so it cannot drift from what a slide actually looks like.
-- The store listing is rewritten for how it is read now: a questions block
-  whose answers open with Yes or No and stand alone, because answer engines
-  lift a sentence rather than a page, and a section recording which term sits
-  where so a later edit does not undo the placement. See STORE_LISTING.md.
-
-### Fixed
-
-- **The colour screenshot had no colour picker in it.** The palette opens
-  beside its row, low in the tab list, and the fixed crop cut it off, so the
-  one asset about colour showed the Theme and Add Tab cards instead. It has
-  been wrong since the assets were first generated. The capture now centres the
-  row before clicking and throws if the palette is outside the frame, which is
-  the part that matters: a generated asset nobody looks at twice can be wrong
-  for as long as nothing checks it.
+- **A sixth screenshot: the tour, open over a real inbox**, with the real tab
+  bar in frame above the panel. Captured from the running product by sending
+  the content script the same `SHOW_ONBOARDING` message the toolbar menu
+  sends, so it cannot drift from what a slide actually looks like.
+- **All six screenshots re-shot** against this build, so the options page they
+  show carries the tour entry point added in 1.6.0.
+- **The colour screenshot had never had a colour picker in it.** The palette
+  opens beside its row, low in the tab list, and the fixed crop cut it off, so
+  the one asset about colour showed the Theme and Add Tab cards instead. The
+  capture now centres the row before clicking and throws if the palette is
+  outside the frame. A generated asset nobody looks at twice can be wrong for
+  as long as nothing checks it.
+- **The listing is rewritten for how it is read now**: a questions block whose
+  answers open with Yes or No and stand alone, because answer engines lift a
+  sentence rather than a page, and a record of which search term sits where so
+  a later edit does not quietly undo the placement. See STORE_LISTING.md.
 - The listing claimed the website had no `/contact` route and pointed its
   Support URL at the homepage. The route exists, is deployed, and is what the
   extension's own help button already opens.
-
-### Changed
-
-- All six screenshots re-shot against the 1.6.1 build, so the options page they
-  show carries the tour entry point added in 1.6.0.
-- `scripts/store-assets/build.mjs` documents how to shoot from a throwaway copy
-  of a signed-in profile, headless, rather than taking over the browser
+- `scripts/store-assets/build.mjs` documents how to shoot from a throwaway
+  copy of a signed-in profile, headless, rather than taking over the browser
   somebody is using, and that Chrome 137 and later ignore `--load-extension`.
+
+### The website
+
+- **The marketing site now runs this extension's own tour**, vendored from
+  this repository rather than re-created, so a visitor who plays it and then
+  installs sees exactly what they were shown.
+- Its FAQ matches the listing's questions word for word, and its `FAQPage`
+  markup moved from the React component into the served HTML, where a crawler
+  that does not execute JavaScript can actually read it.
+- `SoftwareApplication` markup now names the shipping product and version,
+  and `llms.txt` was added.
 
 ## [1.6.1] - 2026-09-22
 

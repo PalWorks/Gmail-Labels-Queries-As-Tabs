@@ -3,7 +3,7 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.6.1
+**Version this listing describes:** 1.6.2
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
 **Last updated:** 2026-09-22
@@ -311,8 +311,8 @@ Certifications to tick:
 - I do not use or transfer user data to determine creditworthiness or for lending purposes
 
 **Important:** these answers changed in 1.4.0, when the feedback form shipped. Earlier
-versions transmitted nothing at all. They are unchanged in 1.5.0, 1.6.0 and 1.6.1, none of
-which add a permission or a new outbound path. The in-product feedback form is the reason
+versions transmitted nothing at all. They are unchanged in 1.5.0, 1.6.0, 1.6.1 and 1.6.2,
+none of which add a permission or a new outbound path. The in-product feedback form is the reason
 "Personally identifiable information" is Yes. If the form is ever removed, the answer goes
 back to No.
 
@@ -398,8 +398,10 @@ Those strings, in upload order, are:
 | 5 | No analytics. No telemetry. | Read the whole policy in the extension: what is stored, and the two things that ever leave. |
 | 6 | A one-minute tour, over your inbox | Six steps that show the bar working, not a description of it. Reopen it any time. |
 
-All six were re-shot on 2026-09-22 against the 1.6.1 build. Two things changed beyond the
-version:
+All six were re-shot on 2026-09-22, against the build immediately before 1.6.2. Nothing
+1.6.2 changed is visible in a still: both of its fixes are about frames that no longer
+appear, so a screenshot of the fixed build is identical to these. Two things changed
+beyond the version:
 
 - **Screenshot 6 is new**: the tour, open over a real inbox, with the real tab bar visible
   above the panel. It is a capture of the running product, triggered through the same
@@ -411,7 +413,36 @@ version:
 
 ---
 
-## 5. Release notes for 1.6.1
+## 5. Release notes for 1.6.2
+
+Paste this one. It covers 1.6.1 as well, which was never submitted.
+
+```
+Fixed: no more black flash. The tab bar used to appear over Gmail as a dark strip for a
+moment before settling into your theme, and the settings page opened black before turning
+light. Both were the extension painting a colour before it knew which one you wanted. It
+now shows nothing rather than a guess, and the settings page opens in the theme you last
+used.
+
+Fixed: "System" means Gmail's theme, not your computer's. If your desktop is dark and your
+Gmail is light, the tab bar, the tour, the toolbar menu and the settings page now all
+follow Gmail. Your desktop is used only when no Gmail tab has reported a theme yet.
+
+New in this release, if you have not seen it: a one-minute tour that shows what the
+extension does instead of describing it. It opens over Gmail, and each step demonstrates
+the tab bar right there in the panel. The last step is the theme picker, and your real tab
+bar changes behind the panel as you choose. Reopen it any time from the toolbar icon, or
+from Settings.
+
+New: a menu behind the toolbar icon, with Configure tabs, Show me around, All settings and
+Help & support. Clicking the icon used to do nothing at all unless you were on Gmail.
+```
+
+1.6.2 adds no permission, changes no data flow, and adds no outbound request. The one new
+thing it stores is a single word, `light` or `dark`, in the browser's own local storage,
+so an extension page can open in the right colour on its first frame.
+
+The 1.6.1 notes, kept for the record since that version was never submitted:
 
 ```
 Fixed: the theme chooser followed your computer instead of Gmail. If your desktop was dark
@@ -421,8 +452,6 @@ Gmail's own theme everywhere, and falls back to your desktop only when no Gmail 
 reported one. The same mistake was found and fixed in three other places, including a
 dark flash on the tab bar itself while Gmail was still loading.
 ```
-
-1.6.1 adds no permission, changes no data flow, and adds no outbound request.
 
 The 1.6.0 notes, still worth pasting if the two ship together:
 
@@ -553,7 +582,7 @@ had both, and had done for months.
 | Extension README | Done. Heading now carries the full product name |
 | Website homepage | Done. The extension's own tour is embedded under "Take the tour", running the same code, vendored into that repo by its own `sync-wizard.mjs` |
 | Website FAQ | Done. Eleven questions, worded identically to section 7, feeding the existing `FAQPage` markup |
-| `SoftwareApplication` JSON-LD | Done. Existed already, but named a different product and claimed version 1.0.0. Now the full name, 1.6.1, licence, feature list, privacy and support URLs |
+| `SoftwareApplication` JSON-LD | Done. Existed already, but named a different product and claimed version 1.0.0. Now the full name, the shipping version, licence, feature list, privacy and support URLs |
 | `llms.txt` | Done, at `/Gmail-Labels-As-Tabs/llms.txt`. See the caveat below |
 | `robots.txt` | Present, and names the AI crawlers explicitly. See the caveat below |
 | Website `/changelog` | Keep publishing per release |
@@ -582,7 +611,7 @@ listing and the site have to agree and this file is where that agreement is reco
   "operatingSystem": "Chrome",
   "url": "https://palworks.github.io/Gmail-Labels-As-Tabs/",
   "downloadUrl": "https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde",
-  "softwareVersion": "1.6.1",
+  "softwareVersion": "1.6.2",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -650,20 +679,20 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-22 against `main` at the 1.6.1 release commit.
+Verified on 2026-09-22 against `main` at the 1.6.2 release commit.
 
 - [x] `npm run package` produces the zip from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.6.1 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.6.2 (CI checks parity)
 - [x] Privacy policy page covers the storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics
 - [x] Privacy policy URL points at the site this repository deploys, not the retired one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.6.1
+- [x] Public changelog updated through 1.6.2
 - [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
 - [x] The uninstall URL is a bare form link carrying no identifying parameter (asserted in
       `test/background.test.ts`; its disclosure is asserted in `test/repoConsistency.test.ts`)
 - [x] Data usage answers reviewed: unchanged from 1.4.0
-- [x] All six screenshots are 1280x800, re-shot against 1.6.1, and contain only demo data
+- [x] All six screenshots are 1280x800, re-shot for this submission, and contain only demo data
       (Inbox, Clients, Invoices, Newsletters, Unread from team)
 - [x] Support URL points at `#/contact`, a route confirmed present in the deployed bundle
 

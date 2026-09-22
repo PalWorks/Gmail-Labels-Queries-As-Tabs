@@ -67,7 +67,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
 | **Real-time Unread Counts** | Live badges via a three-tier strategy: Atom feed, XHR interception, and DOM scraping fallback |
-| **Theme Support** | Light (default), Dark, and System themes; browser-wide across all accounts, with automatic Gmail dark mode detection |
+| **Theme Support** | Light (default), Dark, and a System theme that follows **Gmail's own theme**, not the desktop's; browser-wide across all accounts. No surface paints a theme it is still guessing at, so nothing flashes on the way in |
 | **Multi-Account** | Per-account tab configurations namespaced by email address |
 | **Automation Rules** | Generate Google Apps Script code for automated email cleanup (trash, archive, mark read, move) |
 | **Export / Import** | Backup and restore configuration as schema-validated JSON |
@@ -251,6 +251,10 @@ separately in `chrome.storage.local` under the `globalTheme` key. Because it use
 applies to all accounts in the window but does not sync across devices. Changing the theme in any
 account, in the Gmail modal, the options page, or onboarding, updates all open Gmail tabs live.
 
+The extension's own pages also keep the last *resolved* theme in `localStorage`, because every
+`chrome.storage` read yields and a page has to paint something before it answers. That copy is a
+cache for the first frame and nothing else; `chrome.storage.local` still decides. See ADR-020.
+
 The Google Sheet URL used for activity logging is not persisted in settings; it is entered on the
 Options page and passed directly to the Apps Script generator.
 
@@ -334,12 +338,14 @@ Gmail-Labels-As-Tabs/
 │   ├── welcome.ts                    # Standalone tour host (no Gmail tab open)
 │   ├── welcome.html / welcome.css    # …and its markup & surround
 │   ├── popup.ts / popup.html/.css    # The toolbar icon's menu
+│   ├── themeBoot.ts                  # Stamps the theme before a page paints anything
 │   │
 │   ├── modules/                      # Feature modules (extracted from content.ts)
 │   │   ├── state.ts                  # Shared state & DOM selectors
 │   │   ├── tabs.ts                   # Tab bar rendering & navigation
 │   │   ├── dragdrop.ts               # Drag and drop reordering
 │   │   ├── theme.ts                  # Theme management & Gmail dark detection
+│   │   ├── themeMirror.ts            # The last painted theme, readable without yielding
 │   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
 │   │   ├── rules.ts                  # Automation rules & Apps Script generation
 │   │   └── modals/                   # Modal dialogs (7 files)
@@ -422,7 +428,8 @@ npx jest test/modals/
 | Unread Counts | `unread.test.ts` | Atom feed, XHR strategy, DOM scraping fallback |
 | Drag & Drop | `dragdrop.test.ts` | Horizontal/vertical drag, reorder logic, edge cases |
 | Tab Rendering | `tabs.test.ts` | Tab creation, active state, hash navigation |
-| Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection |
+| Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection, and the window where 'system' is still a guess |
+| First-frame theme | `themeMirror.test.ts` | The synchronous cache and the boot stamp that uses it |
 | Options Page | `options.test.ts` | Account detection, section navigation, rule UI |
 | Import/Export | `importExport.test.ts` | Schema validation, export format, round-trip |
 | Modals | `modals/*.test.ts` | Pin, edit, delete, import, uninstall modal logic |

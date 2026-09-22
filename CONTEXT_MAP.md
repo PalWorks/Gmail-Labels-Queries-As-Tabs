@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Documentation index
 

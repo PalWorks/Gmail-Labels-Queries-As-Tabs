@@ -1,6 +1,6 @@
 {
     "appDescription": {
-        "message": "Injects a user-configurable tabs bar into Gmail linked to labels.",
+        "message": "Turn Gmail labels and saved searches into a tab bar above your inbox. Unread counts, colors, cleanup rules.",
         "description": "The description of the application"
     }
 }

@@ -3,7 +3,7 @@
 Thanks for contributing to **Gmail Labels and Search Queries as Tabs**. This guide covers
 the workflow, standards, and checks.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Prerequisites
 
@@ -68,6 +68,10 @@ Before opening a pull request, confirm the verification gate passes:
 - [ ] `npm run build` succeeds and `dist/js` has no `console.log`
 - [ ] `manifest.json` and `package.json` versions match
 - [ ] Docs updated ([CHANGELOG.md](CHANGELOG.md) and any affected reference docs)
+- [ ] If the change is visible while the page loads rather than after it, say how you
+      checked. Two defects in 1.6.2 were flashes: every final state was correct, every
+      test passed, and the only evidence was a frame. Sampling the computed style on
+      every animation frame, before and after, is what the last person did
 - [ ] No build artifacts committed (`dist/`, `extension.zip`, `dist.zip`, `coverage/`)
 
 CI does **not** run on your push. It is manual dispatch only, so run it yourself once the

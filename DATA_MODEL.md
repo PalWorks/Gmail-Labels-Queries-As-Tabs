@@ -3,19 +3,46 @@
 Storage schema and data shapes for **Gmail Labels and Search Queries as Tabs**. The
 source of truth is [src/utils/storage.ts](src/utils/storage.ts); this file explains it.
 
-Last updated: 2026-09-22 (v1.6.0)
+Last updated: 2026-09-22 (v1.6.2)
 
 ## Storage areas
 
-The extension uses two Chrome storage areas deliberately:
+The extension uses two Chrome storage areas deliberately, plus one browser-local cache:
 
 | Area | Holds | Why |
 |------|-------|-----|
 | `chrome.storage.sync` | Per-account settings, keyed `account_<email>` | Syncs a user's tabs and rules across their signed-in Chrome instances |
 | `chrome.storage.local` | Global theme, key `globalTheme` | Browser-wide, per-window appearance; deliberately not device-synced so all accounts in one window match |
+| `chrome.storage.local` | Last theme Gmail was seen in, key `detectedGmailTheme` | The options page and the toolbar menu have no Gmail DOM to sample, so they read what the content script saw. Only ever written from a real reading, never from a guess |
+| `chrome.storage.local` | A pending first-run tour, key `pendingOnboarding` | Set on install, read and cleared by the first Gmail tab to finish initialising |
+| `localStorage` (extension origin) | The theme this browser last painted, key `glt.resolvedTheme` | The only storage a page can read **without yielding**. See below |
 
 There is no server and no other persistence. Exported config is a JSON blob the user
 downloads via the `downloads` permission.
+
+### Why a `localStorage` cache exists at all
+
+Every `chrome.storage` read is asynchronous, so an extension page has a window between
+"HTML parsed" and "storage answered" in which it must paint something. Until v1.6.2 it
+painted its stylesheet's default, which for the options page is a dark theme: the page
+opened black, drew its elements, then turned light. A user reported it as a flash, and it
+was, but the flash was the only symptom: every final state was correct.
+
+`localStorage` is synchronous, so [src/themeBoot.ts](src/themeBoot.ts) can read it and
+stamp the theme before any content is parsed. It holds a resolved `light` or `dark`, never
+`system`, and it is written by every extension page that settles on a theme
+([src/modules/themeMirror.ts](src/modules/themeMirror.ts)).
+
+Three properties worth knowing:
+
+- **It is a cache, not a source of truth.** `chrome.storage.local` still decides, a few
+  milliseconds later, and overwrites it.
+- **It is per-profile and never synced**, which is correct: it describes what this browser
+  last painted, not what the user prefers.
+- **The Gmail content script cannot write it.** Gmail is a different origin. Change the
+  theme from the in-Gmail modal and the next options page load may open in the old theme
+  for one frame before correcting. A stale cache costs a frame; it never costs a wrong
+  final state.
 
 ## Types
 
@@ -134,6 +161,10 @@ per-account `Settings.theme` field is retained only so that the one-time migrati
 seed the global value from a user's previous per-account choice. Read and write the
 global theme through `getGlobalTheme()` and `setGlobalTheme()`, never by reading
 `Settings.theme` directly. Default when unset is `light`.
+
+That default is load-bearing elsewhere: it is why a page with no cached theme opens light
+rather than asking the operating system. Light is what the extension is set to when
+nothing is stored, so it is an answer rather than a guess. See ADR-020.
 
 ## Migrations
 
