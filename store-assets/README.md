@@ -15,9 +15,11 @@ regenerated whenever the UI changes rather than drifting away from the product.
 | `screenshot-3-automation.png` | 1280x800 | Rule starter templates |
 | `screenshot-4-dark-mode.png` | 1280x800 | Dark theme |
 | `screenshot-5-privacy.png` | 1280x800 | Privacy page |
+| `screenshot-6-tour.png` | 1280x800 | The guided tour, open over a real inbox |
 | `raw/` | various | Unframed source captures |
 
-Captions to paste alongside them are in [STORE_LISTING.md](../STORE_LISTING.md).
+The store has no caption field, so each image carries its own headline and subhead. They
+are listed in [STORE_LISTING.md](../STORE_LISTING.md) alongside the upload order.
 
 ## Privacy
 
@@ -48,6 +50,16 @@ The screenshots show the real product. Two choices are worth recording:
   press Send Feedback". That stopped being true when the uninstall URL came back in v1.5.0
   (ADR-014), so it now points at the policy rather than summarising it. A caption is a
   claim; it goes stale like any other.
+- The colour screenshot shipped for three versions without a colour picker in it. The
+  palette opens beside its row, low in the tab list, and the fixed crop cut it off, so the
+  one asset about colour showed the Theme and Add Tab cards instead. The capture now
+  centres the row before clicking and throws if the palette is not inside the frame. A
+  generated asset can be wrong in a way a hand-made one cannot: nobody looked at it again
+  after the first time.
+- The tour screenshot is the running tour, opened by sending the content script the same
+  `SHOW_ONBOARDING` message the toolbar menu sends. Its crop is tighter than the other
+  Gmail shot so the real tab bar stays in frame above the panel; without it the image
+  would be a dialog on a blurred page, which is not what the tour is.
 
 ## Regenerating
 
@@ -58,4 +70,30 @@ NODE_PATH=$(npm root -g) node scripts/store-assets/build.mjs <extension-id> 9222
 ```
 
 Omit the account argument to skip the Gmail captures and recompose from `raw/`. The script
-fails if any output is the wrong size or if a frame would show a blank band.
+fails if any output is the wrong size, if a frame would show a blank band, if the colour
+palette is outside the crop, or if the tour does not open.
+
+### Shooting without taking over the desktop
+
+The captures open tabs and bring them to the front, which is disruptive if the browser
+being driven is the one somebody is using. A throwaway copy of a signed-in profile avoids
+that entirely:
+
+```bash
+rsync -a --exclude 'OptGuideOnDeviceModel' --exclude 'Default/Service Worker' \
+      --exclude 'Default/IndexedDB' --exclude 'Default/Cache' --exclude 'SingletonLock' \
+      ~/.config/<profile>/ /tmp/shootprof/
+google-chrome --headless=new --remote-debugging-port=9333 \
+      --user-data-dir=/tmp/shootprof --disable-sync
+```
+
+`--disable-sync` matters: the script writes demo tabs into `chrome.storage.sync` before it
+restores the real ones, and a signed-in clone would push those to the account.
+
+**Chrome 137 and later ignore `--load-extension`.** Load it over the protocol instead,
+which returns the same id the path would have produced:
+
+```js
+const session = await browser.newBrowserCDPSession();
+await session.send('Extensions.loadUnpacked', { path: '<repo>/dist' });
+```

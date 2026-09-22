@@ -17,6 +17,11 @@
  *   2. Load dist/ as an unpacked extension and copy its id.
  *   3. NODE_PATH=$(npm root -g) node scripts/store-assets/build.mjs <extension-id> [port] [gmail-account]
  *
+ * Note for a headless or throwaway profile: Chrome 137 and later ignore
+ * --load-extension. Load it over the protocol instead, which returns the same
+ * id the path would have produced:
+ *   Extensions.loadUnpacked { path: '<repo>/dist' }   (CDP, browser session)
+ *
  * Needs a global Playwright (npm i -g playwright); it is not a project
  * dependency because this is a release-time tool, not part of `npm test`.
  */
@@ -89,6 +94,34 @@ async function withPage(fn, { width = 1440, height = 900 } = {}) {
     }
 }
 
+/**
+ * Open the tour in an already-loaded Gmail tab.
+ *
+ * The content script is the only thing that can draw it, and nothing on the
+ * page can reach the content script, so the message is sent from an extension
+ * page that can: exactly the route the toolbar menu takes.
+ */
+async function showTourIn(gmailPage) {
+    await withPage(async (p) => {
+        await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
+        const result = await p.evaluate(
+            () =>
+                new Promise((resolve) => {
+                    chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
+                        if (!tabs || tabs.length === 0) return resolve('no Gmail tab found');
+                        const target = tabs[tabs.length - 1];
+                        chrome.tabs.sendMessage(target.id, { action: 'SHOW_ONBOARDING' }, () =>
+                            resolve(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'ok')
+                        );
+                    });
+                })
+        );
+        if (result !== 'ok') throw new Error(`could not ask Gmail to show the tour: ${result}`);
+    });
+    // Opening and closing that page took the foreground away from Gmail.
+    await gmailPage.bringToFront();
+}
+
 async function setTheme(theme) {
     await withPage(async (p) => {
         await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
@@ -135,10 +168,27 @@ await shootOptions({
     theme: 'light',
     action: async (p) => {
         const triggers = await p.$$('.tab-color-trigger');
-        if (triggers[1]) {
-            await triggers[1].click();
-            await p.waitForTimeout(600);
-        }
+        if (!triggers[1]) throw new Error('no colour trigger on the options page; the demo tabs did not render');
+
+        // Centre the row first. The popover opens beside its trigger, and the
+        // trigger sits low enough in the tab list that an unscrolled page puts
+        // the palette below the fold, where the crop cannot reach it. The
+        // screenshot then shows everything except the thing it is about,
+        // which is how the previous asset shipped without a palette in it.
+        await triggers[1].evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await p.waitForTimeout(350);
+        await triggers[1].click();
+        await p.waitForTimeout(700);
+
+        const visible = await p.evaluate(() => {
+            const el = document.querySelector('.color-popover');
+            if (!el) return 'the palette did not open';
+            const r = el.getBoundingClientRect();
+            if (r.bottom > window.innerHeight - 40) return 'the palette opened below the fold';
+            if (r.top < 120) return 'the palette opened above the capture area';
+            return 'ok';
+        });
+        if (visible !== 'ok') throw new Error(`colour capture: ${visible}`);
     },
 });
 
@@ -170,6 +220,25 @@ if (GMAIL_ACCOUNT) {
                 console.log('captured', `gmail-${theme}.png`);
             });
         }
+
+        // The tour, over the real Gmail it is designed to sit on. Shot from
+        // the product rather than mocked, for the same reason as every other
+        // asset here: a mocked tour would drift the moment a slide changed.
+        await setTheme('light');
+        await withPage(async (p) => {
+            await p.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 90000 });
+            await p.waitForTimeout(13000);
+            await showTourIn(p);
+            // The panel animates in. Give it time to settle, or the shot
+            // catches a half-drawn miniature.
+            await p.waitForTimeout(3500);
+            await p.addStyleTag({ content: BLUR_PRIVATE });
+            await p.waitForTimeout(800);
+            const open = await p.evaluate(() => !!document.getElementById('gmail-labels-onboarding'));
+            if (!open) throw new Error('the tour did not open in the Gmail tab; nothing to capture');
+            await p.screenshot({ path: `${RAW}/gmail-tour.png` });
+            console.log('captured', 'gmail-tour.png');
+        });
     } finally {
         // Always put the account back, even if a capture threw.
         await withPage(async (p) => {
@@ -203,7 +272,9 @@ const SCREENSHOTS = [
     {
         file: 'screenshot-2-colors.png',
         img: raw('options-colorpicker-light.png'),
-        offset: -215,
+        // Paired with the scroll in the capture above: together they put the
+        // open palette in the middle of the frame.
+        offset: -120,
         head: 'Colour-code the views that matter',
         sub: 'An accessible palette that stays readable in light and dark.',
     },
@@ -230,6 +301,16 @@ const SCREENSHOTS = [
         offset: -120,
         head: 'No analytics. No telemetry.',
         sub: 'Read the whole policy in the extension: what is stored, and the two things that ever leave.',
+    },
+    {
+        file: 'screenshot-6-tour.png',
+        img: raw('gmail-tour.png'),
+        // Tighter than the other Gmail shot on purpose: this crop has to hold
+        // the real tab bar and the whole panel, or the point of the tour
+        // sitting over a working inbox is lost.
+        offset: -100,
+        head: 'A one-minute tour, over your inbox',
+        sub: 'Six steps that show the bar working, not a description of it. Reopen it any time.',
     },
 ];
 
@@ -289,6 +370,7 @@ const EXPECTED = {
     'screenshot-3-automation.png': [1280, 800],
     'screenshot-4-dark-mode.png': [1280, 800],
     'screenshot-5-privacy.png': [1280, 800],
+    'screenshot-6-tour.png': [1280, 800],
 };
 let bad = 0;
 for (const [file, [w, h]] of Object.entries(EXPECTED)) {
