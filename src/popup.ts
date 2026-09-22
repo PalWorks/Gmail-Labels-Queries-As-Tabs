@@ -17,6 +17,7 @@ import { catchChromeError } from './modules/extensionContext';
 import { getGlobalTheme } from './utils/storage';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { START_TOUR_ACTION, OPEN_OPTIONS_PAGE_ACTION, TOGGLE_SETTINGS_ACTION } from './modules/messages';
+import { writeMirroredTheme } from './modules/themeMirror';
 
 const GMAIL_URL = 'https://mail.google.com/';
 
@@ -40,6 +41,9 @@ async function paintTheme(): Promise<void> {
         resolved = detected ?? (prefersDarkOS() ? 'dark' : 'light');
     }
     document.documentElement.setAttribute('data-theme', resolved);
+    // The menu is the page most likely to be opened next, and the one with the
+    // least time to correct itself. See modules/themeMirror.ts.
+    writeMirroredTheme(resolved);
 }
 
 function readDetectedGmailTheme(): Promise<ResolvedTheme | null> {

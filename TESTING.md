@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 35 suites, 708 tests as of v1.6.2.
+- 36 suites, 721 tests as of v1.6.2.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,

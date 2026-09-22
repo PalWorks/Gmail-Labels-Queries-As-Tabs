@@ -41,7 +41,10 @@ body.theme-light {
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #1a1a2e;
+    /* The token, not the literal it used to duplicate. body.theme-light
+       re-points --surface-page, so the page follows the theme by definition
+       instead of by a second declaration somebody has to remember. */
+    background: var(--surface-page);
     color: #e0e0e0;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;

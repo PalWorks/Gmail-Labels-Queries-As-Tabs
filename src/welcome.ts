@@ -18,6 +18,7 @@ import { getGlobalTheme, setGlobalTheme, Theme } from './utils/storage';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { catchChromeError } from './modules/extensionContext';
 import { createWizard } from './modules/onboarding/wizardView';
+import { writeMirroredTheme } from './modules/themeMirror';
 
 const GMAIL_URL = 'https://mail.google.com/';
 
@@ -71,6 +72,9 @@ function resolveSystemForPage(): ResolvedTheme {
 function applyThemeToPage(theme: Theme): void {
     const resolved = theme === 'light' || theme === 'dark' ? theme : resolveSystemForPage();
     document.documentElement.setAttribute('data-theme', resolved);
+    // So the next extension page opens in this rather than its stylesheet's
+    // default. See modules/themeMirror.ts.
+    writeMirroredTheme(resolved);
 }
 
 /**

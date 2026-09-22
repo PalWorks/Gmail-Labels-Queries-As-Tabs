@@ -11,7 +11,17 @@
     <link rel="stylesheet" href="css/options.css">
 </head>
 
-<body>
+<!--
+    class="theme-light" is the extension's stored default, not a guess: getGlobalTheme()
+    returns 'light' when nothing is saved. options.css uses dark base tokens, so without
+    this the page painted black and turned light once storage answered.
+
+    themeBoot.js then opens the page in whatever this browser last painted. It is
+    synchronous and first, before any content is parsed, because anything later has
+    already lost the frame it was trying to fix.
+-->
+<body class="theme-light">
+    <script src="js/themeBoot.js"></script>
     <div class="app-layout">
         <!-- Sidebar Navigation -->
         <nav class="sidebar" id="sidebar">

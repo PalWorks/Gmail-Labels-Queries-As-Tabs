@@ -332,6 +332,71 @@ describe('no stylesheet rule outlives what it styled', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Extension pages must be themed before they paint
+// ---------------------------------------------------------------------------
+
+/**
+ * Reported as a black flash: the options page painted its dark base tokens,
+ * then its elements, then the real theme once chrome.storage answered.
+ *
+ * The fix is a synchronous script that stamps the last painted theme before
+ * any content is parsed. Its whole value is its position: the same script at
+ * the bottom of the page, or deferred, or in the page's own bundle, fixes
+ * nothing and looks identical in review. So the position is what is guarded.
+ */
+describe('every extension page is themed before its content', () => {
+    const PAGES = ['src/options.html', 'src/popup.html', 'src/welcome.html'];
+    const BOOT = 'js/themeBoot.js';
+
+    /** Position of the boot script relative to the first content element. */
+    function bootBeforeContent(html: string): boolean {
+        const boot = html.indexOf(BOOT);
+        if (boot === -1) return false;
+        const bodyOpen = html.search(/<body[^>]*>/i);
+        if (bodyOpen === -1 || boot < bodyOpen) return boot !== -1; // in <head> is earlier still
+        // The first element inside <body> that is not the script itself.
+        const after = html.slice(bodyOpen);
+        const firstDiv = after.search(/<(div|main|header|nav|section)\b/i);
+        return firstDiv === -1 || boot - bodyOpen < firstDiv;
+    }
+
+    test('finds the pages it is meant to check', () => {
+        for (const page of PAGES) expect(read(page)).toContain('<body');
+    });
+
+    test('each page loads the boot script before anything it would paint', () => {
+        const late = PAGES.filter((p) => !bootBeforeContent(read(p)));
+        if (late.length > 0) {
+            throw new Error(
+                `These pages paint before they are themed:\n` +
+                    late.map((p) => `  ${p}`).join('\n') +
+                    `\n\nLoad ${BOOT} as the first thing inside <body>.`
+            );
+        }
+    });
+
+    test('the position check fails on a page that loads it late', () => {
+        // Mutation check: a detector that only looked for the filename would
+        // pass on this, and this is the version that does not work.
+        const late = `<body>\n<div class="app"></div>\n<script src="${BOOT}"></script>\n</body>`;
+        expect(bootBeforeContent(late)).toBe(false);
+        const early = `<body>\n<script src="${BOOT}"></script>\n<div class="app"></div>\n</body>`;
+        expect(bootBeforeContent(early)).toBe(true);
+    });
+
+    test('the boot script is a build entry point, or it ships as nothing', () => {
+        expect(read('build.js')).toContain('src/themeBoot.ts');
+    });
+
+    test('the options page carries the default theme in its markup', () => {
+        // The boot script covers a browser that has painted before. A first
+        // ever load has nothing to read, and the options page stylesheet is
+        // dark by default, so the markup has to carry the stored default.
+        expect(read('src/options.html')).toMatch(/<body[^>]*class="[^"]*theme-light/);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Every outbound host the extension can reach must be disclosed
 // ---------------------------------------------------------------------------
 

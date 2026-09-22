@@ -36,6 +36,29 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
   background is never readable, because a bar that stays invisible looks broken
   where a bar of the wrong colour merely looks wrong.
 
+- **The options page did the same thing, in its own way.** A black page, then
+  the elements, then the real theme. Two causes, both of them the page
+  painting before it knew anything: `options.css` uses dark as its base theme,
+  so the stylesheet's own default is a dark page; and the theme lives in
+  `chrome.storage.local`, which cannot be read without yielding, so there is
+  always a window between "HTML parsed" and "storage answered".
+
+  Extension pages now carry a synchronous boot script as the first thing
+  inside `<body>`, which stamps the theme this browser last painted before any
+  content is parsed. The last painted theme is kept in `localStorage`, the
+  only storage a page can read without yielding, shared across the options
+  page, the toolbar menu and the welcome page. A first-ever load has nothing
+  to read and opens light, which is not a guess about the user: it is the
+  value `getGlobalTheme()` returns when nothing is stored.
+
+  Measured on the options page: before, `rgb(26, 26, 46)` for 166ms with the
+  cards already on screen; after, the correct theme on the first frame, and a
+  user who has chosen Dark opens dark rather than flashing light on the way.
+
+  The cache is only ever a first frame. `chrome.storage` still decides, a few
+  milliseconds later, and corrects it if the theme was changed from inside
+  Gmail, which lives on another origin and cannot write this cache.
+
 - **A guessed theme was published to the extension's other pages as though it
   were Gmail's.** `detectedGmailTheme` is how the toolbar menu and the welcome
   page learn what Gmail looks like when they have no Gmail DOM of their own.

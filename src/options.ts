@@ -37,6 +37,7 @@ import { generateAppsScript, tabToGmailLabel } from './modules/rules';
 import { RULE_TEMPLATES, RULE_TEMPLATES_ENABLED, RuleTemplate, applyRuleTemplate } from './modules/ruleTemplates';
 import { setAppSettings, setUserEmail } from './modules/state';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
+import { writeMirroredTheme } from './modules/themeMirror';
 import {
     FeedbackCategory,
     MAX_MESSAGE_CHARS,
@@ -180,6 +181,9 @@ function applyThemeToPage(theme: string): void {
     document.body.classList.remove('theme-light', 'theme-dark');
     const resolved = theme === 'light' || theme === 'dark' ? theme : resolveSystemThemeForPage();
     document.body.classList.add(resolved === 'dark' ? 'theme-dark' : 'theme-light');
+    // So the next extension page to open paints this on its first frame
+    // rather than its stylesheet's default. See modules/themeMirror.ts.
+    writeMirroredTheme(resolved);
     updateSidebarThemeIcon(theme);
 }
 
