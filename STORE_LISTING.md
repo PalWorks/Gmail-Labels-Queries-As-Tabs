@@ -524,9 +524,12 @@ answers from what it can find, corroborate and cite. Four things make that possi
 
 **1. One entity name, everywhere.** "Gmail Labels and Search Queries as Tabs" is the name
 in the manifest, the store, the website title, the GitHub repository description and the
-first sentence of the description. The repository is named `Gmail-Labels-Queries-As-Tabs`
-and the README heading reads "Gmail Labels & Queries as Tabs", which is a third variant.
-Fixing the README heading to the full name costs nothing and removes an ambiguity.
+first sentence of the description. Both READMEs and the website's structured data used to
+say "Gmail Labels & Queries as Tabs" or "Gmail Labels as Tabs"; all three now carry the
+full name, with "Gmail Labels as Tabs" kept as an `alternateName` so the short form people
+actually type still resolves to the same entity. The repository directory is still
+`Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
+breaking inbound links over.
 
 **2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 701
 automated tests, three permissions, one outbound request, 30 days in Trash, five starter
@@ -540,18 +543,32 @@ retrieval system is concerned.
 
 **Table T4: Surfaces and their state**
 
-| Surface | Carries the claims? | Action |
-|---|---|---|
-| Store listing | Yes, after this update | Paste sections 1 to 5 |
-| GitHub README | Partly | Align the first paragraph with the summary in 1.3 |
-| Website homepage | Partly | Add the FAQ from section 7 with `FAQPage` JSON-LD |
-| Website `/changelog` | Yes | Keep publishing per release |
-| `SoftwareApplication` JSON-LD | No | Add to the website homepage, snippet below |
-| `llms.txt` at the site root | No | Add, snippet below |
-| Third-party mentions (blogs, Reddit, alternative-to directories) | None known | The largest gap, and the slowest to close |
+Corrected on 2026-09-22 by reading the website repository rather than assuming. An earlier
+draft of this table said the site had no `FAQPage` and no `SoftwareApplication` markup. It
+had both, and had done for months.
 
-**4. Machine-readable identity.** Two files on the website repository, neither of which
-exists yet:
+| Surface | State |
+|---|---|
+| Store listing | Ready. Paste sections 1 to 5 |
+| Extension README | Done. Heading now carries the full product name |
+| Website homepage | Done. The extension's own tour is embedded under "Take the tour", running the same code, vendored into that repo by its own `sync-wizard.mjs` |
+| Website FAQ | Done. Eleven questions, worded identically to section 7, feeding the existing `FAQPage` markup |
+| `SoftwareApplication` JSON-LD | Done. Existed already, but named a different product and claimed version 1.0.0. Now the full name, 1.6.1, licence, feature list, privacy and support URLs |
+| `llms.txt` | Done, at `/Gmail-Labels-As-Tabs/llms.txt`. See the caveat below |
+| `robots.txt` | Present, and names the AI crawlers explicitly. See the caveat below |
+| Website `/changelog` | Keep publishing per release |
+| Third-party mentions (blogs, Reddit, alternative-to directories) | None known. The largest gap, and the slowest to close |
+
+**The caveat on both crawler files.** This is a GitHub Pages *project* site, so they serve
+at `/Gmail-Labels-As-Tabs/robots.txt` and `/Gmail-Labels-As-Tabs/llms.txt`. Both
+conventions put those files at the origin root, `palworks.github.io/`, which belongs to the
+account and does not exist. So they document intent rather than enforce it. That costs
+nothing in this direction: a missing `robots.txt` means everything is allowed, and allowed
+is what we want. It would matter if we ever needed to *block* a crawler, which would then
+require either a custom domain or a root Pages repository.
+
+**4. Machine-readable identity.** What the website now carries, kept here because the
+listing and the site have to agree and this file is where that agreement is recorded:
 
 `index.html`, in the `<head>`:
 
@@ -656,13 +673,17 @@ Still to do by hand, before submitting:
       Install with a Gmail tab open, then again with none, to see both onboarding surfaces
 - [ ] Paste sections 1.3, 1.4 and 5 into the dashboard, upload all six screenshots, submit
 
-Still open, in the website repository (`PalWorks/Gmail-Labels-As-Tabs`), which nothing in
-this build can verify:
+Done since, in the website repository (`PalWorks/Gmail-Labels-As-Tabs`), which nothing in
+this build can verify and which deploys manually:
 
-| Decision | Options | Recommendation |
-|---|---|---|
-| README heading variant | (a) Leave "Gmail Labels & Queries as Tabs"; (b) match the full store name | (b). One entity name is the cheapest GEO win available |
-| Website FAQ and JSON-LD | (a) Skip; (b) add both from sections 7 and 8 | (b). They are the only two changes here that affect whether models can cite the product |
+- The product tour is embedded on the homepage, running the extension's own code.
+- The FAQ matches section 7 word for word, and feeds the `FAQPage` markup that was already
+  there.
+- The `SoftwareApplication` markup names the shipping product and version.
+- `llms.txt` added; `robots.txt` names the AI crawlers.
+
+Nothing is live until `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs
+--ref main` has run and the page has been checked.
 
 A note for next time: the website deploys **manually**, in both repositories. A change to
 the privacy policy is not live, and must not be described as live, until

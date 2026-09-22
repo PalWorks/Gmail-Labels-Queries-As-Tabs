@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="src/icons/icon128.png" alt="Gmail Labels & Queries as Tabs" width="96" />
+  <img src="src/icons/icon128.png" alt="Gmail Labels and Search Queries as Tabs" width="96" />
 </p>
 
-<h1 align="center">Gmail Labels & Queries as Tabs</h1>
+<h1 align="center">Gmail Labels and Search Queries as Tabs</h1>
 
 <p align="center">
   <strong>A Chrome extension that injects a configurable tab bar into Gmail for one-click navigation to labels, search queries, and custom views.</strong>
@@ -45,7 +45,7 @@
 
 ## Overview
 
-Gmail Labels & Queries as Tabs replaces the need to navigate Gmail's sidebar by placing your most used views as persistent, clickable tabs directly below the toolbar. Tabs support labels, search queries, and Gmail hash routes. They are reorderable via drag and drop, show real-time unread counts, and sync across Chrome instances through `chrome.storage.sync`.
+Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's sidebar by placing your most used views as persistent, clickable tabs directly below the toolbar. Tabs support labels, search queries, and Gmail hash routes. They are reorderable via drag and drop, show real-time unread counts, and sync across Chrome instances through `chrome.storage.sync`.
 
 **Core Value:** Navigate between Gmail views instantly through a native feeling tab bar with zero configuration friction and zero data leaving your browser.
 
