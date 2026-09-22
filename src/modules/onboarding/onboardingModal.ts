@@ -15,7 +15,7 @@
  */
 
 import { getGlobalTheme, setGlobalTheme, Theme } from '../../utils/storage';
-import { applyTheme } from '../theme';
+import { applyTheme, resolveSystemTheme } from '../theme';
 import { isExtensionContextAlive, isContextInvalidatedError } from '../extensionContext';
 import { renderContextInvalidatedNotice } from '../modals/contextNotice';
 import { createWizard, WizardHandle } from './wizardView';
@@ -71,6 +71,10 @@ export function showOnboarding(): void {
         loadTheme: () => getGlobalTheme(),
         saveTheme: (theme: Theme) => setGlobalTheme(theme),
         applyTheme: (theme: Theme) => applyTheme(theme),
+        // Gmail's own rendered theme, sampled from the page we are sitting
+        // on. The same resolver the tab bar itself uses, so the wizard and
+        // the bar behind it can never disagree.
+        resolveSystem: () => resolveSystemTheme(),
         onFinish: close,
         showClose: true,
         onError: (error: unknown) => reportFailure(scrim, close, error),

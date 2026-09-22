@@ -424,3 +424,68 @@ renders four buttons. A message name is a contract between two bundles, and
 keeping it in a leaf is what stops the contract dragging an implementation with
 it. The popup bundle is 1 KB.
 
+## ADR-019: Every surface resolves 'system' through Gmail, and a guard says so
+
+**Decision.** No module may decide what 'system' means by asking
+`prefers-color-scheme` alone. Each surface resolves it from Gmail's own theme
+and falls back to the OS only when Gmail's theme is unknown:
+
+| Surface | How it learns Gmail's theme |
+|---|---|
+| Tab bar and in-Gmail modals | `resolveSystemTheme()` — samples the live Gmail DOM |
+| Onboarding wizard | Asks its host, which is one of the two below |
+| Options page, welcome page, toolbar menu | `detectedGmailTheme` in `chrome.storage.local`, published by any content script |
+
+[test/repoConsistency.test.ts](test/repoConsistency.test.ts) fails any `src/`
+module that reads `prefers-color-scheme` without also naming a Gmail theme
+source.
+
+**Context.** The rule itself is not new. It is stated at the top of
+[src/modules/theme.ts](src/modules/theme.ts) and is the reason that module
+exists: Gmail's theme is an account setting, so a user on a dark desktop can be
+reading a light Gmail, and matching the OS there makes the tab bar stand out
+instead of blending in — the one thing it must not do.
+
+The onboarding wizard shipped in 1.6.0 broke it in a single line. It called
+`window.matchMedia('(prefers-color-scheme: dark)')` directly, so on the
+reporter's machine — dark desktop, light Gmail, 'system' selected — it rendered
+itself dark over a light inbox, inside a modal sitting on that inbox.
+
+Nothing caught it, and the reason is worth recording. There were twenty theme
+assertions across the suite, and every one of them set an explicit 'light' or
+'dark'. Not one exercised 'system' on a machine where the two sources disagree,
+which is the only configuration in which the bug is visible. A hundred tests of
+the two easy cases say nothing about the third.
+
+**Consequences.** `WizardHost.resolveSystem()` is **required**, not optional.
+Making it optional with an OS default would have reintroduced the bug for the
+next host by silence; requiring it meant the compiler named both existing hosts
+the moment the interface changed.
+
+The wizard re-resolves on every slide change rather than caching the value from
+when it opened. Gmail paints its real background well after injection and the
+user can switch Gmail's theme without reloading, so a value read once is a
+value that can be wrong a second later. See ADR-015.
+
+Three further places were corrected in the same pass, all the same mistake:
+
+- The welcome page removed `data-theme` for 'system' and let welcome.css's
+  `prefers-color-scheme` block decide, which is the OS. It now stamps the
+  resolved value, and that block is the pre-JavaScript default only.
+- The toolbar menu followed the OS. It is browser chrome, so that looked
+  defensible, but a dark menu hanging off an otherwise light extension is the
+  mismatch the theme setting exists to prevent.
+- `finalizeInit` rendered the tab bar *before* applying the theme, so until
+  `force-light` landed the bar fell back to toolbar.css's own media query — a
+  one-frame dark flash for exactly this user.
+
+The guard strips comments before scanning. Its first version failed on the
+comment in `content.ts` that explains the fix above, which mentions
+`prefers-color-scheme` by name: the same self-matching mistake the dead-CSS
+probe made in 1.5.0.
+
+What the guard does **not** prove is that Gmail is consulted *first*. A file
+could name both and still get the order wrong. Ordering is covered by unit
+tests per surface instead, each asserting the reporter's configuration: OS dark,
+Gmail light, 'system' selected, result light.
+

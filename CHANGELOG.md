@@ -4,6 +4,27 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.6.1] - 2026-09-22
+
+### Fixed
+
+- **The theme chooser followed your operating system instead of Gmail.** With a
+  dark desktop and a light Gmail, picking "System" turned the onboarding tour
+  dark over a light inbox. Gmail's theme is an account setting, so the desktop
+  says nothing about the inbox the tab bar has to blend into — the extension has
+  always resolved "System" from Gmail's own rendered theme, and the wizard added
+  in 1.6.0 was the one place that asked the OS instead.
+- **The same mistake in three more places**, found by auditing rather than
+  reported: the welcome page handed "System" to a CSS media query; the toolbar
+  menu followed the OS while everything else followed Gmail; and the tab bar was
+  drawn one frame before its theme was applied, so a dark desktop flashed a dark
+  bar over a light Gmail.
+- A guard now fails any module that reads `prefers-color-scheme` without also
+  consulting Gmail's theme, and each surface has a test for the configuration
+  where the two disagree. Twenty theme assertions existed before this; every one
+  set an explicit Light or Dark, so none of them could have caught it. See
+  ADR-019.
+
 ## [1.6.0] - 2026-09-22
 
 Onboarding, rebuilt. The old welcome page listed three things the extension

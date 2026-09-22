@@ -673,3 +673,103 @@ describe('floating promises stay a build failure', () => {
         expect(tsconfig.include).toEqual(expect.arrayContaining(['src/**/*']));
     });
 });
+
+// ---------------------------------------------------------------------------
+// 'system' means Gmail's theme, never the operating system's
+// ---------------------------------------------------------------------------
+
+/**
+ * The rule is stated at the top of src/modules/theme.ts and it is the whole
+ * point of that module: Gmail's theme is an account setting, so a user on a
+ * dark desktop can be reading a light Gmail. Matching the OS there makes the
+ * tab bar stand out instead of blending in, which is the one thing it must
+ * not do.
+ *
+ * The onboarding wizard shipped in 1.6.0 broke it by calling `matchMedia`
+ * directly, and rendered itself dark over a light Gmail. Nothing caught it,
+ * because every theme test asserted a forced 'light' or 'dark' and none
+ * exercised 'system' on a machine where the two sources disagree.
+ *
+ * So: any file allowed to ask the OS must also consult Gmail. This does not
+ * prove the order is right, but it catches a file that never asks Gmail at
+ * all, which is exactly how the bug arrived.
+ */
+describe("'system' theme resolves from Gmail, not the OS", () => {
+    const OS_QUERY = 'prefers-color-scheme';
+
+    /** Any of these means the file knows Gmail's theme is the real answer. */
+    const GMAIL_SOURCES = [
+        'detectGmailTheme',
+        'resolveSystemTheme',
+        'DETECTED_GMAIL_THEME_KEY',
+        'detectedGmailTheme',
+        'resolveSystem',
+    ];
+
+    const tsFiles = walk(path.join(ROOT, 'src'), (n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
+
+    /**
+     * Strip comments before scanning.
+     *
+     * Without this the guard reads prose. The comment in content.ts
+     * explaining why the theme is applied before the first paint mentions
+     * `prefers-color-scheme` by name, and the first version of this check
+     * failed on it — the same self-matching mistake the dead-CSS probe made.
+     */
+    function code(body: string): string {
+        return body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    }
+
+    test('finds the source files it is meant to scan', () => {
+        expect(tsFiles.length).toBeGreaterThan(10);
+    });
+
+    test('no module asks the OS without also asking Gmail', () => {
+        const offenders: string[] = [];
+
+        for (const file of tsFiles) {
+            const body = code(fs.readFileSync(file, 'utf8'));
+            if (!body.includes(OS_QUERY)) continue;
+            if (GMAIL_SOURCES.some((source) => body.includes(source))) continue;
+            offenders.push(path.relative(ROOT, file));
+        }
+
+        if (offenders.length > 0) {
+            throw new Error(
+                'These read prefers-color-scheme but never consult Gmail\'s own theme:\n' +
+                    offenders.map((f) => '  ' + f).join('\n') +
+                    "\n\n'system' must mean Gmail's rendered theme, with the OS only as a fallback " +
+                    'when Gmail cannot be read. See the header of src/modules/theme.ts and ADR-019.'
+            );
+        }
+    });
+
+    test('the check would catch a module that only asks the OS', () => {
+        // Mutation: the shape of the 1.6.0 regression, verified against the
+        // same predicate the real check uses rather than a re-implementation.
+        const regression = code("const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;");
+        const offends = regression.includes(OS_QUERY) && !GMAIL_SOURCES.some((s) => regression.includes(s));
+        expect(offends).toBe(true);
+    });
+
+    test('and would pass a module that asks Gmail first', () => {
+        const correct = code(
+            'const detected = detectGmailTheme();\n' +
+                "if (!detected) return window.matchMedia('(prefers-color-scheme: dark)').matches;"
+        );
+        const offends = correct.includes(OS_QUERY) && !GMAIL_SOURCES.some((s) => correct.includes(s));
+        expect(offends).toBe(false);
+    });
+
+    test('a comment mentioning the OS query is not mistaken for code', () => {
+        // content.ts has exactly this comment, and it is not a violation.
+        const commentOnly = code('// falls back to its `prefers-color-scheme` block\nconst x = 1;');
+        expect(commentOnly.includes(OS_QUERY)).toBe(false);
+    });
+
+    test('theme.ts still states the rule it exists to enforce', () => {
+        // A guard that points at a comment is only as good as the comment.
+        const themeModule = fs.readFileSync(path.join(ROOT, 'src', 'modules', 'theme.ts'), 'utf8');
+        expect(themeModule).toMatch(/source of truth for 'system' mode is \*Gmail's own\* rendered theme/);
+    });
+});

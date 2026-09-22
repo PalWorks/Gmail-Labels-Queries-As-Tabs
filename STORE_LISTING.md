@@ -4,7 +4,7 @@ Everything the CWS Dashboard asks for, in the order the dashboard asks for it. C
 block verbatim. Character counts are the store's limits, and the counts shown are what the
 text below actually uses.
 
-**Version this listing describes:** 1.6.0
+**Version this listing describes:** 1.6.1
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Last updated:** 2026-09-22
 
@@ -86,7 +86,7 @@ saved searches.
 
 OPEN SOURCE
 
-The full source is public and auditable, with 685 automated tests covering storage,
+The full source is public and auditable, with 701 automated tests covering storage,
 rendering, accessibility and the automation script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
@@ -348,10 +348,10 @@ compiled into the extension; it fetches nothing.
 
 ## 7. Pre-submission checklist
 
-Verified on 2026-09-22 against `main` at the 1.6.0 release commit.
+Verified on 2026-09-22 against `main` at the 1.6.1 release commit.
 
 - [x] `npm run package` produces `extension.zip` from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.6.0 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.6.1 (CI checks parity)
 - [x] Privacy policy page rewritten for 1.5.0: storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics stated separately
 - [x] Privacy policy URL now points at the site this repository deploys, not the stale one.

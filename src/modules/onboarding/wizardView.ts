@@ -45,6 +45,18 @@ export interface WizardHost {
      * on the welcome page it is the page itself.
      */
     applyTheme(theme: Theme): void;
+    /**
+     * What 'system' actually means on this surface, right now.
+     *
+     * Never the OS media query. Gmail's theme is an account setting, so a
+     * user on a dark desktop can be reading a light Gmail — which is exactly
+     * the case that shipped broken in 1.6.0: the wizard rendered itself dark
+     * over a light Gmail because it asked the operating system. In Gmail this
+     * reads the page; on the welcome page it reads the theme a Gmail tab last
+     * reported. Both fall back to the OS only when Gmail's theme is unknown.
+     */
+    resolveSystem(): 'light' | 'dark';
+
     /** The user is done, by finishing or by dismissing. */
     onFinish(): void;
     /** Offer a dismiss control. A modal wants one; a full page does not. */
@@ -310,13 +322,28 @@ export function createWizard(host: WizardHost): WizardHandle {
     // Theme
     // -----------------------------------------------------------------------
 
+    /** The theme the user has selected, which may be 'system'. */
+    let selectedTheme: Theme = 'light';
+
     function markTheme(theme: Theme): void {
+        selectedTheme = theme;
         themeButtons.forEach((button, id) => {
             button.setAttribute('aria-pressed', String(id === theme));
         });
-        const systemDark =
-            typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        root.dataset.resolved = theme === 'dark' || (theme === 'system' && systemDark) ? 'dark' : 'light';
+        paintResolved();
+    }
+
+    /**
+     * Repaint the panel for whatever 'system' resolves to now.
+     *
+     * Re-read rather than cached because Gmail paints its real background
+     * well after injection: the theme detected when the wizard opened can be
+     * wrong a second later, and the user can flip Gmail's theme without a
+     * reload. See ADR-015.
+     */
+    function paintResolved(): void {
+        const resolved = selectedTheme === 'system' ? host.resolveSystem() : selectedTheme;
+        root.dataset.resolved = resolved;
     }
 
     /**
@@ -488,6 +515,7 @@ export function createWizard(host: WizardHost): WizardHandle {
         backBtn.hidden = index === 0;
 
         dotNodes.forEach((d, n) => d.classList.toggle('is-on', n === index));
+        paintResolved();
         playSlide(index);
     }
 

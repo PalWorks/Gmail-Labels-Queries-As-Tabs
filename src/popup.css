@@ -8,9 +8,11 @@
  * that one action an extra click, so "Configure tabs" is first, largest and
  * focused on open.
  *
- * Its palette follows the OS rather than the extension's own theme: this is
- * browser chrome, not part of the Gmail page, and Chrome paints the popup's
- * frame from the system theme either way.
+ * The `prefers-color-scheme` block below is the pre-JavaScript default only.
+ * popup.ts stamps `data-theme` with the theme the extension is actually
+ * using, resolved from Gmail first, because a dark menu hanging off an
+ * otherwise light extension is the mismatch the theme setting exists to
+ * prevent.
  */
 
 :root {
@@ -23,7 +25,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme='light']) {
         --pop-bg: #292a2d;
         --pop-text: #e8eaed;
         --pop-text-soft: #9aa0a6;
@@ -31,6 +33,15 @@
         --pop-line: #3c4043;
         --pop-accent: #8ab4f8;
     }
+}
+
+:root[data-theme='dark'] {
+    --pop-bg: #292a2d;
+    --pop-text: #e8eaed;
+    --pop-text-soft: #9aa0a6;
+    --pop-hover: #3c4043;
+    --pop-line: #3c4043;
+    --pop-accent: #8ab4f8;
 }
 
 * {

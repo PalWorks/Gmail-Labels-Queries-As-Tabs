@@ -18,6 +18,7 @@ const mockTabsQuery = jest.fn();
 const mockTabsCreate = jest.fn();
 const mockTabsSendMessage = jest.fn();
 const mockClose = jest.fn();
+const mockStorageGet = jest.fn();
 
 /** The real markup, so a renamed id fails here rather than in the wild. */
 function loadPopupDOM(): void {
@@ -37,9 +38,15 @@ function loadPopup(): void {
 beforeEach(() => {
     jest.clearAllMocks();
     (global as any).chrome = {
-        runtime: { id: 'abcdef', sendMessage: mockSendMessage },
+        runtime: { id: 'abcdef', lastError: null, sendMessage: mockSendMessage },
+        storage: { local: { get: mockStorageGet } },
         tabs: { query: mockTabsQuery, create: mockTabsCreate, sendMessage: mockTabsSendMessage },
     };
+    mockStorageGet.mockImplementation((keys: any, cb: any) => {
+        const key = Array.isArray(keys) ? keys[0] : keys;
+        cb(key === 'detectedGmailTheme' ? { detectedGmailTheme: 'light' } : { globalTheme: 'system' });
+    });
+    document.documentElement.removeAttribute('data-theme');
     mockSendMessage.mockReturnValue(undefined);
     mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5, url: 'https://mail.google.com/mail/u/0/' }]));
     (window as any).close = mockClose;
@@ -141,5 +148,54 @@ describe('failure', () => {
         mockSendMessage.mockReturnValue(undefined);
         loadPopup();
         expect(() => (document.getElementById('popup-settings') as HTMLElement).click()).not.toThrow();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Theme
+//
+// The menu is browser chrome, so following the OS looks defensible. It is
+// not: a user whose desktop is dark and whose Gmail is light picks Light in
+// the extension, and a dark menu hanging off a light everything-else is the
+// mismatch they picked Light to avoid.
+// ---------------------------------------------------------------------------
+
+describe('the menu follows the extension, not the desktop', () => {
+    async function settle(): Promise<void> {
+        for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+    }
+
+    test("'system' takes Gmail's theme even when the OS disagrees", async () => {
+        const real = (window as any).matchMedia;
+        (window as any).matchMedia = (q: string) => ({ matches: q.includes('dark'), media: q });
+
+        loadPopup();
+        await settle();
+
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        (window as any).matchMedia = real;
+    });
+
+    test('an explicit choice wins over both', async () => {
+        mockStorageGet.mockImplementation((keys: any, cb: any) => {
+            const key = Array.isArray(keys) ? keys[0] : keys;
+            cb(key === 'detectedGmailTheme' ? { detectedGmailTheme: 'light' } : { globalTheme: 'dark' });
+        });
+
+        loadPopup();
+        await settle();
+
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+
+    test('a storage failure leaves the menu on its default rather than blank', async () => {
+        mockStorageGet.mockImplementation(() => {
+            throw new Error('storage is gone');
+        });
+
+        loadPopup();
+        await settle();
+
+        expect(document.querySelectorAll('.popup-item').length).toBe(4);
     });
 });

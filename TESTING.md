@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 35 suites, 685 tests as of v1.6.0.
+- 35 suites, 701 tests as of v1.6.1.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -72,6 +72,7 @@ test.
 | ... also: live documents disagree on the test count | Four of them stated four different totals inside one release, each correct when written |
 | ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
+| ... also: a module reads `prefers-color-scheme` without consulting Gmail's own theme | 'system' means Gmail's theme, not the OS. The 1.6.0 wizard asked the OS and rendered dark over a light Gmail. Twenty theme assertions existed; every one set an explicit Light or Dark, so none could have caught it. See ADR-019 |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
 | ... also: the floating-promise lint rules are removed, downgraded to a warning, or lose their type information | A rule that reports nothing looks exactly like a rule that is absent. `npm run lint` tolerates warnings, so "warn" would have retired the guard silently. See ADR-017 |
 

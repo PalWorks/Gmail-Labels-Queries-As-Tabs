@@ -92,13 +92,47 @@ describe('theme, which this page applies to itself', () => {
         expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     });
 
-    test("'system' clears the attribute rather than guessing", async () => {
-        mockStorageGet.mockImplementation((_keys: any, cb: any) => cb({ globalTheme: 'system' }));
+    test("'system' resolves to the theme Gmail last reported, not the OS", async () => {
+        // The page has no Gmail DOM to sample, so it mirrors what a content
+        // script published. Removing the attribute instead would hand the
+        // decision to welcome.css's prefers-color-scheme block, which is the
+        // operating system again — the bug this replaced.
+        mockStorageGet.mockImplementation((keys: any, cb: any) => {
+            const key = Array.isArray(keys) ? keys[0] : keys;
+            cb(key === 'detectedGmailTheme' ? { detectedGmailTheme: 'light' } : { globalTheme: 'system' });
+        });
 
         loadWelcome();
         await settle();
 
-        expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    });
+
+    test("'system' follows Gmail into dark too", async () => {
+        mockStorageGet.mockImplementation((keys: any, cb: any) => {
+            const key = Array.isArray(keys) ? keys[0] : keys;
+            cb(key === 'detectedGmailTheme' ? { detectedGmailTheme: 'dark' } : { globalTheme: 'system' });
+        });
+
+        loadWelcome();
+        await settle();
+
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+
+    test('the OS decides only when no Gmail tab has ever reported a theme', async () => {
+        const real = (window as any).matchMedia;
+        (window as any).matchMedia = (q: string) => ({ matches: q.includes('dark'), media: q });
+        mockStorageGet.mockImplementation((keys: any, cb: any) => {
+            const key = Array.isArray(keys) ? keys[0] : keys;
+            cb(key === 'detectedGmailTheme' ? {} : { globalTheme: 'system' });
+        });
+
+        loadWelcome();
+        await settle();
+
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        (window as any).matchMedia = real;
     });
 
     test('choosing a theme repaints the page and persists it browser-wide', async () => {

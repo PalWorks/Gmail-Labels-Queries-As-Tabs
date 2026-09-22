@@ -14,9 +14,58 @@
  */
 
 import { catchChromeError } from './modules/extensionContext';
+import { getGlobalTheme } from './utils/storage';
+import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { START_TOUR_ACTION, OPEN_OPTIONS_PAGE_ACTION, TOGGLE_SETTINGS_ACTION } from './modules/messages';
 
 const GMAIL_URL = 'https://mail.google.com/';
+
+/**
+ * Paint the menu in the theme the extension is actually using.
+ *
+ * It would be easy to argue the popup is browser chrome and should follow the
+ * operating system, and popup.css still does that before this runs. But a
+ * user whose desktop is dark and whose Gmail is light picks Light in the
+ * extension, and a dark menu hanging off a light everything-else is the same
+ * mismatch they picked Light to avoid. Gmail's theme first, the OS only when
+ * no Gmail tab has ever reported one.
+ */
+async function paintTheme(): Promise<void> {
+    const [selected, detected] = await Promise.all([getGlobalTheme(), readDetectedGmailTheme()]);
+
+    let resolved: ResolvedTheme;
+    if (selected === 'light' || selected === 'dark') {
+        resolved = selected;
+    } else {
+        resolved = detected ?? (prefersDarkOS() ? 'dark' : 'light');
+    }
+    document.documentElement.setAttribute('data-theme', resolved);
+}
+
+function readDetectedGmailTheme(): Promise<ResolvedTheme | null> {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.get([DETECTED_GMAIL_THEME_KEY], (items) => {
+                if (chrome.runtime.lastError || !items) {
+                    resolve(null);
+                    return;
+                }
+                const t = items[DETECTED_GMAIL_THEME_KEY];
+                resolve(t === 'light' || t === 'dark' ? t : null);
+            });
+        } catch {
+            resolve(null);
+        }
+    });
+}
+
+function prefersDarkOS(): boolean {
+    try {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+        return false;
+    }
+}
 
 function send(message: Record<string, unknown>): void {
     catchChromeError(chrome.runtime.sendMessage(message), (e) =>
@@ -25,6 +74,11 @@ function send(message: Record<string, unknown>): void {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    paintTheme().catch((e: unknown) => {
+        // The menu stays on the OS default rather than not opening.
+        console.error('Popup: could not read the theme', e);
+    });
+
     const configureBtn = document.getElementById('popup-configure') as HTMLButtonElement | null;
     const note = document.getElementById('popup-configure-note');
 

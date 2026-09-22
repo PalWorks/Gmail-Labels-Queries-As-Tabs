@@ -101,6 +101,13 @@ Orientation reading order for a new agent:
     and is logged as one: telling someone to reload when reloading will not help is worse
     than saying nothing.
 
+15. **'system' means Gmail's theme, never the OS.** Gmail's theme is an account setting,
+    so a dark desktop says nothing about the inbox the tab bar must blend into. In a
+    content script use `resolveSystemTheme()`; on an extension page read
+    `detectedGmailTheme` from `chrome.storage.local` and fall back to
+    `prefers-color-scheme` only when it is absent. A guard fails any `src/` module that
+    reads the media query without naming a Gmail source. See ADR-019.
+
 ## Coding conventions
 
 - TypeScript, ES2022, strict. Two-space indentation, single quotes, semicolons

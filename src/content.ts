@@ -205,11 +205,17 @@ async function finalizeInit(email: string): Promise<void> {
 
         setAppSettings(await getSettings(email));
         console.log('Gmail Tabs: Settings loaded for', email, getAppSettings());
-        renderTabs();
-        broadcastKnownLabels();
 
+        // Theme before the first paint, not after. Until `force-light` or
+        // `force-dark` is on <body>, toolbar.css falls back to its
+        // `prefers-color-scheme` block — so a user with a dark desktop and a
+        // light Gmail saw the bar flash dark for a frame, which is the exact
+        // mismatch that whole mechanism exists to avoid.
         currentGlobalTheme = await getGlobalTheme();
         applyTheme(currentGlobalTheme);
+
+        renderTabs();
+        broadcastKnownLabels();
 
         // Listen for OS theme changes to auto-update 'system' mode
         listenForSystemThemeChanges(() => currentGlobalTheme);

@@ -20,6 +20,8 @@ function makeHost(overrides: Record<string, unknown> = {}) {
         loadTheme: jest.fn().mockResolvedValue('light' as Theme),
         saveTheme: jest.fn().mockResolvedValue(undefined),
         applyTheme: jest.fn(),
+        // Gmail is light in these tests unless a test says otherwise.
+        resolveSystem: jest.fn().mockReturnValue('light' as const),
         onFinish: jest.fn(),
         onError: jest.fn(),
         ...overrides,
@@ -249,5 +251,98 @@ describe('finishing and dismissing', () => {
         wizard!.destroy();
         expect(document.querySelector('.glt-ob')).toBeNull();
         wizard = null;
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 'system' means Gmail, not the OS
+//
+// The case that shipped broken in 1.6.0: a dark desktop, a light Gmail, and
+// 'system' selected. The wizard asked matchMedia and painted itself dark over
+// a light inbox. No test caught it, because every theme test asserted a
+// forced 'light' or 'dark' and none exercised the one mode where the two
+// sources can disagree.
+// ---------------------------------------------------------------------------
+
+describe("'system' follows the host, never the operating system", () => {
+    /**
+     * Make the OS say dark, so a wizard that asks it gets a different answer
+     * from the one the host gives. jsdom does not implement matchMedia, so it
+     * is defined rather than spied on.
+     */
+    let realMatchMedia: unknown;
+
+    beforeEach(() => {
+        realMatchMedia = (window as any).matchMedia;
+        (window as any).matchMedia = (q: string) => ({
+            matches: q.includes('prefers-color-scheme: dark'),
+            media: q,
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+        });
+    });
+
+    afterEach(() => {
+        (window as any).matchMedia = realMatchMedia;
+    });
+
+    test('a dark desktop does not darken the wizard when Gmail is light', async () => {
+        const host = makeHost({
+            loadTheme: jest.fn().mockResolvedValue('system' as Theme),
+            resolveSystem: jest.fn().mockReturnValue('light' as const),
+        });
+        const root = mount(host);
+        await settle();
+
+        expect(root.dataset.resolved).toBe('light');
+    });
+
+    test('and a light desktop does not lighten it when Gmail is dark', async () => {
+        const host = makeHost({
+            loadTheme: jest.fn().mockResolvedValue('system' as Theme),
+            resolveSystem: jest.fn().mockReturnValue('dark' as const),
+        });
+        const root = mount(host);
+        await settle();
+
+        expect(root.dataset.resolved).toBe('dark');
+    });
+
+    test('choosing System asks the host rather than assuming', async () => {
+        const host = makeHost({ resolveSystem: jest.fn().mockReturnValue('dark' as const) });
+        const root = mount(host);
+        wizard!.goTo(THEME_SLIDE_INDEX);
+
+        (root.querySelectorAll('.glt-ob-theme')[2] as HTMLElement).click();
+        await settle();
+
+        expect(host.resolveSystem).toHaveBeenCalled();
+        expect(root.dataset.resolved).toBe('dark');
+    });
+
+    test('an explicit choice ignores the host entirely', async () => {
+        const host = makeHost({ resolveSystem: jest.fn().mockReturnValue('dark' as const) });
+        const root = mount(host);
+        wizard!.goTo(THEME_SLIDE_INDEX);
+
+        (root.querySelectorAll('.glt-ob-theme')[0] as HTMLElement).click();
+        await settle();
+
+        expect(root.dataset.resolved).toBe('light');
+    });
+
+    test('re-resolves as it steps, because Gmail paints its background late', () => {
+        // The theme detected when the wizard opened can be wrong a second
+        // later. See ADR-015.
+        const resolveSystem = jest.fn().mockReturnValue('light' as const);
+        const root = mount(makeHost({ resolveSystem }));
+        wizard!.goTo(THEME_SLIDE_INDEX);
+        (root.querySelectorAll('.glt-ob-theme')[2] as HTMLElement).click();
+        expect(root.dataset.resolved).toBe('light');
+
+        resolveSystem.mockReturnValue('dark');
+        wizard!.goTo(0);
+
+        expect(root.dataset.resolved).toBe('dark');
     });
 });
