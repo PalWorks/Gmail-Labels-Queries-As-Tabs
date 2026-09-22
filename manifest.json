@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gmail Labels and Search Queries as Tabs",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "__MSG_appDescription__",
   "default_locale": "en",
   "permissions": [

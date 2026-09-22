@@ -192,7 +192,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 701 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 708 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -531,7 +531,7 @@ actually type still resolves to the same entity. The repository directory is sti
 `Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
 breaking inbound links over.
 
-**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 701
+**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 708
 automated tests, three permissions, one outbound request, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets

@@ -1,6 +1,6 @@
 {
   "name": "gmail-labels-as-tabs",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Injects a user-configurable tabs bar into Gmail linked to labels.",
   "scripts": {
     "clean": "rm -rf dist",

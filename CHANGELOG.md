@@ -4,6 +4,46 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.6.2] - 2026-09-22
+
+### Fixed
+
+- **A black bar appeared over Gmail for a moment before the real theme
+  arrived.** Reported from a dark desktop reading a light Gmail: a black slab
+  appears, settles to white, and only then fills with tabs.
+
+  The bar is drawn before the theme is known, twice over. Injection and
+  theming are independent, so `attemptInjection()` inserts the bar as soon as
+  it finds a place to put it, which can be a third of a second before the
+  stored theme has been read and a class put on `<body>`. And in "System" mode
+  the theme can be applied and still be a guess, because Gmail paints its own
+  background late and there is nothing to sample until it does. Both windows
+  were painted from the `prefers-color-scheme` defaults, which on a dark
+  desktop are black.
+
+  The fix is not a faster guess. The bar now carries a background only when
+  the theme is actually known; until then it has none, so what shows through
+  is the Gmail already on screen, and the real colour fades in over 250ms when
+  it arrives. The tabs keep their own colours throughout, so nothing is
+  invisible except the slab behind them.
+
+  Measured frame by frame under the reported configuration, with the desktop
+  set to dark and Gmail light: before, `rgb(32, 33, 36)` for 318ms with no
+  tabs on screen; after, transparent throughout the same window and not one
+  dark frame.
+
+  The state cannot get stuck: the settle ladder commits the guess if Gmail's
+  background is never readable, because a bar that stays invisible looks broken
+  where a bar of the wrong colour merely looks wrong.
+
+- **A guessed theme was published to the extension's other pages as though it
+  were Gmail's.** `detectedGmailTheme` is how the toolbar menu and the welcome
+  page learn what Gmail looks like when they have no Gmail DOM of their own.
+  It was being written with the desktop's preference whenever Gmail could not
+  be read, which is precisely the case those pages needed to be told about.
+  Only real readings are published now; an absent key already means "fall back
+  to the OS".
+
 ## [Unreleased]
 
 Store assets and listing copy. Nothing here ships to a user: the extension

@@ -153,11 +153,61 @@ body.force-light {
     min-height: 48px;
     /* Allow height to grow */
     height: auto;
-    background-color: var(--gmail-tabs-bg);
-    border-bottom: 1px solid var(--gmail-tabs-border);
+    /*
+     * No background until the theme is known. See the three rules below: this
+     * is the "not yet" state, and it is a real state rather than an oversight.
+     */
+    background-color: transparent;
+    border-bottom: 1px solid transparent;
     font-family: 'Google Sans', Roboto, Arial, sans-serif;
     gap: 8px;
     /* Consistent spacing */
+
+    /* So the real colour arrives as a fade rather than a snap. */
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+}
+
+/*
+ * The bar is drawn before the theme is known, twice over.
+ *
+ * First, injection and theming are independent: `attemptInjection()` in
+ * content.ts inserts the bar as soon as it finds a place to put it, which can
+ * be well before `finalizeInit()` has read the stored theme and put a class on
+ * <body>. Second, in 'system' mode the theme can be read and still be a guess,
+ * because Gmail paints its own background late and there is nothing to sample
+ * until it does.
+ *
+ * Both windows used to be painted from the `prefers-color-scheme` defaults at
+ * the top of this file. On a dark desktop reading a light Gmail that meant a
+ * black slab appearing above a light inbox, settling to white, and only then
+ * filling with tabs. Reported as exactly that, in that order.
+ *
+ * So the bar carries a background only when the theme is actually known. The
+ * tabs themselves keep their own colours throughout, so nothing is invisible;
+ * what is missing early is the slab behind them, and what shows through
+ * instead is the Gmail that is already on screen.
+ */
+body.force-light .gmail-tabs-bar,
+body.force-dark .gmail-tabs-bar {
+    background-color: var(--gmail-tabs-bg);
+    border-bottom-color: var(--gmail-tabs-border);
+}
+
+/*
+ * 'System' mode has applied a class, but from the OS rather than from Gmail,
+ * so it is still a guess. Same specificity as the rule above and deliberately
+ * after it, so it wins.
+ *
+ * theme.ts adds and removes this class, and it is never left on: the settle
+ * ladder commits the guess if Gmail's background turns out never to be
+ * readable, because a bar that stays invisible looks broken where a bar of the
+ * wrong colour merely looks wrong.
+ */
+body.theme-unresolved .gmail-tabs-bar {
+    background-color: transparent;
+    border-bottom-color: transparent;
 }
 
 .gmail-tabs-bar::-webkit-scrollbar {

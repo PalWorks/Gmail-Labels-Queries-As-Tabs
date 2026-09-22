@@ -36,6 +36,27 @@ const LIGHT_LUMINANCE_MIN = 140;
 export const DETECTED_GMAIL_THEME_KEY = 'detectedGmailTheme';
 
 /**
+ * On <body> while 'system' mode is still guessing.
+ *
+ * Gmail paints its own background well after the content script runs, so for
+ * the first few hundred milliseconds `detectGmailTheme()` returns null and the
+ * only answer available is the OS preference. That answer is frequently wrong:
+ * a dark desktop reading a light Gmail is the configuration this module exists
+ * for. The old behaviour was to paint the guess, which on a dark desktop meant
+ * a black slab appearing above a light inbox and then turning white a moment
+ * later.
+ *
+ * So the guess is marked, and toolbar.css gives the bar no background at all
+ * while the mark is present. An unknown theme is drawn as nothing rather than
+ * as a colour we are about to contradict. Everything else keeps the guessed
+ * values, so the tabs are readable the moment they render.
+ *
+ * The mark is removed as soon as Gmail's theme can be read, and by
+ * `commitGuessedTheme()` if it never can.
+ */
+export const THEME_UNRESOLVED_CLASS = 'theme-unresolved';
+
+/**
  * Read Gmail's rendered theme from the page itself.
  *
  * Returns `null` — not a guess — when no candidate element has a readable,
@@ -141,14 +162,40 @@ export function applyTheme(theme: ThemeMode): void {
     document.body.classList.remove('force-dark', 'force-light');
 
     let resolved: ResolvedTheme;
+    let guessing = false;
+
     if (theme === 'dark' || theme === 'light') {
+        // The user named a theme. There is nothing to be unsure about.
         resolved = theme;
     } else {
-        resolved = resolveSystemTheme();
-        publishDetectedTheme(resolved);
+        const detected = detectGmailTheme();
+        if (detected) {
+            resolved = detected;
+            // Only a real reading is published. The other pages fall back to
+            // the OS themselves when this key is absent, so publishing a guess
+            // would have told them "this is Gmail's theme" about a value that
+            // never came from Gmail.
+            publishDetectedTheme(resolved);
+        } else {
+            resolved = prefersDarkOS() ? 'dark' : 'light';
+            guessing = true;
+        }
     }
 
     document.body.classList.add(resolved === 'dark' ? 'force-dark' : 'force-light');
+    document.body.classList.toggle(THEME_UNRESOLVED_CLASS, guessing);
+}
+
+/**
+ * Stop waiting: draw the guess.
+ *
+ * Called when every source of a real answer has been exhausted. Without it a
+ * page whose background is never readable would leave the bar transparent for
+ * the life of the tab, which is a worse failure than a wrong colour because it
+ * looks like the extension is broken rather than merely mistaken.
+ */
+export function commitGuessedTheme(): void {
+    document.body.classList.remove(THEME_UNRESOLVED_CLASS);
 }
 
 /**
@@ -199,18 +246,32 @@ const RECHECK_DEBOUNCE_MS = 150;
  */
 export function watchGmailTheme(getCurrentTheme: () => ThemeMode): () => void {
     let lastResolved: ResolvedTheme | null = null;
+    let everDetected = false;
     let disposed = false;
 
     const check = (): void => {
         if (disposed) return;
         if (getCurrentTheme() !== 'system') return;
         const detected = detectGmailTheme();
-        if (!detected || detected === lastResolved) return;
+        if (!detected) return;
+        everDetected = true;
+        if (detected === lastResolved) return;
         lastResolved = detected;
         applyTheme('system');
     };
 
     const timers = SETTLE_DELAYS_MS.map((ms) => setTimeout(check, ms));
+
+    // The ladder is the last thing that can turn a guess into an answer. When
+    // it runs out having never read Gmail's background, the bar stops waiting
+    // and wears the guess, rather than staying invisible forever.
+    timers.push(
+        setTimeout(() => {
+            if (disposed || everDetected) return;
+            if (getCurrentTheme() !== 'system') return;
+            commitGuessedTheme();
+        }, SETTLE_DELAYS_MS[SETTLE_DELAYS_MS.length - 1])
+    );
 
     let scheduled: ReturnType<typeof setTimeout> | null = null;
     const scheduleCheck = (): void => {

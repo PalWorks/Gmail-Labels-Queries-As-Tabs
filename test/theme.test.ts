@@ -12,8 +12,11 @@ import {
     detectGmailTheme,
     resolveSystemTheme,
     applyTheme,
+    commitGuessedTheme,
     listenForSystemThemeChanges,
     watchGmailTheme,
+    THEME_UNRESOLVED_CLASS,
+    DETECTED_GMAIL_THEME_KEY,
     ThemeMode,
 } from '../src/modules/theme';
 
@@ -289,6 +292,149 @@ describe('detectGmailTheme', () => {
 
         expect(document.body.classList.contains('force-light')).toBe(true);
         expect(document.body.classList.contains('force-dark')).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// An unknown theme is drawn as nothing, not as a guess
+// ---------------------------------------------------------------------------
+
+/**
+ * The bug these cover, reported from a desktop set to dark reading a light
+ * Gmail: the bar appeared as a black slab, settled to white a moment later,
+ * and only then filled with tabs. The black was the OS answer being painted
+ * during the window where Gmail had not yet drawn a background to read.
+ *
+ * The fix is not a faster guess. It is to stop painting one: while 'system'
+ * mode has no real answer the bar carries no background at all, so what shows
+ * through is the Gmail already on screen.
+ */
+describe('system mode while Gmail has not painted yet', () => {
+    /** Gmail unreadable: every candidate surface is transparent. */
+    function gmailNotPaintedYet(): Map<Element, string> {
+        const map = new Map<Element, string>();
+        map.set(document.body, 'transparent');
+        map.set(document.documentElement, 'rgba(0, 0, 0, 0)');
+        mockComputedStyle(map);
+        return map;
+    }
+
+    test('marks the theme unresolved rather than painting the OS guess', () => {
+        gmailNotPaintedYet();
+        mockMatchMedia(true);
+
+        applyTheme('system');
+
+        // The guess is still applied, so the tabs are readable when they land.
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+        // But it is marked as a guess, and the stylesheet drops the background.
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+    });
+
+    test('drops the mark as soon as Gmail can actually be read', () => {
+        const map = gmailNotPaintedYet();
+        mockMatchMedia(true);
+        applyTheme('system');
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+
+        map.set(document.body, 'rgb(248, 250, 253)');
+        applyTheme('system');
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+    });
+
+    test('an explicit theme is never a guess, and clears a stale mark', () => {
+        gmailNotPaintedYet();
+        mockMatchMedia(true);
+        applyTheme('system');
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+
+        applyTheme('light');
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+    });
+
+    test('commitGuessedTheme stops waiting and wears the guess', () => {
+        gmailNotPaintedYet();
+        mockMatchMedia(true);
+        applyTheme('system');
+
+        commitGuessedTheme();
+
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+    });
+
+    test('only a real reading is published as Gmail\'s theme', () => {
+        const set = jest.fn();
+        (globalThis as unknown as { chrome: unknown }).chrome = { storage: { local: { set } } };
+
+        try {
+            const map = gmailNotPaintedYet();
+            mockMatchMedia(true);
+
+            applyTheme('system');
+            // A guess must not be shared as "this is Gmail's theme": the popup
+            // and the welcome page fall back to the OS themselves when the key
+            // is absent, and would have no way to tell a reading from a guess.
+            expect(set).not.toHaveBeenCalled();
+
+            map.set(document.body, 'rgb(32, 33, 36)');
+            applyTheme('system');
+
+            expect(set).toHaveBeenCalledWith({ [DETECTED_GMAIL_THEME_KEY]: 'dark' });
+        } finally {
+            delete (globalThis as unknown as { chrome?: unknown }).chrome;
+        }
+    });
+
+    test('the watcher commits the guess when Gmail never becomes readable', () => {
+        jest.useFakeTimers();
+        gmailNotPaintedYet();
+        mockMatchMedia(true);
+
+        const stop = watchGmailTheme(() => 'system');
+        applyTheme('system');
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+
+        // Halfway through the ladder there is still hope, so still no paint.
+        jest.advanceTimersByTime(3000);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+
+        // Out of chances. A bar that stays invisible looks broken, which is a
+        // worse failure than a bar that is merely the wrong colour.
+        jest.advanceTimersByTime(8000);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+        expect(document.body.classList.contains('force-dark')).toBe(true);
+
+        stop();
+        jest.useRealTimers();
+    });
+
+    test('the watcher leaves no mark behind once Gmail paints', () => {
+        jest.useFakeTimers();
+        const map = gmailNotPaintedYet();
+        mockMatchMedia(true);
+
+        const stop = watchGmailTheme(() => 'system');
+        applyTheme('system');
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(true);
+
+        map.set(document.body, 'rgb(255, 255, 255)');
+        jest.advanceTimersByTime(300);
+
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+
+        // And the commit timer, firing later, must not undo anything.
+        jest.advanceTimersByTime(11000);
+        expect(document.body.classList.contains('force-light')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+
+        stop();
+        jest.useRealTimers();
     });
 });
 
