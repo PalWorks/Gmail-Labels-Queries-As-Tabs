@@ -29,7 +29,7 @@
 > theme is known, and extension pages open in the theme the browser last painted,
 > stamped synchronously before any content is parsed. Both of the second pair were
 > reported as a black flash, and neither could have been caught by any assertion about a
-> final state, because every final state was already correct. 38 suites, 802 tests.
+> final state, because every final state was already correct. 38 suites, 809 tests.
 >
 > The website in the sibling repository now runs this extension's own tour, vendored
 > rather than re-created, and its FAQ and structured data were aligned with the store
@@ -68,13 +68,23 @@
 > section 7, and the execution record in
 > [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
 
+> **Refresh note (2026-09-23, v1.7.2):** the label-menu item now lights up under the
+> pointer and under the keyboard the way Gmail's own items do. It did not in 1.7.1, and the
+> reason is a class of defect worth recording: Gmail highlights from its own `jsaction`
+> handler, not from a `:hover` rule, and the clone strips that wiring on purpose, so the
+> item worked perfectly and looked dead. No unit test could have seen it, because jsdom
+> computes no styles, and the canary asserted structure rather than appearance. The class is
+> learned from Gmail at runtime rather than written into the source, which keeps ADR-022
+> intact, with a translucent wash as the fallback (ADR-024). The canary gained a sixth
+> check, `HOVER`. Found by the first person to use it, which is its own lesson.
+
 > **Refresh note (2026-09-23, v1.7.1):** `@inboxsdk/core` is gone (ADR-021), so the content
-> script is 76.5 KB and contains no third-party code. Two modules are new:
+> script is 76.3 KB and contains no third-party code. Two modules are new:
 > `src/modules/labelMenu.ts`, which adds "Show as Tabs" to Gmail's own label menu while
 > hardcoding none of Gmail's class names (ADR-022), and `src/modules/health.ts`, which
 > records locally whether that works and is never transmitted (ADR-023). A drift canary in
 > `scripts/canary/` opens a real Gmail label menu daily and checks the structure the feature
-> depends on. The suite is 38 files, 802 tests.
+> depends on. The suite is 38 files, 809 tests.
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,

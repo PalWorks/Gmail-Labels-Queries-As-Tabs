@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-23 (v1.7.1)
+Last updated: 2026-09-23 (v1.7.2)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 38 suites, 802 tests as of v1.7.1.
+- 38 suites, 809 tests as of v1.7.2.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -86,7 +86,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-802 tests below would all have passed on the broken build.
+809 tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:
@@ -141,6 +141,29 @@ activated changes, and the daily canary covers the rest by dispatching events. I
 activation event is ever changed again, run it. The script is not committed because it is
 throwaway scaffolding; what it proved is above, and the unit tests in
 [test/labelMenu.test.ts](test/labelMenu.test.ts) encode the conclusion.
+
+### The thing a unit test cannot see: what the page looks like
+
+v1.7.1's item worked and looked wrong. It did not light up under the pointer, because
+Gmail highlights from its own `jsaction` handler rather than from a `:hover` rule, and the
+clone strips that wiring on purpose. No unit test could have caught it: jsdom lays nothing
+out, computes no styles and fires no hover, and the canary asserted structure, not
+appearance.
+
+What caught it was a person using it. What confirmed the cause was a stylesheet sweep in a
+live Gmail: every `:hover` selector in the page, tested against the item with `matches()`,
+and not one matched.
+
+The fix is tested from both ends. [test/labelMenu.test.ts](test/labelMenu.test.ts) plants a
+handler that adds a class of the test's own invention, and asserts our item takes it on,
+gives it back, and leaves Gmail's element exactly as found, including when the planted
+handler never un-highlights. It also asserts the wash appears when nothing can be learned,
+light or dark according to the menu's own background, and that an implausible handler
+adding six classes is not copied at all. The canary asserts the live version of the same
+thing, through `HOVER`.
+
+The lesson generalises: **structure passing is not the same as looking right.** A check
+that an element exists says nothing about whether it reacts.
 
 ### Two gates that cannot live in jest
 

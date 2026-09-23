@@ -4,6 +4,32 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.7.2] - 2026-09-23
+
+> 1.7.1 was tagged and never submitted. It is superseded by this release, which
+> adds the one thing a user noticed the moment they used it: the item did not
+> light up under the pointer.
+
+### Fixed
+
+- **The menu item now highlights under the pointer and under the keyboard,**
+  exactly as Gmail's own items do. It did not before, and the reason is worth
+  recording: Gmail does not highlight with a `:hover` rule. It adds a class
+  from its own `jsaction` handler, which is precisely the wiring the clone
+  strips, so the item inherited the look of a row at rest and nothing else.
+  Measured against a live inbox on 2026-09-23: a hovered item goes from one
+  class to two and its background from transparent to `rgb(238, 238, 238)`,
+  while no stylesheet in the page carries a `:hover` selector that matches it.
+
+  The class is **learned at runtime, not written down**, which keeps ADR-022's
+  rule intact: hover one of Gmail's own items for the length of one event-loop
+  turn, see which class appears, put that item back exactly as it was, and use
+  what was learned on ours. If nothing can be learned, the item paints a
+  translucent wash instead, dark on a light menu and light on a dark one, read
+  from whatever the menu itself is painted. See ADR-024.
+
+  The drift canary now watches this too, as a sixth check.
+
 ## [1.7.1] - 2026-09-23
 
 > 1.7.0 was tagged and never submitted. Driving Chrome's real input pipeline

@@ -4,7 +4,7 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-09-23 (v1.7.1)
+Last updated: 2026-09-23 (v1.7.2)
 
 ## What this project is
 

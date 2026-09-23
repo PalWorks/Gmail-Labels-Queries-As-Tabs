@@ -23,9 +23,16 @@ structure.
 | C3 | That menu holds a `[role="menuitem"]` with no `aria-haspopup` and height | No model to clone |
 | C4 | A clone of that item renders identically to it | Our item would look foreign |
 | OURS | Our own item is present and styled like its siblings | Only checked once a build ships it |
+| HOVER | Our own item lights up under the pointer | Only checked once a build ships it |
 
 Every one of these fails closed: no model, no item, and Gmail is exactly as it
 was.
+
+**How Gmail highlights** is recorded alongside HOVER but not asserted. Gmail
+adds a class from its own `jsaction` handler rather than using a `:hover` rule,
+and the extension learns that class at runtime (ADR-024). If Gmail ever moved
+to a stylesheet, the fingerprint would show the class disappearing while HOVER
+stayed green, because the extension falls back to a wash of its own.
 
 **C5**, whether Gmail reuses one menu node across labels, is **recorded but not
 asserted**. It was written as an assertion because an implementation that

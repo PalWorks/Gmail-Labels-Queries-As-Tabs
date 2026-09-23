@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-23 (v1.7.1)
+Last updated: 2026-09-23 (v1.7.2)
 
 ## Local setup
 
@@ -122,6 +122,7 @@ NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs   # run it n
 | C3 | The menu no longer holds an ordinary `[role="menuitem"]` | There is nothing to clone. Do not substitute a hand-built item: it will look foreign and will drift |
 | C4 | A clone no longer renders like the item it came from | Gmail styles items by something other than the class. Investigate before shipping anything |
 | OURS | Our item is missing although C1 to C4 all passed | This one is ours, not Gmail's. Start at `installLabelMenuItem()` in `content.ts` |
+| HOVER | Our item no longer lights up under the pointer | Check what the run recorded for Gmail's own highlight class. If Gmail stopped adding one, the wash should have taken over, so the fault is in `discoverHoverClasses` or `fallbackHighlight` in `labelMenu.ts`, not in Gmail |
 
 Two verdicts are not failures. **SKIPPED** means the canary could not reach a
 signed-in Gmail and learned nothing. A **note** that Gmail took longer to open

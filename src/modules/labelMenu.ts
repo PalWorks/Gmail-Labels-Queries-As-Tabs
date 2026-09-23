@@ -84,6 +84,12 @@ const MENU_POLL_MS = 50;
  */
 const STALE_MENU_GRACE_MS = 300;
 
+/** At most this many classes are copied from a hovered item. See discoverHoverClasses. */
+const MAX_HOVER_CLASSES = 4;
+/** The wash used when Gmail's own highlight class cannot be learned. */
+const HOVER_WASH_ON_LIGHT = 'rgba(0, 0, 0, 0.06)';
+const HOVER_WASH_ON_DARK = 'rgba(255, 255, 255, 0.1)';
+
 export interface LabelMenuDeps {
     /** The signed-in address, or null before it has been detected. */
     getAccountId: () => string | null;
@@ -290,6 +296,78 @@ function rendersLikeModel(item: HTMLElement, model: HTMLElement): boolean {
 }
 
 /**
+ * How Gmail highlights the item under the pointer, learned rather than written.
+ *
+ * Measured on 2026-09-23 against a live inbox: hovering one of Gmail's own
+ * items changes its class from `J-N` to `J-N J-N-JT` and its background from
+ * transparent to rgb(238,238,238), and **no `:hover` rule in any stylesheet
+ * matches the item**. The highlight is added by Gmail's own `jsaction`
+ * handler, which is exactly the thing the clone strips. So a clone inherits
+ * the look of an item at rest and nothing else, and sits there dead under the
+ * pointer while every item above it lights up.
+ *
+ * Writing that class name into this file would fix it and break the one rule
+ * this feature is built on: no Gmail class name lives in our source, because
+ * a rename we cannot see would then be a bug we cannot fix without a release.
+ * So it is asked for instead: hover an ordinary item, see which class appears,
+ * put the item back exactly as it was.
+ *
+ * All of it happens inside one turn of the event loop, between building the
+ * clone and showing it, so the browser never paints the model highlighted.
+ */
+function discoverHoverClasses(model: HTMLElement): string[] {
+    const before = model.getAttribute('class') ?? '';
+    let after = before;
+    try {
+        model.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
+        model.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true, view: window }));
+        after = model.getAttribute('class') ?? '';
+    } catch {
+        after = before;
+    } finally {
+        try {
+            model.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, cancelable: true, view: window }));
+            model.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false, cancelable: true, view: window }));
+        } catch {
+            /* the restore below is what actually guarantees the model is clean */
+        }
+        // Whatever the handlers did or failed to do, the model ends the way it
+        // started. This is Gmail's element, not ours.
+        if ((model.getAttribute('class') ?? '') !== before) model.setAttribute('class', before);
+    }
+
+    const had = new Set(before.split(/\s+/).filter(Boolean));
+    const added = after.split(/\s+/).filter((token) => token && !had.has(token));
+    // A handful at most. More than that is not a highlight, it is some other
+    // handler doing something we do not understand, and copying it blind is
+    // how an extension starts looking like a Gmail bug.
+    return added.length <= MAX_HOVER_CLASSES ? added : [];
+}
+
+/**
+ * The highlight to use when Gmail's own class cannot be learned: a wash over
+ * whatever the menu's own background is, dark on light and light on dark, so
+ * it is right in both Gmail themes without knowing which one is on.
+ */
+function fallbackHighlight(menu: HTMLElement): string {
+    // Walk up until something actually paints. A menu that inherits its
+    // background reports `rgba(0, 0, 0, 0)`, and reading that as black would
+    // put the dark wash on a light Gmail: invisible, which is the one outcome
+    // worse than no highlight at all.
+    for (let el: HTMLElement | null = menu; el; el = el.parentElement) {
+        const parts = (window.getComputedStyle(el).backgroundColor || '').match(/[\d.]+/g);
+        if (!parts || parts.length < 3) continue;
+        if (parts.length > 3 && Number(parts[3]) === 0) continue;
+        const [r, g, b] = parts.slice(0, 3).map(Number);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance < 0.5 ? HOVER_WASH_ON_DARK : HOVER_WASH_ON_LIGHT;
+    }
+    // Nothing in the chain paints anything, so what is behind the menu is the
+    // page's own default, which is white.
+    return HOVER_WASH_ON_LIGHT;
+}
+
+/**
  * Build the item and put it at the bottom of the menu.
  *
  * Returns true when the item is in place. Every false is a give-up that has
@@ -385,6 +463,25 @@ function injectInto(menu: HTMLElement, labelName: string): boolean {
         const key = (event as KeyboardEvent).key;
         if (key === 'Enter' || key === ' ' || key === 'Spacebar') activate(event);
     });
+
+    // Light up under the pointer, and under the keyboard, the way every item
+    // above it does. Gmail will never clear ours, because it does not know it
+    // exists, so both directions are ours to handle.
+    const hoverClasses = discoverHoverClasses(model);
+    const wash = hoverClasses.length ? null : fallbackHighlight(menu);
+    const highlight = (on: boolean): void => {
+        if (hoverClasses.length) {
+            if (on) item.classList.add(...hoverClasses);
+            else item.classList.remove(...hoverClasses);
+            return;
+        }
+        if (on) item.style.backgroundColor = wash as string;
+        else item.style.removeProperty('background-color');
+    };
+    item.addEventListener('mouseenter', () => highlight(true));
+    item.addEventListener('mouseleave', () => highlight(false));
+    item.addEventListener('focus', () => highlight(true));
+    item.addEventListener('blur', () => highlight(false));
 
     recordIntegrationHealth('labelMenu', 'active');
     return true;

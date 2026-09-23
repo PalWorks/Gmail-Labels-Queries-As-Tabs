@@ -276,7 +276,8 @@ const PROBE = async () => {
         c3: { ok: false, menuItems: 0, modelText: null },
         c4: { ok: false, height: null, modelHeight: null, font: false, padding: false, colour: false },
         c5: { ok: false, sameNode: null },
-        ours: { applicable: false, present: false, text: null, inheritedClasses: null, styledLikeSibling: null },
+        ours: { applicable: false, present: false, text: null, inheritedClasses: null, styledLikeSibling: null, highlights: null },
+        hover: { gmailAddsClass: null, gmailClasses: null, modelRestored: null },
         observed: {},
     };
 
@@ -370,6 +371,39 @@ const PROBE = async () => {
             ocs.fontFamily === mcs.fontFamily &&
             ocs.padding === mcs.padding &&
             Math.round(ourItem.getBoundingClientRect().height) === Math.round(model.getBoundingClientRect().height);
+    }
+
+    // --- Hover: how Gmail highlights, and whether ours does too -------------
+    // Gmail highlights the item under the pointer from its own `jsaction`
+    // handler, not from a `:hover` rule, so a clone with its wiring stripped
+    // sits dead under the pointer unless the extension puts the highlight back.
+    // The extension learns the class at runtime; this watches that it still
+    // can, and that our item lights up whichever way it ended up doing it.
+    const hoverProbe = (el) => {
+        const before = el.getAttribute('class') || '';
+        const styleBefore = el.style.backgroundColor || '';
+        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
+        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true, view: window }));
+        const during = { cls: el.getAttribute('class') || '', style: el.style.backgroundColor || '' };
+        el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, cancelable: true, view: window }));
+        el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false, cancelable: true, view: window }));
+        const after = el.getAttribute('class') || '';
+        // Leave Gmail's own element exactly as it was found.
+        if (after !== before) el.setAttribute('class', before);
+        return { before, styleBefore, during, after };
+    };
+
+    const gmailHover = hoverProbe(model);
+    const had = new Set(gmailHover.before.split(/\s+/).filter(Boolean));
+    const gained = gmailHover.during.cls.split(/\s+/).filter((c) => c && !had.has(c));
+    r.hover.gmailAddsClass = gained.length > 0;
+    r.hover.gmailClasses = gained.join(' ') || null;
+    r.hover.modelRestored = gmailHover.after === gmailHover.before;
+
+    if (ourItem) {
+        const ownHover = hoverProbe(ourItem);
+        r.ours.highlights =
+            ownHover.during.cls !== ownHover.before || ownHover.during.style !== ownHover.styleBefore;
     }
 
     // --- C4: a clone of the model renders identically -----------------------
@@ -503,6 +537,13 @@ function record(result, verdict, failures, probe) {
         triggerClasses: probe?.observed?.triggerClasses ?? null,
         visibleMenuItems: probe?.c3?.menuItems ?? null,
         menuNodeReused: probe?.c5?.sameNode ?? null,
+        // Recorded, not asserted, for the same reason as C5: whether Gmail
+        // highlights by class or by stylesheet changes nothing for us, because
+        // the extension falls back to a wash of its own. A change is still
+        // worth seeing in the diff, and the class itself is the one Gmail
+        // string this project deliberately never writes down.
+        hoverAddsClass: probe?.hover?.gmailAddsClass ?? null,
+        hoverClasses: probe?.hover?.gmailClasses ?? null,
         contract: {
             C1: probe?.c1?.ok ?? null,
             C2: probe?.c2?.ok ?? null,
@@ -510,6 +551,7 @@ function record(result, verdict, failures, probe) {
             C4: probe?.c4?.ok ?? null,
             C5: 'recorded, not asserted',
             OURS: probe?.ours?.applicable ? probe.ours.present && probe.ours.styledLikeSibling : 'n/a',
+            HOVER: 'recorded, not asserted',
         },
         ownItemText: probe?.ours?.text ?? null,
         failures,
@@ -717,6 +759,15 @@ async function runAgainst(chrome, src) {
             'OURS',
             probe.ours.present && probe.ours.styledLikeSibling === true,
             `our item is present and styled like its siblings (present ${probe.ours.present}, text ${JSON.stringify(probe.ours.text)}, styled ${probe.ours.styledLikeSibling})`,
+        ]);
+        // Asserted separately from OURS so a dead highlight reads as a dead
+        // highlight rather than as a missing item. It is asserted at all
+        // because an item that does not react to the pointer reads as broken
+        // even though it works, which is the report a user actually sends.
+        checks.push([
+            'HOVER',
+            probe.ours.highlights === true,
+            `our item lights up under the pointer (Gmail adds ${JSON.stringify(probe.hover.gmailClasses)}, ours reacts ${probe.ours.highlights}, Gmail's item restored ${probe.hover.modelRestored})`,
         ]);
     }
 

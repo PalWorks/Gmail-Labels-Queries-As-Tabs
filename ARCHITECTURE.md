@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-23 (v1.7.1)
+Last updated: 2026-09-23 (v1.7.2)
 
 ## 1. High-Level Overview
 
@@ -307,7 +307,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 38 suites, 802 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 38 suites, 809 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -390,6 +390,7 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 | **The first-frame theme is a cache, and one writer cannot reach it** | `localStorage` is per-origin, so the Gmail content script cannot update it. Change the theme in the in-Gmail modal and the next extension page can open in the previous theme for one frame. Costs a frame, never a final state | `src/modules/themeMirror.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` are Gmail's obfuscated class names and can change. They are now confined to `src/utils/selectors.ts` by a guard, and the newest Gmail integration (`labelMenu.ts`) uses none of them: it finds elements by ARIA role and clones one to inherit Gmail's own classes. See ADR-022 | `src/utils/selectors.ts` |
 | **The label menu depends on structure Gmail owns** | ARIA roles on Gmail's menu and a readable label name. If either goes, the item does not appear and Gmail is untouched, which is the designed behaviour rather than a fault. Watched daily by `scripts/canary/`, and reported per user by the options page's integration row. See ADR-023 | `src/modules/labelMenu.ts` |
+| **The item's highlight depends on Gmail's own handler** | Gmail lights up a hovered item by adding a class from `jsaction`, not by a `:hover` rule, so the class is learned at runtime and applied to our item. If it cannot be learned, the item paints a translucent wash read from the menu's own background instead, so it always reacts. See ADR-024 | `src/modules/labelMenu.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 
 ### 🟢 Low

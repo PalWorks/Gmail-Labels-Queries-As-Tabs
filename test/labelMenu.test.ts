@@ -822,3 +822,135 @@ describe('activation', () => {
         expect(addLabelTab).toHaveBeenCalledTimes(2);
     });
 });
+
+// ---------------------------------------------------------------------------
+// The highlight under the pointer
+// ---------------------------------------------------------------------------
+
+describe('lighting up under the pointer, the way Gmail\'s own items do', () => {
+    /**
+     * Gmail highlights by adding a class from its own `jsaction` handler, not
+     * by a `:hover` rule: measured against a live inbox on 2026-09-23, the
+     * hovered item went from `J-N` to `J-N J-N-JT` while no stylesheet in the
+     * page carried a `:hover` selector matching it. A clone therefore inherits
+     * a dead item, and the class has to be learned at runtime rather than
+     * written down here.
+     *
+     * This stands in for that handler. The class name is this test's invention,
+     * which is the point: nothing in the module knows it.
+     */
+    function giveGmailAHighlight(added = 'HOVER-CLASS'): HTMLElement {
+        const model = Array.from(menu().querySelectorAll<HTMLElement>('[role="menuitem"]')).filter(
+            (i) => !i.hasAttribute('aria-haspopup')
+        ).pop() as HTMLElement;
+        model.addEventListener('mouseover', () => model.classList.add(...added.split(' ')));
+        model.addEventListener('mouseout', () => model.classList.remove(...added.split(' ')));
+        return model;
+    }
+
+    function hover(el: HTMLElement, on: boolean): void {
+        el.dispatchEvent(new MouseEvent(on ? 'mouseenter' : 'mouseleave', { bubbles: false }));
+    }
+
+    test('our item takes on whatever class Gmail puts on a hovered item', () => {
+        giveGmailAHighlight();
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        expect(item.classList.contains('HOVER-CLASS')).toBe(false);
+
+        hover(item, true);
+        expect(item.classList.contains('HOVER-CLASS')).toBe(true);
+
+        hover(item, false);
+        expect(item.classList.contains('HOVER-CLASS')).toBe(false);
+    });
+
+    test('the keyboard gets the same highlight as the mouse', () => {
+        giveGmailAHighlight();
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        item.dispatchEvent(new FocusEvent('focus'));
+        expect(item.classList.contains('HOVER-CLASS')).toBe(true);
+        item.dispatchEvent(new FocusEvent('blur'));
+        expect(item.classList.contains('HOVER-CLASS')).toBe(false);
+    });
+
+    test('Gmail\'s own item is left exactly as it was found', () => {
+        const model = giveGmailAHighlight();
+        const before = model.getAttribute('class');
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+        expect(model.getAttribute('class')).toBe(before);
+    });
+
+    test('a handler that highlights and never un-highlights still leaves it clean', () => {
+        const model = Array.from(menu().querySelectorAll<HTMLElement>('[role="menuitem"]')).filter(
+            (i) => !i.hasAttribute('aria-haspopup')
+        ).pop() as HTMLElement;
+        const before = model.getAttribute('class');
+        model.addEventListener('mouseover', () => model.classList.add('STICKY'));
+
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        expect(model.getAttribute('class')).toBe(before);
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        hover(item, true);
+        expect(item.classList.contains('STICKY')).toBe(true);
+    });
+
+    test('a Gmail that highlights nothing gets a wash instead, dark on light', () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        hover(item, true);
+        expect(item.style.backgroundColor).toBe('rgba(0, 0, 0, 0.06)');
+        hover(item, false);
+        expect(item.style.backgroundColor).toBe('');
+    });
+
+    test('and light on dark, read from the menu Gmail drew', () => {
+        const real = window.getComputedStyle.bind(window);
+        const spy = jest.spyOn(window, 'getComputedStyle').mockImplementation(((el: Element) => {
+            const base = real(el as HTMLElement);
+            if ((el as HTMLElement).getAttribute('role') === 'menu') {
+                return { ...base, backgroundColor: 'rgb(32, 33, 36)' } as CSSStyleDeclaration;
+            }
+            return base;
+        }) as typeof window.getComputedStyle);
+
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        hover(item, true);
+        expect(item.style.backgroundColor).toBe('rgba(255, 255, 255, 0.1)');
+        spy.mockRestore();
+    });
+
+    test('a handler that does something wilder than a highlight is not copied', () => {
+        // Six classes is not a highlight. Copying whatever appears would make
+        // us imitate a behaviour we have not understood.
+        giveGmailAHighlight('A B C D E F');
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        hover(item, true);
+        expect(item.classList.contains('A')).toBe(false);
+        expect(item.style.backgroundColor).toBe('rgba(0, 0, 0, 0.06)');
+    });
+});

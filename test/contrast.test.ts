@@ -264,6 +264,13 @@ describe('no colour literals outside the stylesheets', () => {
             "Gmail's own background colours, sampled to detect its theme. These are " +
                 'values we read, never values we paint.',
         ],
+        [
+            'src/modules/labelMenu.ts',
+            'A translucent wash painted on an element inside Gmail\'s own menu, used only ' +
+                'when Gmail\'s highlight class cannot be learned at runtime. It has no ' +
+                'foreground of ours to contrast against, and no stylesheet of ours reaches ' +
+                'that node, so there is no token for it to live in.',
+        ],
     ]);
 
     function sourceFiles(dir: string, exts: string[]): string[] {

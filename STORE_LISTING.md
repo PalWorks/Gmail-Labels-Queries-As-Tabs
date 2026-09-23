@@ -3,7 +3,7 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.7.1
+**Version this listing describes:** 1.7.2
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
 **Last updated:** 2026-09-23
@@ -196,7 +196,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 802 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 809 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -415,7 +415,7 @@ beyond the version:
   the one asset about colour contained no colour picker. The capture now centres the row
   first and fails loudly if the palette is not inside the frame.
 
-**For 1.7.1, the six assets stand unchanged.** 1.7.1 adds two visible things: the "Show as
+**For 1.7.2, the six assets stand unchanged.** 1.7.2 adds two visible things: the "Show as
 Tabs" entry at the end of Gmail's label menu, and the Gmail integration row on the settings
 page. Neither is on the shipped assets. A seventh screenshot of the menu item would show
 the feature the release notes lead with, and it is the one asset that would have to be shot
@@ -424,7 +424,7 @@ that is shot, the release notes carry the feature and the stills do not.
 
 ---
 
-## 5. Release notes for 1.7.1
+## 5. Release notes for 1.7.2
 
 Paste this one.
 
@@ -444,11 +444,13 @@ is how you can tell, and tell us. Nothing is sent anywhere: there is a button th
 a short note to your clipboard if you want to send one yourself.
 ```
 
-1.7.1 adds no permission, changes no data flow, and adds no outbound request. It stores one
+1.7.2 adds no permission, changes no data flow, and adds no outbound request. It stores one
 extra thing, locally: whether that menu item worked the last time it was tried.
 
-1.7.0 was tagged and never submitted: a real mouse showed the menu item did nothing,
-because Gmail takes its menu apart on mouse down and the item was bound to click.
+Neither 1.7.0 nor 1.7.1 was submitted. 1.7.0 was caught by a real mouse doing nothing at
+all, because Gmail takes its menu apart on mouse down and the item was bound to click.
+1.7.1 worked but did not light up under the pointer the way Gmail's own items do, which
+1.7.2 fixes.
 
 ### Release notes for 1.6.2, kept for the record
 
@@ -597,7 +599,7 @@ actually type still resolves to the same entity. The repository directory is sti
 `Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
 breaking inbound links over.
 
-**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 802
+**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 809
 automated tests, three permissions, one outbound request, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets
@@ -716,15 +718,15 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-23 against `main` at the 1.7.1 release commit.
+Verified on 2026-09-23 against `main` at the 1.7.2 release commit.
 
 - [x] `npm run package` produces the zip from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.7.1 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.7.2 (CI checks parity)
 - [x] Privacy policy page covers the storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics
 - [x] Privacy policy URL points at the site this repository deploys, not the retired one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.7.1
+- [x] Public changelog updated through 1.7.2
 - [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
 - [x] The uninstall URL is a bare form link carrying no identifying parameter (asserted in
       `test/background.test.ts`; its disclosure is asserted in `test/repoConsistency.test.ts`)
@@ -732,7 +734,7 @@ Verified on 2026-09-23 against `main` at the 1.7.1 release commit.
 - [x] All six screenshots are 1280x800, re-shot for this submission, and contain only demo data
       (Inbox, Clients, Invoices, Newsletters, Unread from team)
 - [x] Support URL points at `#/contact`, a route confirmed present in the deployed bundle
-- [x] 1.7.1 adds no permission, no outbound host and no new data flow, so the published
+- [x] 1.7.2 adds no permission, no outbound host and no new data flow, so the published
       privacy policy needs no edit and CI's published-policy step passes without a deploy
 - [x] The one new stored value, `integrationHealth` in `chrome.storage.local`, is disclosed
       in SECURITY.md and DATA_MODEL.md, is written only on change, and is never transmitted

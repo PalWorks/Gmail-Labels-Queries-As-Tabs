@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-23 (v1.7.1)
+Last updated: 2026-09-23 (v1.7.2)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -715,3 +715,62 @@ trigger, and the diagnostic carries no address, label name or tab title.
   records moves.
 - It is coupled to one developer machine being switched on. That is accepted:
   the alternative is Gmail credentials in CI, which is not acceptable.
+
+## ADR-024: The highlight under the pointer is learned, not written down
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Context:** v1.7.2
+
+The first user of the "Show as Tabs" item noticed within a minute what no test
+had: every item in Gmail's menu lights up grey under the pointer, and ours sat
+there dead.
+
+The cause is more interesting than the symptom. Gmail does not highlight with a
+`:hover` rule. Measured against a live inbox on 2026-09-23, a hovered item goes
+from `class="J-N"` to `class="J-N J-N-JT"` and its background from transparent
+to `rgb(238, 238, 238)`, and a sweep of every stylesheet in the page found **no
+`:hover` selector that matches the item at all**. The highlight is added by
+Gmail's own `jsaction` handler. ADR-022's clone strips that wiring on purpose,
+so it inherits the look of a row at rest and nothing else.
+
+Writing `J-N-JT` into the source would fix it in one line and break the rule the
+whole feature rests on.
+
+### Decision
+
+Ask Gmail rather than assume. At the moment the item is built, hover one of
+Gmail's own ordinary items with a synthetic `mouseover`, read which class
+appeared, hover out, and restore that element's `class` attribute to exactly
+what it was. All of it happens inside a single turn of the event loop, between
+building the clone and showing it, so nothing is ever painted highlighted. What
+was learned is then applied to our item on `mouseenter` and `focus`, and removed
+on `mouseleave` and `blur`, because Gmail will never clear a class on an element
+it does not know exists.
+
+Two guards on what is copied:
+
+- **At most four classes.** More than that is not a highlight, it is some other
+  handler doing something not understood, and imitating it blind is how an
+  extension starts looking like a Gmail bug.
+- **A wash if nothing is learned.** A translucent overlay over the menu's own
+  background, dark on light and light on dark, decided by the luminance of the
+  first ancestor that actually paints. A menu that inherits its background
+  reports `rgba(0, 0, 0, 0)`, and reading that as black would put a dark wash on
+  a light Gmail: invisible, which is worse than no highlight at all.
+
+### Consequences
+
+- Still no Gmail class name in our source, so the `repoConsistency` guard that
+  enforces ADR-022 stays green and a Gmail rename remains a non-event.
+- Verified through Chrome's real input pipeline, not a dispatched event: our
+  item goes `J-N` to `J-N J-N-JT` with background `rgb(238, 238, 238)` under a
+  real pointer, and back to rest on leave, while Gmail's own item is untouched.
+- The canary gained a sixth check, `HOVER`, which asserts our item reacts and
+  records what Gmail's own highlight currently is. A move from class to
+  stylesheet would show in the fingerprint diff without failing anything,
+  because the wash covers that case.
+- The wash's two colour literals live in a `.ts` file, which the contrast guard
+  forbids by default. They are allowlisted with the reason, because no
+  stylesheet of ours reaches a node inside Gmail's menu and there is no
+  foreground of ours for them to contrast against.

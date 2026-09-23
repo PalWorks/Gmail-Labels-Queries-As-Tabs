@@ -1,7 +1,8 @@
 # v1.7.x: "Show as Tabs" in Gmail's label menu, with drift detection built first
 
-Status: executed 2026-09-23. Tagged v1.7.0, which a real mouse caught as broken before
-it was submitted; shipped as v1.7.1.
+Status: executed 2026-09-23. Tagged v1.7.0, which a real mouse caught as broken before it
+was submitted, then v1.7.1, which worked but did not light up under the pointer. Released
+as v1.7.2 (ADR-024). Neither earlier tag was ever submitted to the store.
 Written: 2026-09-23
 Supersedes nothing. Depends on: InboxSDK removal (commit f64a81d, ADR-021).
 

@@ -63,7 +63,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | Feature | Description |
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
-| **"Show as Tabs" in Gmail's own menu** | The three-dot menu beside any label, including sublabels, ends with "Show as Tabs", or "Remove from Tabs" if it already has one. The item hardcodes no Gmail class name: it clones one of Gmail's own menu items, so it inherits Gmail's styling and survives a Gmail rename. See ADR-022 |
+| **"Show as Tabs" in Gmail's own menu** | The three-dot menu beside any label, including sublabels, ends with "Show as Tabs", or "Remove from Tabs" if it already has one. The item hardcodes no Gmail class name: it clones one of Gmail's own menu items, so it inherits Gmail's styling and survives a Gmail rename. It lights up under the pointer like Gmail's own items, using a highlight learned from them at runtime. See ADR-022 and ADR-024 |
 | **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
 | **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
@@ -449,7 +449,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 38 test files, 802 test cases.**
+**Total: 38 test files, 809 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -477,7 +477,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 802 tests across 38 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 809 tests across 38 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -620,7 +620,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (802 tests across 38 suites)
+npm test          # Jest (809 tests across 38 suites)
 npm run build     # Verify production build
 ```
 
