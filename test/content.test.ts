@@ -473,3 +473,141 @@ describe('injection and theme', () => {
         expect(mockApplyTheme).not.toHaveBeenCalled();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Handover
+//
+// Chrome does not reload a tab when the extension is updated, so the worker
+// injects a fresh content script into the tab instead. That leaves two copies
+// in one page for an instant. These cover this copy's side of the exchange:
+// it answers the worker's ping, and it gets out of the way when a newer copy
+// arrives.
+// ---------------------------------------------------------------------------
+
+describe('handover between two copies in one page', () => {
+    let observerCallback: (() => void) | null = null;
+
+    function importContent(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            jest.isolateModules(() => {
+                jest.doMock('../src/utils/storage', () => ({
+                    getSettings: mockGetSettings,
+                    migrateLegacySettingsIfNeeded: mockMigrate,
+                    saveSettings: mockSaveSettings,
+                    getGlobalTheme: mockGetGlobalTheme,
+                    migrateThemeToGlobalIfNeeded: mockMigrateTheme,
+                    ensureAccountRegistered: mockEnsureAccountRegistered,
+                    GLOBAL_THEME_STORAGE_KEY: 'globalTheme',
+                    takePendingOnboarding: mockTakePendingOnboarding,
+                }));
+                jest.doMock('../src/modules/state', () => ({
+                    state: mockState,
+                    TABS_BAR_ID: 'gmail-labels-as-tabs-bar',
+                    TOOLBAR_SELECTORS: ['.G-atb'],
+                    getAppSettings: () => mockState.currentSettings,
+                    setAppSettings: (s: any) => { mockState.currentSettings = s; },
+                    getUserEmail: () => mockState.currentUserEmail,
+                    setUserEmail: (e: any) => { mockState.currentUserEmail = e; },
+                }));
+                jest.doMock('../src/modules/theme', () => ({
+                    applyTheme: mockApplyTheme,
+                    listenForSystemThemeChanges: mockListenForSystemThemeChanges,
+                }));
+                jest.doMock('../src/modules/unread', () => ({
+                    handleUnreadUpdates: jest.fn(),
+                    computeKnownLabelTokens: jest.fn(() => []),
+                }));
+                jest.doMock('../src/modules/tabs', () => ({
+                    renderTabs: mockRenderTabs,
+                    createTabsBar: jest.fn(() => {
+                        const el = document.createElement('div');
+                        el.id = 'gmail-labels-as-tabs-bar';
+                        return el;
+                    }),
+                    updateActiveTab: mockUpdateActiveTab,
+                    setModalCallbacks: jest.fn(),
+                }));
+                jest.doMock('../src/modules/modals', () => ({
+                    showPinModal: jest.fn(),
+                    showEditModal: jest.fn(),
+                    showDeleteModal: jest.fn(),
+                    toggleSettingsModal: jest.fn(),
+                    setRenderCallback: jest.fn(),
+                }));
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                require('../src/content');
+                resolve();
+            });
+        });
+    }
+
+    function addVisibleToolbar(): void {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'G-atb';
+        toolbar.getBoundingClientRect = () =>
+            ({ height: 44, width: 200, top: 0, left: 0, right: 200, bottom: 44, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+        document.body.appendChild(toolbar);
+    }
+
+    beforeEach(() => {
+        observerCallback = null;
+        (global as any).MutationObserver = jest.fn().mockImplementation((cb: () => void) => {
+            observerCallback = cb;
+            return { observe: jest.fn(), disconnect: jest.fn(), takeRecords: jest.fn() };
+        });
+    });
+
+    test('answers the worker ping, which is how it is counted as alive', async () => {
+        await importContent();
+        await flush();
+        const sendResponse = jest.fn();
+
+        const held = messageListeners[0]({ action: 'PING' }, {}, sendResponse);
+
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+        // Answered on the spot: holding the channel open would leave the
+        // worker's promise pending and every tab looking unreachable.
+        expect(held).toBe(false);
+    });
+
+    test('clears a previous copy tab bar off the page as it starts', async () => {
+        const stale = document.createElement('div');
+        stale.id = 'gmail-labels-as-tabs-bar';
+        stale.dataset.fromTheOldCopy = 'yes';
+        document.body.appendChild(stale);
+        addVisibleToolbar();
+
+        await importContent();
+        await flush();
+
+        const bar = document.getElementById('gmail-labels-as-tabs-bar');
+        expect(bar).not.toBeNull();
+        expect(bar!.dataset.fromTheOldCopy).toBeUndefined();
+    });
+
+    test('removes its own tab bar when a newer copy takes the page over', async () => {
+        addVisibleToolbar();
+        await importContent();
+        await flush();
+        expect(document.getElementById('gmail-labels-as-tabs-bar')).not.toBeNull();
+
+        document.dispatchEvent(new CustomEvent('gmailTabs:standDown'));
+
+        expect(document.getElementById('gmail-labels-as-tabs-bar')).toBeNull();
+    });
+
+    test('does not put the bar back after standing down', async () => {
+        // The observer is disconnected on stand-down, but a mutation already
+        // queued still arrives. Without the guard, the copy that just handed
+        // over re-injects a bar whose buttons can no longer reach storage.
+        addVisibleToolbar();
+        await importContent();
+        await flush();
+
+        document.dispatchEvent(new CustomEvent('gmailTabs:standDown'));
+        observerCallback?.();
+        await new Promise((r) => setTimeout(r, 150));
+
+        expect(document.getElementById('gmail-labels-as-tabs-bar')).toBeNull();
+    });
+});

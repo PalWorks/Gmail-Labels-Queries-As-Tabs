@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-23 (v1.7.2)
+Last updated: 2026-09-24 (v1.7.3)
 
 ## Privacy promise
 
@@ -48,13 +48,19 @@ amended by ADR-012.
 | _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
+| `scripting` | Start this extension's own content script in a Gmail tab that was already open when the extension was installed or updated. One file, this extension's own, into `mail.google.com` only. See ADR-025 |
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |
 
-No `<all_urls>`, no broad host access, no scripting into other sites. In particular there is
-no `scripting` permission. That is why InboxSDK's page world was never injected and
-neither of its two features ever ran in a shipped build; the library was removed after
-v1.6.2 and the content script now contains no third-party code at all. See the row in
-[ARCHITECTURE.md](ARCHITECTURE.md) section 10.
+No `<all_urls>` and no broad host access. `scripting` is scoped by the host permission
+above, so it can reach `mail.google.com` and nothing else, and what it injects is this
+extension's own content script: never code fetched from anywhere, which is what the Web
+Store's remote-code rule is about.
+
+Until 1.7.3 the extension declared no `scripting` permission at all, and that is why
+InboxSDK's page world was never injected and neither of its two features ever ran in a
+shipped build. The library was removed after v1.6.2 and the content script contains no
+third-party code; declaring `scripting` for our own script does not bring any of that
+back. See the row in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 
 ## Where the published privacy policy lives
 

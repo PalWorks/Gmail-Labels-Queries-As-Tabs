@@ -25,3 +25,12 @@ export const SHOW_ONBOARDING_ACTION = 'SHOW_ONBOARDING';
 
 /** Worker or popup → content script: toggle the Configure Tabs modal. */
 export const TOGGLE_SETTINGS_ACTION = 'TOGGLE_SETTINGS';
+
+/**
+ * Worker → content script: are you there, and still connected?
+ *
+ * The answer is what tells the worker whether a Gmail tab needs a content
+ * script injected into it. An orphaned script cannot answer: its context is
+ * gone, so the send rejects, which reads as "not there" and is exactly right.
+ */
+export const PING_ACTION = 'PING';

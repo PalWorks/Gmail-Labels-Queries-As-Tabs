@@ -4,6 +4,67 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.7.3] - 2026-09-24
+
+> 1.7.2 was built and tagged but held while 1.6.2 was in review. It is
+> superseded by this release. Everything in 1.7.0 through 1.7.2 ships here.
+
+### Fixed
+
+- **A Gmail tab that was already open now gets the tab bar without being
+  reloaded.** Chrome runs a content script in pages loaded *after* an install
+  or an update, and in no page that was already open. So the first Gmail tab a
+  new user had open sat there without a tab bar, and every background update
+  left every open Gmail tab running an orphaned copy whose buttons could no
+  longer reach storage. The fix is `chrome.scripting.executeScript`: the worker
+  starts the content script in those tabs itself, and injects the stylesheets
+  with it, so the bar arrives styled.
+
+  Measured on 2026-09-24 against a real signed-in Gmail: a tab open before the
+  extension existed had no bar, and 4 seconds after the install it had a
+  populated one, with a sentinel on `window` still intact, which is the proof
+  the page was never reloaded.
+
+  **The reload is not gone, it is the fallback.** A tab that cannot be injected
+  into is reloaded rather than left without a tab bar.
+
+- **Installing no longer reloads your Gmail at all.** It used to, deliberately,
+  because a reload was the only way to get the content script in there. A
+  reload throws away an open compose window and your place in the page, at a
+  moment Chrome chose rather than you.
+
+### Added
+
+- **`scripting` permission**, which is what makes the above possible. It injects
+  one file, this extension's own content script, into `mail.google.com` and
+  nowhere else. It adds no new permission warning on top of the Gmail host
+  permission already granted, so Chrome does not disable the extension for
+  existing users on update.
+
+- **A handover protocol between two copies of the content script**
+  ([src/modules/handover.ts](src/modules/handover.ts)). An update leaves the old
+  copy running in the page, orphaned: its `chrome.*` calls throw but its
+  observer still fires and its tab bar is still on screen, clickable and dead.
+  The arriving copy announces itself with a DOM event, which an orphaned script
+  can still hear when it can no longer receive a message, and the old copy
+  disconnects its observer, drops its label-menu hook and clears its own DOM.
+  See ADR-025.
+
+### Measured, and worth writing down
+
+- A fully loaded, perfectly usable Gmail tab reports `status: "loading"` to
+  `chrome.tabs.query`, because Gmail holds a request open for live updates. A
+  first version of this sweep skipped loading tabs to avoid a double injection
+  and so skipped every Gmail tab there was. It was caught by the live proof, not
+  by the unit tests, which had no opinion about what Chrome reports.
+- `chrome.runtime.onInstalled` fires with `reason: "update"` both for a real
+  update and when the Reload button at `chrome://extensions` reloads an unpacked
+  copy, with `previousVersion` equal to the version being installed. One code
+  path therefore fixes both the shipped update and the development loop.
+- Upgrading from 1.7.2, whose copy predates the handover and cannot stand down,
+  was measured end to end: one tab bar, populated, page not reloaded, and
+  exactly one "Show as Tabs" item in Gmail's menu, not two.
+
 ## [1.7.2] - 2026-09-23
 
 > 1.7.1 was tagged and never submitted. It is superseded by this release, which

@@ -56,6 +56,7 @@ Last updated: 2026-09-22 (v1.6.2)
 | Shared module state + accessors | [src/modules/state.ts](src/modules/state.ts) |
 | Detecting that this content script was orphaned by an extension update | [src/modules/extensionContext.ts](src/modules/extensionContext.ts) |
 | The "reload Gmail" notice every modal shows once orphaned | [src/modules/modals/contextNotice.ts](src/modules/modals/contextNotice.ts) |
+| How a Gmail tab open before an install or an update gets a working script, without being reloaded | [src/modules/handover.ts](src/modules/handover.ts) |
 | Tab bar rendering, dropdowns, keyboard/aria | [src/modules/tabs.ts](src/modules/tabs.ts) |
 | Unread count waterfall (feed, XHR, DOM) | [src/modules/unread.ts](src/modules/unread.ts) |
 | Apps Script generation from rules | [src/modules/rules.ts](src/modules/rules.ts) |

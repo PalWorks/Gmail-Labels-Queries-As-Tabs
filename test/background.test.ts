@@ -77,6 +77,8 @@ const mockTabsReload = jest.fn().mockResolvedValue(undefined);
 const mockTabsUpdate = jest.fn().mockResolvedValue(undefined);
 const mockWindowsUpdate = jest.fn().mockResolvedValue(undefined);
 const mockTabsSendMessage = jest.fn().mockResolvedValue(undefined);
+const mockInsertCSS = jest.fn().mockResolvedValue(undefined);
+const mockExecuteScript = jest.fn().mockResolvedValue([{ result: null }]);
 const mockSetUninstallURL = jest.fn();
 
 function setupChromeMocks(): void {
@@ -107,6 +109,7 @@ function setupChromeMocks(): void {
             sendMessage: mockTabsSendMessage,
         },
         windows: { update: mockWindowsUpdate },
+        scripting: { insertCSS: mockInsertCSS, executeScript: mockExecuteScript },
     };
 }
 
@@ -229,26 +232,81 @@ describe('onInstalled handler', () => {
         expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'welcome.html' });
     });
 
-    test('reloads open Gmail tabs, which is what makes the tab bar appear', async () => {
+    test('injects into open Gmail tabs, which is what makes the tab bar appear', async () => {
         gmailTabs = [{ id: 1 }, { id: 2 }];
 
         installedListeners[0]({ reason: 'install' });
         await flush();
 
-        expect(mockTabsReload).toHaveBeenCalledWith(1);
-        expect(mockTabsReload).toHaveBeenCalledWith(2);
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 1 }, files: ['js/content.js'] });
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 2 }, files: ['js/content.js'] });
+        // Injection alone would leave the bar unstyled: the manifest's
+        // stylesheets reach a tab only when Chrome injects the script itself.
+        expect(mockInsertCSS).toHaveBeenCalledWith({
+            target: { tabId: 1 },
+            files: ['css/toolbar.css', 'css/onboarding.css'],
+        });
+        expect(mockTabsReload).not.toHaveBeenCalled();
     });
 
-    test('leaves the tour flag for the reloaded tab to pick up', async () => {
-        // The worker cannot message those tabs: until they reload they are
-        // running no content script, so the message would reach nothing.
+    test('reloads a tab it cannot inject into, rather than leaving it without a tab bar', async () => {
+        gmailTabs = [{ id: 1 }];
+        mockExecuteScript.mockRejectedValueOnce(new Error('Cannot access contents of the page'));
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
+
+        expect(mockTabsReload).toHaveBeenCalledWith(1);
+    });
+
+    test('leaves a discarded tab alone: it loads the script itself when woken', async () => {
+        gmailTabs = [{ id: 1, discarded: true }];
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
+
+        expect(mockExecuteScript).not.toHaveBeenCalled();
+        expect(mockTabsReload).not.toHaveBeenCalled();
+    });
+
+    test('injects into a tab Chrome still calls loading, because Gmail always is', async () => {
+        // Measured on 2026-09-24: a Gmail tab that has been open and usable
+        // for minutes still reports status 'loading', because Gmail holds a
+        // request open for live updates. An earlier version of this sweep
+        // skipped loading tabs and so skipped every Gmail tab there was.
+        gmailTabs = [{ id: 1, status: 'loading' }];
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
+
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 1 }, files: ['js/content.js'] });
+    });
+
+    test('leaves the tour flag for the injected script to pick up', async () => {
+        // The worker cannot show the tour itself here: until the script is in
+        // the page there is nothing to receive SHOW_ONBOARDING. The flag is
+        // what the script reads as it boots.
         gmailTabs = [{ id: 1, active: true }];
 
         installedListeners[0]({ reason: 'install' });
         await flush();
 
         expect(localStore.pendingOnboarding).toBe(true);
-        expect(mockTabsSendMessage).not.toHaveBeenCalled();
+        expect(mockTabsSendMessage).not.toHaveBeenCalledWith(1, { action: 'SHOW_ONBOARDING' });
+    });
+
+    test('sets the tour flag before the script that reads it arrives', async () => {
+        gmailTabs = [{ id: 1 }];
+        let flagWhenInjected: unknown;
+        mockExecuteScript.mockImplementationOnce(() => {
+            flagWhenInjected = localStore.pendingOnboarding;
+            return Promise.resolve([{ result: null }]);
+        });
+
+        installedListeners[0]({ reason: 'install' });
+        await flush();
+
+        expect(flagWhenInjected).toBe(true);
     });
 
     test('does not also open the standalone page when Gmail is open', async () => {
@@ -260,12 +318,52 @@ describe('onInstalled handler', () => {
         expect(mockTabsCreate).not.toHaveBeenCalled();
     });
 
-    test('does nothing on update', async () => {
+    test('repairs the open Gmail tabs on update, without a tour and without a page', async () => {
+        // An update orphans every content script already running. Measured on
+        // 2026-09-24: the chrome://extensions Reload button fires this same
+        // event, so the development loop is repaired by the same path.
+        gmailTabs = [{ id: 1 }, { id: 2 }];
+
         installedListeners[0]({ reason: 'update' });
         await flush();
 
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 1 }, files: ['js/content.js'] });
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 2 }, files: ['js/content.js'] });
         expect(mockTabsCreate).not.toHaveBeenCalled();
         expect(localStore.pendingOnboarding).toBeUndefined();
+    });
+
+    test('does not inject a second copy into a tab whose script answers', async () => {
+        gmailTabs = [{ id: 1 }];
+        mockTabsSendMessage.mockResolvedValueOnce({ ok: true });
+
+        installedListeners[0]({ reason: 'update' });
+        await flush();
+
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(1, { action: 'PING' });
+        expect(mockExecuteScript).not.toHaveBeenCalled();
+        expect(mockTabsReload).not.toHaveBeenCalled();
+    });
+
+    test('one unreachable tab does not stop the others', async () => {
+        gmailTabs = [{ id: 1 }, { id: 2 }];
+        mockExecuteScript.mockRejectedValueOnce(new Error('No tab with id: 1'));
+        mockTabsReload.mockRejectedValueOnce(new Error('No tab with id: 1'));
+
+        installedListeners[0]({ reason: 'update' });
+        await flush();
+
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 2 }, files: ['js/content.js'] });
+    });
+
+    test('ignores reasons that are neither an install nor an update', async () => {
+        gmailTabs = [{ id: 1 }];
+
+        installedListeners[0]({ reason: 'chrome_update' });
+        await flush();
+
+        expect(mockExecuteScript).not.toHaveBeenCalled();
+        expect(mockTabsReload).not.toHaveBeenCalled();
     });
 });
 

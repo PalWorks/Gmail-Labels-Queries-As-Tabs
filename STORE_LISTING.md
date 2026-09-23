@@ -3,10 +3,10 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.7.2
+**Version this listing describes:** 1.7.3
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-09-23
+**Last updated:** 2026-09-24
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -156,7 +156,7 @@ Nothing is sent anywhere on its own. There is exactly one outbound request, and 
 
 One page opens after you have already left: uninstalling opens a short feedback form at tally.so, so we can learn why. The link carries no address, no settings and no identifier, nothing is sent from the extension, and closing the tab answers nothing.
 
-Three permissions, one use each. Storage saves your tabs. Downloads writes the backup file when you press Export. Management lets the Uninstall button inside Settings remove the extension cleanly.
+Four permissions, one use each. Storage saves your tabs. Downloads writes the backup file when you press Export. Management lets the Uninstall button inside Settings remove the extension cleanly. Scripting starts the extension in a Gmail tab you already had open, so installing or updating it does not make you reload Gmail by hand. All four work only on mail.google.com.
 
 QUESTIONS PEOPLE ASK
 
@@ -196,7 +196,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 809 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 835 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -261,6 +261,18 @@ The extension never downloads anything the user did not click to export.
 Used only by the "Uninstall Extension" button in Settings, which calls
 chrome.management.uninstallSelf() so the user can remove the extension from within its own
 options page. The extension does not read, enable or disable any other extension.
+```
+
+**`scripting`**
+
+```
+Used only to start this extension's own content script in a Gmail tab that was already
+open. Chrome injects content scripts into pages loaded after an install or an update, but
+not into pages already open, so without this the user has to reload Gmail by hand before
+the tab bar appears. The alternative, reloading their Gmail tab for them, throws away an
+open compose window and their place in the page at a moment they did not choose. It
+injects one file, this extension's own content script, into mail.google.com only, and
+never any code from anywhere else.
 ```
 
 **Host permission `https://mail.google.com/*`**
@@ -415,18 +427,21 @@ beyond the version:
   the one asset about colour contained no colour picker. The capture now centres the row
   first and fails loudly if the palette is not inside the frame.
 
-**For 1.7.2, the six assets stand unchanged.** 1.7.2 adds two visible things: the "Show as
-Tabs" entry at the end of Gmail's label menu, and the Gmail integration row on the settings
-page. Neither is on the shipped assets. A seventh screenshot of the menu item would show
+**For 1.7.3, the six assets stand unchanged.** The releases since 1.6.2 add two visible
+things: the "Show as Tabs" entry at the end of Gmail's label menu, and the Gmail
+integration row on the settings page. Neither is on the shipped assets. 1.7.3 itself is
+invisible in a still by definition: what it changes is a reload that no longer has to
+happen. A seventh screenshot of the menu item would show
 the feature the release notes lead with, and it is the one asset that would have to be shot
 against a real signed-in inbox, with the label list blurred the way screenshot 1 is. Until
 that is shot, the release notes carry the feature and the stills do not.
 
 ---
 
-## 5. Release notes for 1.7.2
+## 5. Release notes for 1.7.3
 
-Paste this one.
+Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0 and
+1.7.1 were never submitted, and 1.7.2 was built but held while 1.6.2 was still in review.
 
 ```
 New: add a label to your tab bar from Gmail itself. Click the three dots beside any label
@@ -442,15 +457,24 @@ New: the settings page now tells you whether that menu item is working for you, 
 Gmail integration. Gmail sometimes tries different layouts with different people, and this
 is how you can tell, and tell us. Nothing is sent anywhere: there is a button that copies
 a short note to your clipboard if you want to send one yourself.
+
+Fixed: installing or updating the extension used to leave any Gmail tab you already had
+open without a tab bar until you reloaded it. It now starts itself in those tabs, so the
+bar appears where you are, and your open compose window and your place in the page stay
+where they were.
 ```
 
-1.7.2 adds no permission, changes no data flow, and adds no outbound request. It stores one
-extra thing, locally: whether that menu item worked the last time it was tried.
+**This release adds one permission, `scripting`**, and the justification block in section 3
+covers it. It is what lets the extension start itself in a Gmail tab that is already open,
+instead of reloading that tab or leaving it without a tab bar. It changes no data flow, adds
+no outbound request and reaches no host other than mail.google.com. The only thing stored
+that was not stored in 1.6.2 is local and diagnostic: whether the label menu item worked the
+last time it was tried.
 
 Neither 1.7.0 nor 1.7.1 was submitted. 1.7.0 was caught by a real mouse doing nothing at
 all, because Gmail takes its menu apart on mouse down and the item was bound to click.
 1.7.1 worked but did not light up under the pointer the way Gmail's own items do, which
-1.7.2 fixes.
+1.7.2 fixed. 1.7.2 was ready but held while 1.6.2 was in review, and 1.7.3 supersedes it.
 
 ### Release notes for 1.6.2, kept for the record
 
@@ -600,7 +624,7 @@ actually type still resolves to the same entity. The repository directory is sti
 breaking inbound links over.
 
 **2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 809
-automated tests, three permissions, one outbound request, 30 days in Trash, five starter
+automated tests, four permissions, one outbound request, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets
 repeated.
@@ -686,7 +710,7 @@ listing and the site have to agree and this file is where that agreement is reco
 
 - Free, MIT licensed, no account required.
 - Runs only on mail.google.com. Message content is never read, stored or transmitted.
-- Permissions: storage, downloads, management, and the host mail.google.com.
+- Permissions: storage, downloads, management, scripting, and the host mail.google.com.
 - One outbound request, and only on a user action: the feedback form.
 - Settings sync through Chrome's own sync, per Gmail account.
 ```
@@ -718,20 +742,28 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-23 against `main` at the 1.7.2 release commit.
+Verified on 2026-09-24 against `main` at the 1.7.3 release commit.
 
 - [x] `npm run package` produces the zip from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.7.2 (CI checks parity)
-- [x] Privacy policy page covers the storage model, both outbound paths, all four
-      permissions, the Apps Script boundary, and the site's own analytics
+- [x] `manifest.json` and `package.json` both read 1.7.3 (CI checks parity)
+- [x] Privacy policy page covers the storage model, both outbound paths, all five
+      permissions including the host, the Apps Script boundary, and the site's own
+      analytics. The in-extension page (Settings -> Privacy) lists `scripting` as of 1.7.3;
+      the website's own policy page needs the same line before this is submitted
 - [x] Privacy policy URL points at the site this repository deploys, not the retired one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.7.2
-- [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
+- [x] Public changelog updated through 1.7.3
+- [ ] **Permissions changed in 1.7.3**: storage, downloads, management, **scripting**,
+      `https://mail.google.com/*`. `scripting` adds no new user-facing warning on top of
+      the host permission already granted, so Chrome does not disable the extension for
+      existing users, but the justification in section 3 must be pasted into the dashboard
+      with this submission
 - [x] The uninstall URL is a bare form link carrying no identifying parameter (asserted in
       `test/background.test.ts`; its disclosure is asserted in `test/repoConsistency.test.ts`)
-- [x] Data usage answers reviewed: unchanged from 1.4.0
-- [x] All six screenshots are 1280x800, re-shot for this submission, and contain only demo data
+- [x] Data usage answers reviewed: unchanged from 1.4.0. `scripting` injects this
+      extension's own content script and nothing else, so the remote-code answer is
+      unchanged
+- [x] All six screenshots are 1280x800 and contain only demo data
       (Inbox, Clients, Invoices, Newsletters, Unread from team)
 - [x] Support URL points at `#/contact`, a route confirmed present in the deployed bundle
 - [x] 1.7.2 adds no permission, no outbound host and no new data flow, so the published

@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-23 (v1.7.2)
+Last updated: 2026-09-24 (v1.7.3)
 
 ## Local setup
 
@@ -17,10 +17,13 @@ Then load the unpacked extension in Chrome:
 1. Open `chrome://extensions`.
 2. Enable Developer mode (top right).
 3. Click Load unpacked and select the `dist/` folder.
-4. Open or reload `https://mail.google.com` to see the tab bar inject.
+4. Open `https://mail.google.com`. A Gmail tab you already had open gets the tab bar too,
+   without a reload: the worker starts the content script in it (ADR-025).
 
 Use `npm run watch` to rebuild on change; click the reload icon on the extension card in
-`chrome://extensions` after each rebuild.
+`chrome://extensions` after each rebuild. Since 1.7.3 that reload is enough on its own:
+it fires `onInstalled` with `reason: 'update'`, and the worker re-injects into the Gmail
+tabs you have open, so they do not need reloading by hand.
 
 ## Verification gate (run before any commit or release)
 

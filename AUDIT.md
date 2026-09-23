@@ -29,7 +29,7 @@
 > theme is known, and extension pages open in the theme the browser last painted,
 > stamped synchronously before any content is parsed. Both of the second pair were
 > reported as a black flash, and neither could have been caught by any assertion about a
-> final state, because every final state was already correct. 38 suites, 809 tests.
+> final state, because every final state was already correct. 39 suites, 835 tests.
 >
 > The website in the sibling repository now runs this extension's own tour, vendored
 > rather than re-created, and its FAQ and structured data were aligned with the store
@@ -61,12 +61,22 @@
 >
 > **Closed after v1.6.2:** `@inboxsdk/core` was ~1.03 MB of the 1.09 MB content script and
 > **neither of its two features ever ran in a shipped build**. `InboxSDK.load()` never
-> settled, because it waited on a page world that needs the `scripting` permission we do not
-> declare, and it never rejected either, so the failure was silent apart from one console
+> settled, because it waited on a page world that needs the `scripting` permission the
+> extension did not declare until 1.7.3 (and declares now only for its own content script), and it never rejected either, so the failure was silent apart from one console
 > error per Gmail load. Both features were already covered by code we own. It has been
 > removed: the content script is now 72.2 KB and every behaviour is unchanged. See ADR-021,
 > section 7, and the execution record in
 > [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
+
+> **Refresh note (2026-09-24, v1.7.3):** a Gmail tab that was already open when the
+> extension is installed or updated no longer has to be reloaded by hand. The worker starts
+> the content script in it with `chrome.scripting.executeScript`, which is the one new
+> permission in this release, and a new module, `src/modules/handover.ts`, hands the page
+> over between the orphaned copy and the new one. Installing no longer reloads the user's
+> Gmail either; the reload survives only as the fallback for a tab that cannot be injected
+> into. Two things were measured rather than assumed: a usable Gmail tab reports
+> `status: "loading"` forever, and `onInstalled` fires with `reason: "update"` for the
+> chrome://extensions Reload button as well as for a shipped update. See ADR-025.
 
 > **Refresh note (2026-09-23, v1.7.2):** the label-menu item now lights up under the
 > pointer and under the keyboard the way Gmail's own items do. It did not in 1.7.1, and the
@@ -79,12 +89,12 @@
 > check, `HOVER`. Found by the first person to use it, which is its own lesson.
 
 > **Refresh note (2026-09-23, v1.7.1):** `@inboxsdk/core` is gone (ADR-021), so the content
-> script is 76.3 KB and contains no third-party code. Two modules are new:
+> script is 76.9 KB as of 1.7.3 and contains no third-party code. Two modules are new:
 > `src/modules/labelMenu.ts`, which adds "Show as Tabs" to Gmail's own label menu while
 > hardcoding none of Gmail's class names (ADR-022), and `src/modules/health.ts`, which
 > records locally whether that works and is never transmitted (ADR-023). A drift canary in
 > `scripts/canary/` opens a real Gmail label menu daily and checks the structure the feature
-> depends on. The suite is 38 files, 809 tests.
+> depends on. The suite is 39 files, 835 tests.
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,
@@ -338,6 +348,7 @@ All user settings are persisted via `chrome.storage.sync` with a multi-account k
 | `storage` | Persisting user settings across sessions |
 | `downloads` | Exporting settings as JSON file |
 | `management` | Self-uninstall capability |
+| `scripting` | Starting the content script in a Gmail tab that was already open (ADR-025) |
 | `host_permissions: mail.google.com` | Content script injection + Atom feed access |
 
 ### Build Configuration
@@ -402,8 +413,10 @@ InboxSDK was *intended* for two purposes, and achieved neither:
 **Neither has ever run in a shipped build.** `InboxSDK.load()` returns `driver.onready`,
 which chains off `injectScript()`, which resolves only once `pageWorld.js` sets
 `data-inboxsdk-user-email-address` on `<head>`. Injecting `pageWorld.js` requires the
-`scripting` permission, which this extension does not declare, so the SDK's own background
-handler answers `false`, nothing is injected, and the promise never settles. It does not
+`scripting` permission, which the extension did not declare while the SDK was in the build,
+so the SDK's own background handler answered `false`, nothing was injected, and the promise
+never settled. (1.7.3 declares `scripting`, for this extension's own content script. The
+SDK was removed after v1.6.2 and is not coming back.) It does not
 reject either, so the `catch` in `loadInboxSDK()` has never fired: the only symptom is one
 console error per Gmail load.
 

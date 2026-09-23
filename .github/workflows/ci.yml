@@ -194,7 +194,14 @@ jobs:
 
           # Every outbound host the extension can reach, and every permission
           # the manifest asks for, has to appear on that page.
-          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev storage downloads management mail.google.com"
+          #
+          # The permissions are read from the manifest rather than listed here.
+          # A hardcoded list is how this check went stale the first time: it
+          # named two of four permissions, and adding the fifth would have been
+          # one more thing to remember. Now adding a permission fails this step
+          # until the published policy names it.
+          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev mail.google.com"
+          required="$required $(node -p "require('./manifest.json').permissions.join(' ')")"
           # Microsoft Clarity runs on the site itself and must be disclosed too.
           required="$required Microsoft Clarity"
           status=0

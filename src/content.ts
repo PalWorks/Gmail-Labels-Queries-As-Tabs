@@ -34,7 +34,9 @@ import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modu
 import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
-import { installLabelMenu } from './modules/labelMenu';
+import { installLabelMenu, uninstallLabelMenu } from './modules/labelMenu';
+import { claimPage, removeOurPageFurniture } from './modules/handover';
+import { PING_ACTION } from './modules/messages';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -47,6 +49,11 @@ let currentGlobalTheme: Theme = 'light';
 // Content-script lifecycle primitives (private to this module).
 let observer: MutationObserver | null = null;
 let initPromise: Promise<void> | null = null;
+
+// Set once another copy of this script has taken the page over. Everything
+// that could put something back on screen checks it, because a copy that has
+// handed over must not keep re-injecting a bar the live copy does not own.
+let standingDown = false;
 
 // ---------------------------------------------------------------------------
 // Module Wiring (resolve circular deps via callbacks)
@@ -70,9 +77,11 @@ document.addEventListener('gmailTabs:rerender', () => renderTabs());
 let observerDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function startObserver(): void {
+    if (standingDown) return;
     if (observer) observer.disconnect();
 
     observer = new MutationObserver((_mutations) => {
+        if (standingDown) return;
         if (observerDebounceTimer) return;
         observerDebounceTimer = setTimeout(() => {
             observerDebounceTimer = null;
@@ -100,6 +109,7 @@ let injectionRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let injectionRetries = 0;
 
 function scheduleInjectionRetry(): void {
+    if (standingDown) return;
     if (injectionRetryTimer) return; // single-flight: never stack timers
     if (injectionRetries >= MAX_INJECTION_RETRIES) return; // bounded: stop polling, rely on observer
     injectionRetryTimer = setTimeout(() => {
@@ -114,6 +124,7 @@ function scheduleInjectionRetry(): void {
  * Retries (bounded, single-flight) if the insertion point isn't found yet.
  */
 function attemptInjection(): void {
+    if (standingDown) return;
     const existingBar = document.getElementById(TABS_BAR_ID);
 
     let injectionPoint: Element | null = null;
@@ -334,8 +345,45 @@ function handleUrlChange(): void {
 // Main Init
 // ---------------------------------------------------------------------------
 
+/**
+ * Stop, because another copy of this script has taken the page over.
+ *
+ * Called when the extension is updated or reloaded and the worker injects a
+ * fresh copy into this already-open tab. This copy's `chrome.*` calls are
+ * dead by then, so everything it still does is either useless or in the live
+ * copy's way: the observer would re-position a bar it no longer owns, and the
+ * label menu would keep offering an item whose click cannot reach storage.
+ *
+ * The page furniture goes too. The live copy clears it on arrival as well,
+ * and both are idempotent, so it does not matter which of them gets there
+ * first.
+ */
+function standDown(): void {
+    standingDown = true;
+    if (observer) {
+        observer.disconnect();
+        observer = null;
+    }
+    if (observerDebounceTimer) {
+        clearTimeout(observerDebounceTimer);
+        observerDebounceTimer = null;
+    }
+    if (injectionRetryTimer) {
+        clearTimeout(injectionRetryTimer);
+        injectionRetryTimer = null;
+    }
+    uninstallLabelMenu();
+    removeOurPageFurniture();
+    console.log('Gmail Tabs: a newer copy has taken this tab over; standing down');
+}
+
 async function init(): Promise<void> {
     console.log('Gmail Tabs: Initializing...');
+
+    // First, before anything is built: this page may already hold a copy of
+    // this script, orphaned by the update that injected this one.
+    claimPage(standDown);
+
     injectPageWorld();
 
     // Deliberately not awaited: injection and the observer must start while
@@ -393,6 +441,13 @@ async function init(): Promise<void> {
         }
         if (message.action === SHOW_ONBOARDING_ACTION) {
             showOnboarding();
+            sendResponse({ ok: true });
+            return false;
+        }
+        if (message.action === PING_ACTION) {
+            // The worker asks before injecting. Answering at all is the
+            // answer: a tab that replies has a live content script and must
+            // not be given a second one.
             sendResponse({ ok: true });
             return false;
         }

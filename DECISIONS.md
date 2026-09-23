@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-23 (v1.7.2)
+Last updated: 2026-09-24 (v1.7.3)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -774,3 +774,83 @@ Two guards on what is copied:
   forbids by default. They are allowlisted with the reason, because no
   stylesheet of ours reaches a node inside Gmail's menu and there is no
   foreground of ours for them to contrast against.
+
+## ADR-025: The tab that was already open is injected into, not reloaded
+
+**Date:** 2026-09-24
+**Status:** Accepted
+**Context:** v1.7.3
+
+Chrome runs a content script in pages loaded **after** an extension is
+installed or updated, and in no page that was already open. Two consequences,
+both reported by a user:
+
+- The Gmail tab a new user has open while installing sits there without a tab
+  bar until they reload it.
+- Every extension update, including the ones Chrome performs in the background
+  at a moment nobody chose, leaves every open Gmail tab running an orphaned
+  copy: its DOM is still on screen and clickable, and its every `chrome.*` call
+  throws.
+
+Until now the install hook answered this by reloading the user's Gmail tabs.
+That works, and it costs the user an open compose window, the thread they were
+reading and their place in it.
+
+### Decision
+
+The worker reaches those tabs itself. On `onInstalled` for `install` **and**
+`update`, it queries every Gmail tab, sends each one a `PING`, and where nothing
+answers injects `css/toolbar.css`, `css/onboarding.css` and `js/content.js` with
+`chrome.scripting`. This costs one permission, `scripting`, which injects this
+extension's own content script into `mail.google.com` and nothing else.
+
+**The reload survives as the fallback**, not the plan: a tab that cannot be
+injected into is reloaded rather than left without a tab bar.
+
+Answering the ping at all is the answer. An orphaned script cannot answer,
+because its context is gone and the send rejects, which reads as "not there" and
+is exactly right.
+
+A discarded tab is left alone: it will load the content script itself when the
+user comes back to it, and waking it spends their data to change nothing they
+can see. `tab.status` is deliberately **not** consulted, for a reason that had to
+be measured: a fully loaded, fully usable Gmail tab reports `status: 'loading'`
+indefinitely, because Gmail holds a request open for its live updates. A first
+version skipped loading tabs to avoid double injection and so skipped every
+Gmail tab there was.
+
+### The handover, because two copies in one page is the normal case
+
+An update leaves the old copy running. Two copies fighting over the same DOM
+would leave the user unable to tell which tab bar is live, so
+[src/modules/handover.ts](src/modules/handover.ts) defines the exchange: the
+arriving copy announces itself on a `document` event, clears the page furniture
+the previous copy left, and registers to stand down in turn. The copy already
+there disconnects its observer, drops its label-menu hook and removes its own
+DOM.
+
+The announcement is a **DOM event, not a `chrome.*` message**, because an
+orphaned script can no longer receive a message but can still hear an event: it
+costs nothing it has lost. It is dispatched **before** the arriving copy
+registers its own listener, so a copy cannot shut itself down on arrival.
+
+### Consequences
+
+- Installing no longer reloads anyone's Gmail. The tab bar simply appears.
+- One version's worth of imperfection was unavoidable and was measured rather
+  than assumed: a 1.7.2 copy predates this protocol and cannot stand down.
+  Upgrading 1.7.2 to 1.7.3 against a real signed-in Gmail left one tab bar,
+  populated, the page not reloaded, and exactly one "Show as Tabs" item in
+  Gmail's menu. The orphaned copy re-adds an empty bar only if the live bar is
+  removed, which happens only if something removes it deliberately. It is gone
+  the moment that tab is reloaded.
+- The development loop is fixed by the same code: measured on 2026-09-24, the
+  Reload button at `chrome://extensions` fires `onInstalled` with
+  `reason: 'update'` and `previousVersion` equal to the version being installed.
+- Two lists of file paths now describe one thing, the manifest's and the
+  worker's. `test/repoConsistency.test.ts` fails if they drift, because the
+  failure mode is silent: the injection succeeds and the bar comes up unstyled.
+- The published privacy policy stated that the extension has no `scripting`
+  permission. That sentence has to change before this ships, and the CI step
+  that fetches the live policy now reads the permission list from
+  `manifest.json` rather than a hardcoded copy.

@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-23 (v1.7.2)
+Last updated: 2026-09-24 (v1.7.3)
 
 ## 1. High-Level Overview
 
@@ -86,7 +86,7 @@ Gmail-Labels-As-Tabs/
 | `src/content.ts` | Orchestrator: bootstraps the content script, owns the injection lifecycle and storage listeners, delegates everything else to modules |
 | `src/modules/` | Feature modules, one concern per file. Nothing here reaches into another module's state; shared state goes through `state.ts` |
 | `src/utils/` | Leaf utilities with no module dependencies: storage, import/export, rendering, colors, selectors |
-| `src/background.ts` | Service worker: file downloads, install hooks, uninstall URL, and picking which surface the onboarding tour opens on |
+| `src/background.ts` | Service worker: file downloads, install and update hooks (including starting the content script in Gmail tabs that were already open), uninstall URL, and picking which surface the onboarding tour opens on |
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
 | `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
 | `src/themeBoot.ts` | Loaded synchronously as the first thing inside `<body>` on every extension page, so the page opens in the right colour instead of correcting itself in front of the user. See ADR-020 |
@@ -244,7 +244,11 @@ Handles privileged Chrome APIs, and is the serialization point for settings:
   single writer for everything the user configures.
 - `chrome.downloads.download()` for config export
 - `chrome.management.uninstallSelf()` for clean uninstall
-- `chrome.runtime.onInstalled` for onboarding
+- `chrome.runtime.onInstalled` for onboarding, and for reaching the Gmail tabs Chrome does
+  not reach itself: on an install or an update it pings every open Gmail tab and, where
+  nothing answers, injects the content script and its stylesheets with
+  `chrome.scripting`. A tab that cannot be injected into is reloaded instead, which is the
+  fallback rather than the plan. See ADR-025
 - `chrome.action.onClicked` forwards to content script
 
 It sets an **uninstall URL**, pointing at the Tally feedback form, because uninstall is
@@ -307,7 +311,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 38 suites, 809 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 39 suites, 835 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -391,6 +395,7 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` are Gmail's obfuscated class names and can change. They are now confined to `src/utils/selectors.ts` by a guard, and the newest Gmail integration (`labelMenu.ts`) uses none of them: it finds elements by ARIA role and clones one to inherit Gmail's own classes. See ADR-022 | `src/utils/selectors.ts` |
 | **The label menu depends on structure Gmail owns** | ARIA roles on Gmail's menu and a readable label name. If either goes, the item does not appear and Gmail is untouched, which is the designed behaviour rather than a fault. Watched daily by `scripts/canary/`, and reported per user by the options page's integration row. See ADR-023 | `src/modules/labelMenu.ts` |
 | **The item's highlight depends on Gmail's own handler** | Gmail lights up a hovered item by adding a class from `jsaction`, not by a `:hover` rule, so the class is learned at runtime and applied to our item. If it cannot be learned, the item paints a translucent wash read from the menu's own background instead, so it always reacts. See ADR-024 | `src/modules/labelMenu.ts` |
+| **An orphaned copy of the content script keeps running after an update** | Chrome leaves it in the page with its `chrome.*` calls dead. The new copy announces itself on a DOM event and the old one stands down, but a copy from before 1.7.3 cannot hear that announcement. Measured on the real 1.7.2 upgrade: one tab bar, populated, and one menu item, not two. It is gone the moment that tab is reloaded. See ADR-025 | `src/modules/handover.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 
 ### 🟢 Low

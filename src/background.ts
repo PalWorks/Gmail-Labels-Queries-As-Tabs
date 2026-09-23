@@ -18,12 +18,113 @@ import {
     setPendingOnboarding,
 } from './utils/storage';
 import { catchChromeError } from './modules/extensionContext';
-import { START_TOUR_ACTION, SHOW_ONBOARDING_ACTION, OPEN_OPTIONS_PAGE_ACTION } from './modules/messages';
+import {
+    START_TOUR_ACTION,
+    SHOW_ONBOARDING_ACTION,
+    OPEN_OPTIONS_PAGE_ACTION,
+    PING_ACTION,
+} from './modules/messages';
 
 const mutationQueue = createMutationQueue();
 
 /** Matches every Gmail tab, in any window. */
 const GMAIL_MATCH = 'https://mail.google.com/*';
+
+/**
+ * The content script and its stylesheets, exactly as `manifest.json` declares
+ * them.
+ *
+ * Chrome injects these itself into every Gmail tab loaded from now on. It
+ * does not inject them into a tab that was already open when the extension
+ * was installed, updated or reloaded: that tab keeps running whatever copy it
+ * had, or none at all, until the user reloads it by hand. This list is how we
+ * reach those tabs instead of asking the user to.
+ *
+ * A guard in test/repoConsistency.test.ts fails if these two lists and the
+ * manifest ever disagree, because the failure would be silent: injection
+ * would succeed and the tab would come up unstyled, or a version behind.
+ */
+const CONTENT_SCRIPT_FILES = ['js/content.js'];
+const CONTENT_STYLE_FILES = ['css/toolbar.css', 'css/onboarding.css'];
+
+/** Every Gmail tab open in this profile, in any window. */
+async function findGmailTabs(): Promise<chrome.tabs.Tab[]> {
+    try {
+        return await chrome.tabs.query({ url: GMAIL_MATCH });
+    } catch (e: unknown) {
+        console.warn('Background: could not look for Gmail tabs:', e);
+        return [];
+    }
+}
+
+/** What happened to one tab, for the log and for the tests. */
+type Adoption = 'already-running' | 'injected' | 'reloaded' | 'skipped';
+
+/**
+ * Give one already-open Gmail tab a working content script.
+ *
+ * Injection rather than a reload, because the tab belongs to the user: a
+ * reload throws away an open compose window, the thread they were reading and
+ * their place in it, at a moment they did not choose and for a reason they
+ * cannot see. Chrome updates extensions in the background, so that moment is
+ * arbitrary. Injection is invisible; the tab bar simply appears.
+ *
+ * The reload survives as the fallback, because a tab with no tab bar is worse
+ * than a tab that blinked.
+ */
+async function adoptGmailTab(tab: chrome.tabs.Tab): Promise<Adoption> {
+    if (tab.id === undefined) return 'skipped';
+
+    // A discarded tab has no page to inject into, and it will load the
+    // content script itself the moment the user comes back to it. Waking it
+    // would spend the user's data to change nothing they can see.
+    if (tab.discarded) return 'skipped';
+
+    // `tab.status` is deliberately not consulted. Measured on 2026-09-24: a
+    // fully loaded, fully usable Gmail tab reports `status: 'loading'`,
+    // because Gmail holds a request open for its live updates. Skipping
+    // loading tabs therefore skipped every Gmail tab there was, which is the
+    // one thing this function exists not to do. A page that really is still
+    // loading gets the manifest's own copy as well, and the two sort it out:
+    // see modules/handover.ts.
+
+    try {
+        const reply = await chrome.tabs.sendMessage(tab.id, { action: PING_ACTION });
+        // Answering at all is the answer. A script that replies is connected,
+        // so it is this version's and it is live.
+        if (reply) return 'already-running';
+    } catch {
+        // No answer: either no content script, or one orphaned by this very
+        // update. Both are exactly what the injection below is for.
+    }
+
+    try {
+        await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: CONTENT_STYLE_FILES });
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_SCRIPT_FILES });
+        return 'injected';
+    } catch (e: unknown) {
+        console.warn('Background: could not inject into Gmail tab', tab.id, e);
+    }
+
+    try {
+        await chrome.tabs.reload(tab.id);
+        return 'reloaded';
+    } catch (e: unknown) {
+        console.warn('Background: could not reload Gmail tab', tab.id, e);
+        return 'skipped';
+    }
+}
+
+/**
+ * Make every open Gmail tab work, without the user reloading any of them.
+ *
+ * One tab that cannot be reached must not stop the rest, so each is handled
+ * independently and none of them rejects.
+ */
+async function adoptOpenGmailTabs(tabs?: chrome.tabs.Tab[]): Promise<Adoption[]> {
+    const open = tabs ?? (await findGmailTabs());
+    return Promise.all(open.map((tab) => adoptGmailTab(tab)));
+}
 
 /**
  * Start the onboarding tour on whichever surface the user actually has.
@@ -221,17 +322,12 @@ if (chrome.runtime.setUninstallURL) {
 /**
  * Decide where the first-run tour should appear, and make it happen.
  *
- * Reloading the open Gmail tabs is not new behaviour bolted on for the tour:
+ * Reaching the open Gmail tabs is not new behaviour bolted on for the tour:
  * it is what makes the tab bar appear at all without the user reloading by
  * hand. The tour rides along with it.
  */
 async function installOnboarding(): Promise<void> {
-    let tabs: chrome.tabs.Tab[] = [];
-    try {
-        tabs = await chrome.tabs.query({ url: GMAIL_MATCH });
-    } catch (e: unknown) {
-        console.warn('Background: could not look for Gmail tabs on install:', e);
-    }
+    const tabs = await findGmailTabs();
 
     if (tabs.length === 0) {
         // Nothing to run it over: the standalone page is the whole experience.
@@ -239,15 +335,11 @@ async function installOnboarding(): Promise<void> {
         return;
     }
 
+    // Set before the scripts arrive, not after: each one reads this flag as
+    // it boots, and a flag written afterwards would be read by nobody.
     await setPendingOnboarding(true);
 
-    for (const tab of tabs) {
-        if (tab.id === undefined) continue;
-        // One discarded or closing tab must not stop the rest.
-        catchChromeError(chrome.tabs.reload(tab.id), (e) =>
-            console.warn('Background: could not reload Gmail tab', tab.id, e)
-        );
-    }
+    await adoptOpenGmailTabs(tabs);
 
     const focus = tabs.find((t) => t.active) ?? tabs[0];
     if (focus && focus.id !== undefined) {
@@ -257,16 +349,29 @@ async function installOnboarding(): Promise<void> {
     }
 }
 
-// Install hook: first-run tour + reload open Gmail tabs
+// Install and update hook: reach the Gmail tabs Chrome will not reach itself.
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
         // The tour runs over Gmail when there is a Gmail tab to run it over,
         // because only there can the theme chooser retint the real bar. The
         // flag is how: an already-open Gmail tab is running no content script
-        // until it reloads, so a message sent now would reach nothing. The
-        // reload below injects the script, which then picks this up.
+        // yet, so a message sent now would reach nothing. The injection below
+        // starts one, which then picks the flag up.
         installOnboarding().catch((e: unknown) =>
             console.warn('Background: could not set up the welcome tour:', e)
+        );
+        return;
+    }
+
+    if (details.reason === 'update') {
+        // Measured on 2026-09-24, headless Chrome 141: this fires both when
+        // the extension is updated and when an unpacked copy is reloaded from
+        // chrome://extensions, the latter with `previousVersion` equal to the
+        // version being installed. Both leave every open Gmail tab running an
+        // orphaned script whose every `chrome.*` call throws, so both need
+        // the same repair.
+        adoptOpenGmailTabs().catch((e: unknown) =>
+            console.warn('Background: could not reach the open Gmail tabs:', e)
         );
     }
 });

@@ -963,3 +963,57 @@ describe("Gmail's own class names live only in the selector registry", () => {
         expect(registry).toMatch(/\.G-atb|\.bsU|\.nH|\.wT/);
     });
 });
+
+// ---------------------------------------------------------------------------
+// The worker injects exactly what the manifest declares
+// ---------------------------------------------------------------------------
+
+/**
+ * Chrome injects the content script into every Gmail tab loaded from now on.
+ * The worker injects it into the tabs that were already open. Those are two
+ * separate lists of file paths for one thing, and a drift between them fails
+ * silently in the worst way: the injection succeeds, and the tab comes up
+ * unstyled, or running a stale file that the build no longer produces.
+ *
+ * See `adoptGmailTab` in src/background.ts and ADR-025.
+ */
+describe('the worker injects what the manifest declares', () => {
+    const manifest = JSON.parse(read('manifest.json'));
+    const worker = read('src/background.ts');
+    const declared = (manifest.content_scripts ?? []).find((entry: { matches?: string[] }) =>
+        (entry.matches ?? []).some((m: string) => m.includes('mail.google.com'))
+    );
+
+    /** The string array assigned to a `const` in the worker. */
+    function listInWorker(name: string): string[] {
+        const match = worker.match(new RegExp(`const ${name} = \\[([^\\]]*)\\]`));
+        if (!match) throw new Error(`${name} is gone from src/background.ts`);
+        return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    }
+
+    test('the manifest still declares a Gmail content script', () => {
+        // Otherwise both assertions below pass against an empty list.
+        expect(declared?.js?.length).toBeGreaterThan(0);
+        expect(declared?.css?.length).toBeGreaterThan(0);
+    });
+
+    test('the injected script is the declared script', () => {
+        expect(listInWorker('CONTENT_SCRIPT_FILES')).toEqual(declared.js);
+    });
+
+    test('the injected stylesheets are the declared stylesheets', () => {
+        // A tab bar injected without these renders as unstyled Gmail-coloured
+        // text, which looks like a broken extension rather than a missing one.
+        expect(listInWorker('CONTENT_STYLE_FILES')).toEqual(declared.css);
+    });
+
+    test('injecting needs the permission that makes it possible', () => {
+        expect(manifest.permissions).toContain('scripting');
+    });
+
+    test('every injected file is in the build output', () => {
+        for (const file of [...declared.js, ...declared.css]) {
+            expect(fs.existsSync(path.join(ROOT, 'dist', file))).toBe(true);
+        }
+    });
+});

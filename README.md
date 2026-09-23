@@ -274,6 +274,7 @@ Options page and passed directly to the Apps Script generator.
 | `storage` | Save tab configurations and rules |
 | `downloads` | Export settings as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
+| `scripting` | Start the content script in a Gmail tab that was already open, so an install or an update does not require a manual reload (ADR-025) |
 | `host_permissions` (mail.google.com) | Inject the tab bar into Gmail's UI |
 
 ## Usage
@@ -449,7 +450,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 38 test files, 809 test cases.**
+**Total: 39 test files, 835 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -477,7 +478,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 809 tests across 38 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 835 tests across 39 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -620,7 +621,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (809 tests across 38 suites)
+npm test          # Jest (835 tests across 39 suites)
 npm run build     # Verify production build
 ```
 
@@ -633,7 +634,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send, and it stores nothing
 - **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
-- **Minimal permissions**: Only `storage`, `downloads`, and `management`
+- **Minimal permissions**: Only `storage`, `downloads`, `management` and `scripting`, the last of which injects this extension's own content script into Gmail and nothing else
 - **Open source**: Full codebase available for audit
 
 The Atom feed used for unread counts fetches from `mail.google.com` (same origin). No cross-origin requests are made.

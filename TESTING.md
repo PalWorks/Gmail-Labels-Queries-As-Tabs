@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-23 (v1.7.2)
+Last updated: 2026-09-24 (v1.7.3)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 38 suites, 809 tests as of v1.7.2.
+- 39 suites, 835 tests as of v1.7.3.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -86,7 +86,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-809 tests below would all have passed on the broken build.
+835 tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:
@@ -165,12 +165,43 @@ thing, through `HOVER`.
 The lesson generalises: **structure passing is not the same as looking right.** A check
 that an element exists says nothing about whether it reacts.
 
+### What Chrome says, which no mock will tell you
+
+1.7.3 makes the worker start the content script in Gmail tabs that were already open. The
+unit tests cover the decisions: ping before injecting, inject the stylesheets too, reload
+only when injection fails, leave a discarded tab alone, let one unreachable tab not stop
+the rest. Every one of them passed against a first version that did nothing at all in a
+real browser.
+
+It skipped any tab whose `status` was `'loading'`, on the reasoning that such a tab is
+about to receive the manifest's own copy anyway. **A Gmail tab that has been open and
+usable for minutes reports `status: 'loading'`**, because Gmail holds a request open for
+its live updates. The rule therefore skipped every Gmail tab there was. The test double
+answered whatever the test told it to, so the suite had no opinion.
+
+Three facts were measured in a headless Chrome against a real signed-in Gmail on
+2026-09-24, and each one changed the code or the documentation:
+
+| Question | What Chrome actually does |
+|---|---|
+| What is a loaded Gmail tab's `status`? | `'loading'`, indefinitely |
+| Does the chrome://extensions Reload button fire `onInstalled`? | Yes, with `reason: 'update'` and `previousVersion` equal to the version being installed |
+| Does injection avoid a page reload? | Yes. A sentinel set on `window` before the install was still there after it, and again after an update |
+| What does upgrading from 1.7.2, whose copy cannot stand down, leave behind? | One tab bar, populated, and one "Show as Tabs" item. The orphaned copy only re-adds an empty bar if the live one is removed, which happens only if it is removed deliberately |
+
+The proof scripts are throwaway scaffolding and are not committed, for the same reason the
+real-mouse check is not. What they established is written above and encoded in
+[test/background.test.ts](test/background.test.ts),
+[test/handover.test.ts](test/handover.test.ts) and
+[test/content.test.ts](test/content.test.ts). **If the sweep's rules for which tabs to
+touch change again, measure them against a real Gmail before trusting the suite.**
+
 ### Two gates that cannot live in jest
 
 | Gate | Fails when | Why it is in CI |
 |---|---|---|
 | `Verify dist/icons contains only icons the manifest declares` | The build copies a file into `dist/icons` that `manifest.json` never names | It needs the built artefact. Two promo tiles, 398 KB and 44% of the package, shipped to users this way because `copy-assets` globbed `src/icons/*.png` |
-| `Verify the published privacy policy matches what the code does` | The live policy omits an outbound host, a declared permission or the site's own analytics, or the site bundle contains an API key | It needs the network, and the page lives in another repository that deploys by hand. It went four versions stale. See ADR-016 |
+| `Verify the published privacy policy matches what the code does` | The live policy omits an outbound host, a declared permission or the site's own analytics, or the site bundle contains an API key. The permission list is read from `manifest.json` as of 1.7.3, so adding a permission fails this step until the published policy names it. It cannot tell a mention from a denial: the live policy said the extension had *no* `scripting` permission, which a word match reads as present | It needs the network, and the page lives in another repository that deploys by hand. It went four versions stale. See ADR-016 |
 
 The second one couples a green build to an external site being up. That is the intended
 trade: an extension whose declared privacy policy cannot be produced should not ship.
