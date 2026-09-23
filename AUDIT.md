@@ -29,7 +29,7 @@
 > theme is known, and extension pages open in the theme the browser last painted,
 > stamped synchronously before any content is parsed. Both of the second pair were
 > reported as a black flash, and neither could have been caught by any assertion about a
-> final state, because every final state was already correct. 39 suites, 835 tests.
+> final state, because every final state was already correct. 39 suites, 844 tests.
 >
 > The website in the sibling repository now runs this extension's own tour, vendored
 > rather than re-created, and its FAQ and structured data were aligned with the store
@@ -68,6 +68,12 @@
 > section 7, and the execution record in
 > [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
 
+> **Refresh note (2026-09-24, v1.7.4):** the tab bar marked two tabs current at once when
+> a sublabel was open, because Gmail writes a nested label as one path and the match was a
+> substring test. The rule is now the most specific tab wins: a label tab matches what is
+> nested under it, so an open thread keeps its tab lit, but only the longest matching path
+> stays active. See ADR-026.
+
 > **Refresh note (2026-09-24, v1.7.3):** a Gmail tab that was already open when the
 > extension is installed or updated no longer has to be reloaded by hand. The worker starts
 > the content script in it with `chrome.scripting.executeScript`, which is the one new
@@ -94,7 +100,7 @@
 > hardcoding none of Gmail's class names (ADR-022), and `src/modules/health.ts`, which
 > records locally whether that works and is never transmitted (ADR-023). A drift canary in
 > `scripts/canary/` opens a real Gmail label menu daily and checks the structure the feature
-> depends on. The suite is 39 files, 835 tests.
+> depends on. The suite is 39 files, 844 tests.
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,

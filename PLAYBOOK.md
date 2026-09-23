@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-24 (v1.7.3)
+Last updated: 2026-09-24 (v1.7.4)
 
 ## Local setup
 

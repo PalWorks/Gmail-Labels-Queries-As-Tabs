@@ -399,29 +399,64 @@ function closeDropdownOutside(e: MouseEvent): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * The label path Gmail is currently showing, decoded, or `null` when the view
+ * is not a label at all.
+ *
+ * Gmail encodes a nested label as one path: `#label/Delete%2FOnlineOrders`,
+ * and spaces as `+`. Reading it back is the only way to compare a tab's stored
+ * label name against the address bar without guessing at the encoding.
+ */
+function currentLabelPath(hash: string): string | null {
+    if (!hash.startsWith('#label/')) return null;
+    const raw = hash.slice('#label/'.length).replace(/\+/g, ' ');
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        // A malformed escape sequence is not worth losing the highlight over.
+        return raw;
+    }
+}
+
+/**
  * Highlight the active tab based on the current URL hash.
+ *
+ * A label tab matches its own label **and anything nested under it**, because
+ * an open thread reads `#label/Work/FMfcgzQb...` and the tab for Work should
+ * stay lit while it is being read. That rule alone lights a parent whenever a
+ * child is open, which is what a user reported on 2026-09-24: selecting
+ * "Delete/OnlineOrderNotifications" lit both that tab and "Delete".
+ *
+ * So the longest match wins. The child's tab is a longer path than its
+ * parent's, so it takes the highlight on its own; the parent keeps it only
+ * while the open sublabel has no tab of its own, which is the one case where
+ * "you are inside Delete" is the most specific thing the bar can say.
  */
 export function updateActiveTab(): void {
     const hash = window.location.hash;
     const bar = document.getElementById(TABS_BAR_ID);
     if (!bar) return;
 
-    const tabs = bar.querySelectorAll('.gmail-tab');
-    tabs.forEach((t) => {
-        const tabEl = t as HTMLElement;
-        const tabValue = tabEl.dataset.value;
-        const tabType = tabEl.dataset.type;
-        if (!tabValue) return;
+    const labelPath = currentLabelPath(hash);
+    const tabs = Array.from(bar.querySelectorAll<HTMLElement>('.gmail-tab'));
 
-        let isActive = false;
+    // Nesting is on a path separator, never on a bare prefix: "Delete" must
+    // not match "Deleted Items".
+    const covers = (value: string): boolean =>
+        labelPath !== null && (labelPath === value || labelPath.startsWith(`${value}/`));
 
-        if (tabType === 'hash') {
-            isActive = hash === tabValue;
-        } else {
-            const cleanHash = decodeURIComponent(hash.replace('#label/', '').replace(/\+/g, ' '));
-            isActive =
-                cleanHash === tabValue || hash.includes(`#label/${encodeURIComponent(tabValue).replace(/%20/g, '+')}`);
-        }
+    let longestMatch = -1;
+    for (const tabEl of tabs) {
+        const value = tabEl.dataset.value;
+        if (!value || tabEl.dataset.type === 'hash') continue;
+        if (covers(value)) longestMatch = Math.max(longestMatch, value.length);
+    }
+
+    for (const tabEl of tabs) {
+        const value = tabEl.dataset.value;
+        if (!value) continue;
+
+        const isActive =
+            tabEl.dataset.type === 'hash' ? hash === value : covers(value) && value.length === longestMatch;
 
         const nameSpan = tabEl.querySelector('.tab-name');
         if (isActive) {
@@ -431,5 +466,5 @@ export function updateActiveTab(): void {
             tabEl.classList.remove('active');
             nameSpan?.removeAttribute('aria-current');
         }
-    });
+    }
 }

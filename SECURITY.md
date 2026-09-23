@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-24 (v1.7.3)
+Last updated: 2026-09-24 (v1.7.4)
 
 ## Privacy promise
 

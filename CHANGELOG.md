@@ -4,6 +4,37 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.7.4] - 2026-09-24
+
+> 1.7.3 was tagged and never submitted. This supersedes it, and carries
+> everything since 1.6.2.
+
+### Fixed
+
+- **Opening a sublabel no longer lights its parent's tab as well.** Reported
+  with a screenshot: selecting "Delete/OnlineOrderNotifications" left both that
+  tab and the "Delete" tab highlighted, so the bar showed two current views.
+
+  Gmail writes a nested label as one encoded path (`#label/Delete%2FOnline...`),
+  which makes a parent's name a prefix of every child's, and the match was a
+  substring test. It could not have been an exact test either: an open thread
+  reads `#label/Work/FMfcgzQb...`, and the tab for Work should stay lit while
+  the thread is being read.
+
+  So the rule is now **the most specific tab wins**. A label tab still matches
+  anything nested under it, and among the tabs that match, only the longest
+  path stays active. A parent keeps the highlight only while the open sublabel
+  has no tab of its own, which is the one case where "you are inside Delete" is
+  the most specific thing the bar can say.
+
+  Nesting is matched on the path separator, so a tab for "Delete" no longer
+  reacts to "Deleted Items" either, and the label path is decoded once rather
+  than compared against a guessed encoding.
+
+  Verified in a real signed-in Gmail with a parent tab, a child tab and a
+  same-prefix decoy: exactly one tab is active for the parent, for each child,
+  and for the inbox.
+
 ## [1.7.3] - 2026-09-24
 
 > 1.7.2 was built and tagged but held while 1.6.2 was in review. It is

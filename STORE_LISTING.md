@@ -3,7 +3,7 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.7.3
+**Version this listing describes:** 1.7.4
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
 **Last updated:** 2026-09-24
@@ -196,7 +196,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 835 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 844 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -427,21 +427,21 @@ beyond the version:
   the one asset about colour contained no colour picker. The capture now centres the row
   first and fails loudly if the palette is not inside the frame.
 
-**For 1.7.3, the six assets stand unchanged.** The releases since 1.6.2 add two visible
+**For 1.7.4, the six assets stand unchanged.** The releases since 1.6.2 add two visible
 things: the "Show as Tabs" entry at the end of Gmail's label menu, and the Gmail
-integration row on the settings page. Neither is on the shipped assets. 1.7.3 itself is
-invisible in a still by definition: what it changes is a reload that no longer has to
-happen. A seventh screenshot of the menu item would show
+integration row on the settings page. Neither is on the shipped assets. 1.7.3 and 1.7.4 are
+invisible in a still by definition: one removes a reload that no longer has to happen, and
+the other removes a second highlight from a bar that should only ever show one. A seventh screenshot of the menu item would show
 the feature the release notes lead with, and it is the one asset that would have to be shot
 against a real signed-in inbox, with the label list blurred the way screenshot 1 is. Until
 that is shot, the release notes carry the feature and the stills do not.
 
 ---
 
-## 5. Release notes for 1.7.3
+## 5. Release notes for 1.7.4
 
-Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0 and
-1.7.1 were never submitted, and 1.7.2 was built but held while 1.6.2 was still in review.
+Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0
+through 1.7.3 were each built and never submitted.
 
 ```
 New: add a label to your tab bar from Gmail itself. Click the three dots beside any label
@@ -462,6 +462,9 @@ Fixed: installing or updating the extension used to leave any Gmail tab you alre
 open without a tab bar until you reloaded it. It now starts itself in those tabs, so the
 bar appears where you are, and your open compose window and your place in the page stay
 where they were.
+
+Fixed: opening a sublabel used to highlight its parent's tab as well, so the bar showed two
+current views at once. Only the tab you are actually looking at is highlighted now.
 ```
 
 **This release adds one permission, `scripting`**, and the justification block in section 3
@@ -742,22 +745,24 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-24 against `main` at the 1.7.3 release commit.
+Verified on 2026-09-24 against `main` at the 1.7.4 release commit.
 
 - [x] `npm run package` produces the zip from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.7.3 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.7.4 (CI checks parity)
 - [x] Privacy policy page covers the storage model, both outbound paths, all five
       permissions including the host, the Apps Script boundary, and the site's own
       analytics. The in-extension page (Settings -> Privacy) lists `scripting` as of 1.7.3;
       the website's own policy page needs the same line before this is submitted
 - [x] Privacy policy URL points at the site this repository deploys, not the retired one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.7.3
-- [ ] **Permissions changed in 1.7.3**: storage, downloads, management, **scripting**,
+- [x] Public changelog updated through 1.7.4
+- [ ] **Permissions changed in 1.7.3, and 1.7.4 ships that change**: storage, downloads, management, **scripting**,
       `https://mail.google.com/*`. `scripting` adds no new user-facing warning on top of
       the host permission already granted, so Chrome does not disable the extension for
       existing users, but the justification in section 3 must be pasted into the dashboard
       with this submission
+- [x] The tab bar marks exactly one tab current, verified in a real signed-in Gmail with a
+      parent tab, a child tab and a same-prefix decoy (1.7.4, ADR-026)
 - [x] The uninstall URL is a bare form link carrying no identifying parameter (asserted in
       `test/background.test.ts`; its disclosure is asserted in `test/repoConsistency.test.ts`)
 - [x] Data usage answers reviewed: unchanged from 1.4.0. `scripting` injects this

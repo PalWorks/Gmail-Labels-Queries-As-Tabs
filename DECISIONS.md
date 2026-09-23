@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-24 (v1.7.3)
+Last updated: 2026-09-24 (v1.7.4)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -854,3 +854,46 @@ registers its own listener, so a copy cannot shut itself down on arrival.
   permission. That sentence has to change before this ships, and the CI step
   that fetches the live policy now reads the permission list from
   `manifest.json` rather than a hardcoded copy.
+
+## ADR-026: The most specific tab wins
+
+**Date:** 2026-09-24
+**Status:** Accepted
+**Context:** v1.7.4
+
+Gmail addresses a nested label as one encoded path: `Delete/OnlineOrderNotifications`
+is `#label/Delete%2FOnlineOrderNotifications`. Two consequences pull in
+opposite directions.
+
+A tab cannot match its label exactly, because opening a thread inside a label
+reads `#label/Work/FMfcgzQbgClc...`, and the tab for Work should stay lit while
+that thread is being read.
+
+A tab cannot match by substring either, which is what it did until now: every
+parent is a prefix of its children, so opening a sublabel lit the parent's tab
+as well, and the bar showed two current views at once. Reported with a
+screenshot on 2026-09-24.
+
+### Decision
+
+A label tab matches its own label **and anything nested under it**, on the path
+separator rather than on a bare prefix, so "Delete" does not match "Deleted
+Items". Among the tabs that match, **only the longest one stays active**.
+
+The child's path is longer than its parent's, so a sublabel with a tab takes
+the highlight alone. A parent keeps it only while the open sublabel has no tab
+of its own, which is the one case where "you are inside Delete" is the most
+specific thing the bar can say. An open thread adds a segment that belongs to
+no tab, so the label it was opened from keeps the highlight, which is the
+behaviour the old substring test was really there for.
+
+### Consequences
+
+- The label path is decoded once and compared as text, rather than compared
+  against a re-encoded guess at what Gmail would have written. A malformed
+  escape sequence falls back to the raw string instead of throwing and taking
+  the highlight with it.
+- Nine tests in [test/tabs.test.ts](test/tabs.test.ts) pin the rule, including
+  the same-prefix decoy and the open-thread case, because the obvious
+  "simplification" back to an exact match would silently unlight a tab whenever
+  a thread is open.

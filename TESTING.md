@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-24 (v1.7.3)
+Last updated: 2026-09-24 (v1.7.4)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 39 suites, 835 tests as of v1.7.3.
+- 39 suites, 844 tests as of v1.7.4.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -86,7 +86,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-835 tests below would all have passed on the broken build.
+844 tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:

@@ -237,6 +237,123 @@ describe('updateActiveTab', () => {
 });
 
 // ---------------------------------------------------------------------------
+// updateActiveTab and nested labels
+//
+// Gmail writes a nested label as one encoded path, so a parent's name is a
+// prefix of every child's. Reported on 2026-09-24: opening
+// "Delete/OnlineOrderNotifications" lit its tab and the "Delete" tab with it.
+// ---------------------------------------------------------------------------
+
+describe('updateActiveTab with nested labels', () => {
+    const nested: Tab[] = [
+        { id: 'tab-1', title: 'Inbox', value: '#inbox', type: 'hash' },
+        { id: 'tab-2', title: 'Delete', value: 'Delete', type: 'label' },
+        { id: 'tab-3', title: 'OnlineOrders', value: 'Delete/OnlineOrderNotifications', type: 'label' },
+        { id: 'tab-4', title: 'Deleted Items', value: 'Deleted Items', type: 'label' },
+    ];
+
+    function setupNestedBar(): HTMLElement {
+        const bar = createTabsBar();
+        document.body.appendChild(bar);
+        mockState.currentSettings = { tabs: nested, showUnreadCount: false, theme: 'system', rules: [] };
+        renderTabs();
+        return bar;
+    }
+
+    /** The titles of every tab currently highlighted. */
+    function activeTitles(bar: HTMLElement): string[] {
+        return Array.from(bar.querySelectorAll<HTMLElement>('.gmail-tab.active')).map(
+            (t) => t.querySelector('.tab-name')?.textContent?.trim() ?? ''
+        );
+    }
+
+    test('a sublabel lights its own tab, not its parent as well', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete%2FOnlineOrderNotifications';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['OnlineOrders']);
+    });
+
+    test('the parent stays lit while a sublabel with no tab of its own is open', () => {
+        // The most specific thing the bar can say is "you are inside Delete".
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete%2FSpamletters';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Delete']);
+    });
+
+    test('an open thread keeps its label tab lit', () => {
+        // Gmail appends the thread id to the label path.
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete%2FOnlineOrderNotifications/FMfcgzQbgClcJBgGqJVCRrRqQpgLDLPG';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['OnlineOrders']);
+    });
+
+    test('a page of results keeps the label lit', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete/p2';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Delete']);
+    });
+
+    test('nesting is a path separator, not a bare prefix', () => {
+        // "Delete" must not light up for "Deleted Items".
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Deleted+Items';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Deleted Items']);
+    });
+
+    test('the parent alone lights up for the parent itself', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Delete']);
+    });
+
+    test('a label with a space is matched through its encoding', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Deleted%20Items';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Deleted Items']);
+    });
+
+    test('a malformed escape does not throw or light anything', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/%E0%A4';
+
+        expect(() => updateActiveTab()).not.toThrow();
+        expect(activeTitles(bar)).toEqual([]);
+    });
+
+    test('aria-current follows the same single tab', () => {
+        const bar = setupNestedBar();
+        window.location.hash = '#label/Delete%2FOnlineOrderNotifications';
+
+        updateActiveTab();
+
+        const marked = bar.querySelectorAll('.tab-name[aria-current="page"]');
+        expect(marked).toHaveLength(1);
+        expect(marked[0].textContent?.trim()).toBe('OnlineOrders');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Tab Click Behavior
 // ---------------------------------------------------------------------------
 
