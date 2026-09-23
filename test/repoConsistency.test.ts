@@ -1011,9 +1011,17 @@ describe('the worker injects what the manifest declares', () => {
         expect(manifest.permissions).toContain('scripting');
     });
 
-    test('every injected file is in the build output', () => {
+    test('every injected file has a source that produces it', () => {
+        // Deliberately not a check against `dist`. The suite runs before the
+        // build in CI, so a `dist` check passes locally, where a build is
+        // lying around, and fails on a clean checkout: a guard that depends
+        // on build state tests the working directory, not the repository.
+        const sourceOf = (file: string) =>
+            file.startsWith('js/')
+                ? path.join(ROOT, 'src', file.replace(/^js\//, '').replace(/\.js$/, '.ts'))
+                : path.join(ROOT, 'src', 'ui', file.replace(/^css\//, ''));
         for (const file of [...declared.js, ...declared.css]) {
-            expect(fs.existsSync(path.join(ROOT, 'dist', file))).toBe(true);
+            expect({ file, source: fs.existsSync(sourceOf(file)) }).toEqual({ file, source: true });
         }
     });
 });
