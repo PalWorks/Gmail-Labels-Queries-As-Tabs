@@ -55,8 +55,9 @@ Strengths:
 
 Weaknesses and risks:
 
-- We bundle the full InboxSDK (~1 MB) but use only `User.getEmailAddress()` and
-  `Router.handleAllRoutes()`. We either exploit more of it or drop it to cut load time.
+- ~~We bundle the full InboxSDK (~1 MB) but use only `User.getEmailAddress()` and
+  `Router.handleAllRoutes()`.~~ **Resolved after v1.6.2:** dropped. Neither call had ever
+  run, and the content script fell to 72.2 KB. See ADR-021.
 - The unread waterfall (Atom feed, XHR, DOM) is clever but more fragile than InboxSDK's
   native nav-item unread count.
 - Slow load is the top category complaint against injection tools; our lean build is an
@@ -75,7 +76,7 @@ Weaknesses and risks:
 ## Backlog (post v2.1, ranked)
 
 1. Multi-label / OR-query virtual tabs (beat the native 5-section cap).
-2. Lean-build decision: exploit InboxSDK search rewriter, or drop InboxSDK to cut ~1 MB.
+2. ~~Lean-build decision: exploit InboxSDK search rewriter, or drop InboxSDK to cut ~1 MB.~~ Done after v1.6.2; InboxSDK dropped. See ADR-021.
 3. In-product privacy-first positioning (permissions explainer, zero-network badge).
 4. Focus mode (hide or dim non-active tabs).
 5. Shareable tab presets via export/import (no account).

@@ -243,8 +243,9 @@ describe('no stylesheet rule outlives what it styled', () => {
      * Everything else must appear somewhere in the source.
      */
     const EXTERNALLY_APPLIED = new Set<string>([
-        // Applied by the browser or by Gmail/InboxSDK, not by our code.
-        'inboxsdk__appId',
+        // Applied by the browser or by Gmail, not by our code. Empty today;
+        // kept because the next such class should be named here with a reason
+        // rather than silently tolerated.
     ]);
 
     /**

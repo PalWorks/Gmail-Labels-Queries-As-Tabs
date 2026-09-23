@@ -137,9 +137,8 @@ Gmail-Labels-As-Tabs/
 3. **User opens Gmail** → Chrome injects `content.ts` (ISOLATED world) + `toolbar.css`
 4. **`content.ts` → `init()`**:
    - **Immediately** injects `xhrInterceptor.js` into MAIN world (for XHR access)
-   - **Parallel path A:** Starts DOM-based email extraction (polls `document.title`, `aria-label`)
-   - **Parallel path B:** Loads InboxSDK (non-blocking) for enhanced route detection
-   - **Whichever finds email first** → calls `finalizeInit(email)`:
+   - **Starts DOM-based email extraction** (polls `document.title`, `aria-label`)
+   - **On the first address found** → calls `finalizeInit(email)`:
      - Migrates legacy settings if needed
      - Loads settings from `chrome.storage.sync`
      - **Applies the theme, then** calls `renderTabs()`. That order is the fix
@@ -166,7 +165,6 @@ Gmail-Labels-As-Tabs/
 | **Dual-World Injection** | `content.ts` + `xhrInterceptor.ts` | Content script runs in ISOLATED world (can't see Gmail's XHR). Solution: inject a script tag into MAIN world that monkey-patches `XMLHttpRequest` and communicates back via `CustomEvent` |
 | **Event-Driven Communication** | Cross-world | MAIN→ISOLATED: `CustomEvent('gmailTabs:unreadUpdate')`. Content↔Background: `chrome.runtime.sendMessage` |
 | **Optimistic UI** | Drag-and-drop | UI updates immediately on drop, storage write happens asynchronously |
-| **Progressive Enhancement** | `init()` | DOM-based detection runs immediately; InboxSDK loads in parallel as a fallback/enhancement |
 | **Per-Account Namespacing** | `storage.ts` | Settings keyed by `account_{email}` in `chrome.storage.sync`, enabling multi-account support |
 | **CSS Custom Properties** | `toolbar.css` | Full theming via CSS variables with `prefers-color-scheme` media query + force-override classes |
 | **Strategy Pattern (implicit)** | Unread counts | Three strategies tried in order: Atom feed → XHR interception → DOM scraping |
@@ -182,7 +180,7 @@ owned centrally:
 
 | Responsibility | Key Functions |
 |---|---|
-| **Initialization** | `init()`, `initializeFromDOM()`, `loadInboxSDK()`, `finalizeInit()` |
+| **Initialization** | `init()`, `initializeFromDOM()`, `finalizeInit()` |
 | **Injection lifecycle** | `attemptInjection()`, bounded retries, `MutationObserver` fallback |
 | **Account registration** | `ensureAccountRegistered()` so the options page sees the account |
 | **Cross-surface listeners** | `chrome.storage.onChanged` (account-scoped), `popstate`, theme watcher |
@@ -265,7 +263,6 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 | Per-account settings | `chrome.storage.sync` | Key: `account_{email}`, Value: `Settings` object |
 | Default settings | [storage.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/utils/storage.ts#L31-L48) | Hardcoded `DEFAULT_SETTINGS` constant |
 | Theme | Browser-wide in `chrome.storage.local` under `globalTheme` (default `light`); `Settings.theme` kept only for migration seeding | `'system' \| 'light' \| 'dark'` |
-| InboxSDK App ID | [content.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L13) | Hardcoded constant `APP_ID` |
 | Uninstall feedback URL | [background.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/background.ts#L66) | Hardcoded Tally form URL |
 | i18n | `_locales/en/` | Chrome i18n message format |
 
@@ -279,8 +276,6 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 
 ```
 content.ts ──imports──▶ storage.ts
-content.ts ──imports──▶ @inboxsdk/core
-background.ts ──imports──▶ @inboxsdk/core/background.js
 xhrInterceptor.ts ──(standalone, no imports)──
 welcome.ts ──(standalone, uses chrome.* APIs)──
 ```
@@ -289,7 +284,6 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Package | Purpose | Why |
 |---|---|---|
-| `@inboxsdk/core` | Gmail SDK for route detection and user identity | Intended as a non-critical enhancement; in practice inert, because its page world is never injected. See section 10 |
 | `esbuild` | Build tool | Fast TypeScript bundling (4 entry points → `dist/js/`) |
 | `typescript` | Language | Strict-mode TypeScript compilation |
 | `jest` + `ts-jest` + `jest-environment-jsdom` | Testing | Unit tests with JSDOM for browser APIs |
@@ -297,7 +291,10 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 | `@types/chrome` | Type definitions | TypeScript types for Chrome Extension APIs |
 
 > [!NOTE]
-> The extension has **zero runtime dependencies** — `@inboxsdk/core` is bundled at build time via esbuild.
+> The extension has **zero dependencies of any kind in the shipped bundle**. Every package
+> above is a `devDependency`; `dist/js/*.js` is this repository's own code and nothing else.
+> The last third-party library in the bundle, `@inboxsdk/core`, was removed after v1.6.2.
+> See ADR-021.
 
 ---
 
@@ -388,7 +385,6 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 |---|---|---|
 | **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference. Since 1.6.2 that fallback is marked rather than painted, so a wrong guess shows as no background rather than the wrong one, and is committed only once the settle ladder gives up | `src/modules/theme.ts` |
 | **The first-frame theme is a cache, and one writer cannot reach it** | `localStorage` is per-origin, so the Gmail content script cannot update it. Change the theme in the in-Gmail modal and the next extension page can open in the previous theme for one frame. Costs a frame, never a final state | `src/modules/themeMirror.ts` |
-| **InboxSDK is 95% of the content script and neither of its two features has ever run** | The bundle is 1.09 MB, of which ~1.03 MB is InboxSDK. `InboxSDK.load()` awaits `pageWorld.js` setting a `<head>` attribute, and injecting `pageWorld.js` needs the `scripting` permission we do not declare, so the promise never settles and never rejects: `sdk.User.getEmailAddress()` and `sdk.Router.handleAllRoutes()` are unreachable, and the only symptom is one console error per Gmail load. Both features are covered anyway: email by `extractEmailFromDOM()` and the DOM poller, routes by the body `MutationObserver` and `popstate`. Measured: removing it builds a 54.6 KB content script and every behaviour still works. Live-verified 2026-09-21 | `content.ts` |
 | **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` etc. are Gmail's obfuscated class names that can change | `content.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |
 
@@ -434,7 +430,6 @@ src/xhrInterceptor.ts──┤────────────────�
 src/welcome.ts     ──┘
                       
 copy-assets: manifest.json, CSS, HTML, icons, _locales  ▶  dist/
-post-build: copies @inboxsdk/core/pageWorld.js           ▶  dist/pageWorld.js
 ```
 
 ---

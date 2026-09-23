@@ -4,6 +4,33 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [Unreleased]
+
+### Removed
+
+- **InboxSDK, all 1.03 MB of it.** It was bundled to do two things, detect the
+  signed-in address and notice Gmail route changes, and it did neither in any
+  shipped build. `InboxSDK.load()` waits on a page world that is injected only
+  with the `scripting` permission this extension has never declared, so the
+  promise never settled. It never rejected either, which is why the failure was
+  invisible apart from one console error per Gmail load.
+
+  Both jobs were already done by code we own: the address by
+  `extractEmailFromDOM()` and the one-second poller, routes by the body
+  `MutationObserver` and `popstate`.
+
+  Gone with it: the `APP_ID` constant, `loadInboxSDK()`, the service worker's
+  background import, the `pageWorld.js` copy step and its
+  `web_accessible_resources` entry, and the dev dependency. The content script
+  falls from **1,103,251 bytes to 72,159**, a 93.5% reduction, and
+  `dist/pageWorld.js` (583,907 bytes) is no longer shipped at all. Nothing a
+  user can see changes. See ADR-021.
+
+  One test changed meaning rather than disappearing. `content.test.ts` asserted
+  that the SDK supplied the address when the DOM had none, and passed only
+  because the mock resolved where production never did. It now drives the
+  poller instead, which is the path that actually recovers a late address.
+
 ## [1.6.2] - 2026-09-22
 
 ### Fixed

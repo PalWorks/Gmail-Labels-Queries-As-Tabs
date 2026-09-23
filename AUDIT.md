@@ -1,7 +1,7 @@
 # Gmail Labels as Tabs: Repository Audit
 
 > **Version Analyzed:** 1.2.1 (Manifest V3)
-> **Stack:** TypeScript, esbuild, Chrome Extension APIs (InboxSDK is bundled but inert; see section 7)
+> **Stack:** TypeScript, esbuild, Chrome Extension APIs (no third-party library in the shipped bundle since InboxSDK was removed after v1.6.2; see section 7)
 > **License:** MIT
 >
 > **Refresh note (v1.2.1):** `modals.ts` has been decomposed into `src/modules/modals/*`;
@@ -59,13 +59,14 @@
 > Note what this says about the tests: the suite covering the broken options-page link
 > passed throughout, because it mocked the call that was failing.
 >
-> **Open, not fixed:** `@inboxsdk/core` is ~1.03 MB of the 1.09 MB content script and
-> **neither of its two features has ever run in a shipped build**. `InboxSDK.load()` never
-> settles, because it waits on a page world that needs the `scripting` permission we do not
-> declare, and it never rejects either, so the failure is silent apart from one console
-> error per Gmail load. Both features are covered by code we own. A stripped build measures
-> 54.6 KB and behaves identically. Live-verified 2026-09-21; see section 7 and the execution
-> record in [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
+> **Closed after v1.6.2:** `@inboxsdk/core` was ~1.03 MB of the 1.09 MB content script and
+> **neither of its two features ever ran in a shipped build**. `InboxSDK.load()` never
+> settled, because it waited on a page world that needs the `scripting` permission we do not
+> declare, and it never rejected either, so the failure was silent apart from one console
+> error per Gmail load. Both features were already covered by code we own. It has been
+> removed: the content script is now 72.2 KB and every behaviour is unchanged. See ADR-021,
+> section 7, and the execution record in
+> [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,
@@ -174,7 +175,6 @@ manifest.json injects content.ts + toolbar.css at document_end
 content.ts::init()
    ├─── injectPageWorld()            ← Injects xhrInterceptor.js into MAIN world
    ├─── initializeFromDOM()          ← Extracts user email from DOM (polling fallback)
-   ├─── loadInboxSDK()              ← Never resolves: page world needs `scripting`. Inert
    ├─── attemptInjection()          ← Finds Gmail toolbar, inserts tab bar after it
    ├─── startObserver()             ← MutationObserver to re-inject if Gmail re-renders
    ├─── addEventListener(popstate)  ← Track URL changes for active tab highlighting
@@ -199,7 +199,6 @@ content.ts
 
 ```
 background.ts
-    ├─── import @inboxsdk/core/background.js  ← Required by InboxSDK
     ├─── onMessage: DOWNLOAD_FILE             ← Exports settings as JSON file
     ├─── onMessage: UNINSTALL_SELF            ← Triggers chrome.management.uninstallSelf
     ├─── action.onClicked                     ← Extension icon click → TOGGLE_SETTINGS
@@ -336,7 +335,6 @@ All user settings are persisted via `chrome.storage.sync` with a multi-account k
 | `TABS_BAR_ID` | `state.ts` | DOM ID for the injected tab bar |
 | `MODAL_ID` | `state.ts` | DOM ID for modal overlays |
 | `TOOLBAR_SELECTORS` | `state.ts` | CSS selectors for Gmail's toolbar (injection target) |
-| `APP_ID` | `content.ts` | InboxSDK application identifier |
 | `FEEDBACK_URL` | `background.ts` | Tally.so form URL for uninstall feedback |
 
 ## 7. Dependency Structure
@@ -359,7 +357,6 @@ state.ts ──► storage (types only)
 
 | Library | Version | Purpose |
 |---|---|---|
-| `@inboxsdk/core` | ^2.2.11 | Intended for route tracking and email detection. Inert in practice: its page world is never injected, so neither feature runs. See section 7. |
 | `esbuild` | ^0.27.0 | Fast TypeScript bundler. Replaces webpack/rollup. |
 | `typescript` | ^5.3.3 | TypeScript compiler. |
 | `jest` | ^29.7.0 | Test runner. |
@@ -370,11 +367,16 @@ state.ts ──► storage (types only)
 | `eslint` | ^8.57.0 | Linting (configured but no `.eslintrc` found). |
 | `prettier` | ^3.2.5 | Code formatting (configured but no `.prettierrc` found). |
 
-**Key architectural note:** All dependencies are `devDependencies`. The production bundle contains only the extension's own code plus InboxSDK's bundled output. There are zero runtime NPM dependencies.
+**Key architectural note:** All dependencies are `devDependencies`, and since the removal of
+`@inboxsdk/core` after v1.6.2 the production bundle contains only the extension's own code.
+There are zero runtime NPM dependencies and no third-party code in `dist/js/`.
 
-### InboxSDK Usage
+### InboxSDK Usage (removed after v1.6.2)
 
-InboxSDK is *intended* for two purposes, and achieves neither:
+The library is gone. This section is kept because the reasoning is the reason, and because
+the same failure mode can return with any library that needs a page world.
+
+InboxSDK was *intended* for two purposes, and achieved neither:
 
 1. **Email detection:** `sdk.User.getEmailAddress()` as a fallback when DOM extraction fails.
 2. **Route tracking:** `sdk.Router.handleAllRoutes()` to detect Gmail navigation changes.
@@ -391,10 +393,16 @@ Verified live on 2026-09-21 in a signed-in Gmail tab: `data-inboxsdk-script-inje
 `"true"`, `data-inboxsdk-user-email-address` is `null`, `window.__InboxSDKImpLoader` is
 `undefined`, and the console carries "Couldn't inject pageWorld.js".
 
-The extension works regardless, because `initializeFromDOM()` and the DOM poller detect the
-account and the body `MutationObserver` plus `popstate` track routes. The cost is ~1.03 MB
-of the 1.09 MB content script. `test/content.test.ts` mocks `load()` to resolve, so the
-green tests around the fallback describe our glue, not production behaviour.
+The extension worked regardless, because `initializeFromDOM()` and the DOM poller detect the
+account and the body `MutationObserver` plus `popstate` track routes. The cost was ~1.03 MB
+of the 1.09 MB content script. `test/content.test.ts` mocked `load()` to resolve, so the
+green tests around the fallback described our glue, not production behaviour; that test now
+exercises the poller instead, which is what actually recovers a late address.
+
+**Removed after v1.6.2** (ADR-021): the import, the `APP_ID` constant, `loadInboxSDK()`, the
+service worker's background import, the `pageWorld.js` copy step and its
+`web_accessible_resources` entry, and the dev dependency. The content script went from
+1,103,251 bytes to 72,159, a 93.5% reduction, with 721 tests green.
 
 ## 8. Testing Strategy
 

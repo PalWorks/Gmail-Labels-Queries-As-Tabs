@@ -1,7 +1,5 @@
 
 const esbuild = require('esbuild');
-const fs = require('fs');
-const path = require('path');
 
 const isWatch = process.argv.includes('--watch');
 
@@ -40,8 +38,6 @@ async function build() {
         console.log('Watching for changes...');
     } else {
         await esbuild.build(commonConfig);
-        // Copy SDK pageWorld.js to root of dist
-        fs.copyFileSync('node_modules/@inboxsdk/core/pageWorld.js', 'dist/pageWorld.js');
         console.log('Build complete.');
     }
 }

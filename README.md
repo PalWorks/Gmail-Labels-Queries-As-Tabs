@@ -131,7 +131,6 @@ Unread counts use a three-tier waterfall for maximum reliability:
 | **Per-Account Namespacing** | storage.ts | Settings keyed by `account_{email}` in chrome.storage.sync |
 | **CSS Custom Properties** | toolbar.css | Full theming via CSS variables with `prefers-color-scheme` media query and force-override classes |
 | **Optimistic UI** | dragdrop.ts | UI updates immediately on drop; storage write happens asynchronously |
-| **Progressive Enhancement** | content.ts init() | DOM-based detection runs immediately; InboxSDK loads in parallel as an intended enhancement. In practice it never finishes loading, because its page world needs the `scripting` permission we do not declare, so DOM detection is the only path that runs. See ARCHITECTURE.md section 10 |
 | **Strategy Pattern** | unread.ts | Three unread count strategies attempted in waterfall order |
 
 ### Data Flow
@@ -150,7 +149,7 @@ User clicks tab  →  window.location.hash changes (#inbox, #label/Work, #search
 | **Language** | TypeScript (ES2022, strict mode) |
 | **Bundler** | esbuild (5 entry points, minified, console-stripped) |
 | **Extension Platform** | Chrome Manifest V3 |
-| **Route Detection** | Body `MutationObserver` + `popstate` (InboxSDK is bundled for this but never initialises) |
+| **Route Detection** | Body `MutationObserver` + `popstate` |
 | **Storage** | `chrome.storage.sync` (cross-device, per-account namespaced) |
 | **Testing** | Jest + ts-jest + jsdom |
 | **Linting** | ESLint + @typescript-eslint |
@@ -641,7 +640,6 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 
 ## Acknowledgements
 
-- [InboxSDK](https://www.inboxsdk.com/) for Gmail route detection and user identity
 - [esbuild](https://esbuild.github.io/) for lightning fast TypeScript bundling
 - [Jest](https://jestjs.io/) for the testing framework
 - [Chrome Extensions team](https://developer.chrome.com/docs/extensions/) for the Manifest V3 platform

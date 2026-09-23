@@ -11,12 +11,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { flush } from './helpers/async';
 
-// ---------------------------------------------------------------------------
-// Mock InboxSDK background import (no-op)
-// ---------------------------------------------------------------------------
-
-jest.mock('@inboxsdk/core/background.js', () => ({}));
-
 // Polyfill TextEncoder for jsdom
 if (typeof global.TextEncoder === 'undefined') {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

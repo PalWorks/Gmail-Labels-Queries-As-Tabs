@@ -77,12 +77,11 @@ away, and it can automate routine cleanup of those labels.
 - **MAIN world / isolated world.** Two JavaScript execution contexts on a page. Content
   scripts run isolated; the XHR interceptor is injected into the page's MAIN world to see
   Gmail's own network traffic. They communicate via `CustomEvent` on `document`.
-- **InboxSDK.** A third-party library originally used to locate Gmail UI anchor points and
-  to detect the signed-in address. Bundled into the content script, where it accounts for
-  roughly 1.03 MB of 1.09 MB, and **inert**: its page world needs the `scripting`
-  permission this extension does not declare, so `InboxSDK.load()` never settles and
-  neither of its two features has ever run in a shipped build. It does not reject either,
-  so the only symptom is one console error per Gmail load. See ARCHITECTURE.md section 10.
+- **InboxSDK.** A third-party library formerly bundled to locate Gmail UI anchor points
+  and detect the signed-in address. **Removed after v1.6.2.** It never ran in any shipped
+  build, because its page world needs the `scripting` permission this extension does not
+  declare, and it cost 1,031,092 of the 1,103,251 bytes of the content script. Both jobs were already
+  done by code we own. See ADR-021.
 - **SettingsOp.** A description of a change to an account's settings, as plain data, so it
   can be sent to the service worker and applied there. See DATA_MODEL.md.
 - **rev.** A counter on an account's stored settings, bumped on every write. Used to detect

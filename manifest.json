@@ -50,8 +50,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "js/xhrInterceptor.js",
-        "pageWorld.js"
+        "js/xhrInterceptor.js"
       ],
       "matches": [
         "https://mail.google.com/*"

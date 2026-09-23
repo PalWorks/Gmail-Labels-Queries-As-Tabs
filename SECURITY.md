@@ -43,8 +43,9 @@ amended by ADR-012.
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |
 
 No `<all_urls>`, no broad host access, no scripting into other sites. In particular there is
-no `scripting` permission, which is why InboxSDK's page world is never injected and neither
-of its two features has ever run; see the InboxSDK row in
+no `scripting` permission. That is why InboxSDK's page world was never injected and
+neither of its two features ever ran in a shipped build; the library was removed after
+v1.6.2 and the content script now contains no third-party code at all. See the row in
 [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 
 ## Where the published privacy policy lives

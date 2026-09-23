@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (post 1.6.2)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -579,3 +579,50 @@ What no guard can prove is the absence of a flash, which is a frame rather than
 a value. That was verified by sampling the computed background on every
 animation frame, before and after, in the reported configuration: 4 dark frames
 before and 0 after on the tab bar, 2 and 0 on the options page.
+
+## ADR-021: No third-party library runs inside the user's mailbox
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Context:** after v1.6.2
+
+`@inboxsdk/core` was 1.03 MB of a 1.09 MB content script and had never executed
+a single line of its own API in a shipped build. Its page world is injected
+only with the `scripting` permission, which this extension does not declare, so
+`InboxSDK.load()` never settled and never rejected. That combination is the
+worst one available: no feature, no error, no way to notice.
+
+The question deferred for four releases was whether we would eventually want it.
+Two pieces of evidence closed it.
+
+First, an inventory of what a real user of the SDK gets. A competitor's shipped
+build calls `ButterBar`, `Widgets.showModalView`, `Router.handleAllRoutes`,
+`Router.goto`, `Toolbars.addToolbarButtonForApp` and `User.getEmailAddress`.
+Every one of those except ButterBar we already do by hand, tested, in code we
+own.
+
+Second, and decisive: **InboxSDK does not solve Gmail's obfuscated class names.
+It hardcodes them.** `inboxsdk.js` in `node_modules` carries `.dw .nH > .nH >
+.no`, `T-I J-J5-Ji ztGYyc T-I-atl L3` and `pM aRw` as literal strings. What the
+megabyte buys is not a technique, it is someone else maintaining a selector list
+and shipping updates when Gmail changes. Verified separately that Gmail's class
+names are identical across installations and vary only by Gmail build, so that
+list is a maintenance contract, not a capability.
+
+### Decision
+
+Remove it, and treat "no third-party code in the content script" as a property
+worth keeping rather than an accident.
+
+### Consequences
+
+- The content script is 72,159 bytes. `dist/pageWorld.js`, 583,907 bytes, is no
+  longer built or shipped.
+- `api.inboxsdk.com/api/v2/errors` and `register.inboxsdk.com` are no longer
+  present in any shipped file. They were never contacted, verified over a
+  25-second Gmail load, but their presence in a package whose listing says
+  nothing leaves the browser was a disclosure risk we no longer carry.
+- We own the Gmail DOM coupling outright. That is the real cost, and it is the
+  reason the next piece of work is a drift canary rather than a feature.
+- If Gmail notifications ever become worth having, the answer is our own strip,
+  not a megabyte of someone else's.

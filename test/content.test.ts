@@ -8,8 +8,8 @@ import { flush } from './helpers/async';
  * Tests extractEmailFromDOM() behavior indirectly, and verifies
  * the storage change listener triggers re-renders for relevant keys.
  *
- * content.ts has heavy side effects on import (InboxSDK, MutationObserver,
- * chrome listeners), so we use jest.isolateModules() and careful mocking.
+ * content.ts has heavy side effects on import (MutationObserver, chrome
+ * listeners), so we use jest.isolateModules() and careful mocking.
  */
 
 // ---------------------------------------------------------------------------
@@ -103,13 +103,6 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         return new Promise<void>((resolve) => {
             jest.isolateModules(() => {
                 // Set up all required mocks before the import
-                jest.doMock('@inboxsdk/core', () => ({
-                    load: jest.fn().mockResolvedValue({
-                        User: { getEmailAddress: () => 'sdk@gmail.com' },
-                        Router: { handleAllRoutes: jest.fn() },
-                    }),
-                }));
-
                 jest.doMock('../src/utils/storage', () => ({
                     getSettings: mockGetSettings,
                     migrateLegacySettingsIfNeeded: mockMigrate,
@@ -204,8 +197,14 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         expect(mockState.currentUserEmail).toBe('test@example.com');
     });
 
-    test('returns null when no email found in DOM, SDK provides fallback', async () => {
+    test('no email in the DOM leaves the account undetected and arms the poller', async () => {
+        // This used to assert that InboxSDK supplied the address. It
+        // never did in a shipped build: the SDK's page world needs a
+        // permission this extension does not declare, so `load()` never
+        // settled. The mock made the fiction pass. The poller below is what
+        // actually recovers this case, so that is what is tested now.
         document.title = 'Gmail';
+        const setIntervalSpy = jest.spyOn(global, 'setInterval');
         mockGetSettings.mockResolvedValue({
             tabs: [],
             showUnreadCount: false,
@@ -214,11 +213,20 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         });
 
         await importContent();
-        // Let the InboxSDK fallback path settle.
         await flush(40);
 
-        // SDK fallback should set email
-        expect(mockState.currentUserEmail).toBe('sdk@gmail.com');
+        expect(mockState.currentUserEmail).toBeNull();
+
+        const pollCall = setIntervalSpy.mock.calls.find(([, ms]) => ms === 1000);
+        expect(pollCall).toBeDefined();
+
+        // Gmail finishes painting and the address appears.
+        document.title = 'Inbox - late@gmail.com - Gmail';
+        (pollCall![0] as () => void)();
+        await flush();
+
+        expect(mockState.currentUserEmail).toBe('late@gmail.com');
+        setIntervalSpy.mockRestore();
     });
 });
 
@@ -226,13 +234,6 @@ describe('storage change listener', () => {
     function importContentAndGetListeners(): Promise<void> {
         return new Promise<void>((resolve) => {
             jest.isolateModules(() => {
-                jest.doMock('@inboxsdk/core', () => ({
-                    load: jest.fn().mockResolvedValue({
-                        User: { getEmailAddress: () => 'user@test.com' },
-                        Router: { handleAllRoutes: jest.fn() },
-                    }),
-                }));
-
                 jest.doMock('../src/utils/storage', () => ({
                     getSettings: mockGetSettings,
                     migrateLegacySettingsIfNeeded: mockMigrate,
@@ -338,12 +339,6 @@ describe('injection and theme', () => {
     function importContent(): Promise<void> {
         return new Promise<void>((resolve) => {
             jest.isolateModules(() => {
-                jest.doMock('@inboxsdk/core', () => ({
-                    load: jest.fn().mockResolvedValue({
-                        User: { getEmailAddress: () => 'sdk@gmail.com' },
-                        Router: { handleAllRoutes: jest.fn() },
-                    }),
-                }));
                 jest.doMock('../src/utils/storage', () => ({
                     getSettings: mockGetSettings,
                     migrateLegacySettingsIfNeeded: mockMigrate,

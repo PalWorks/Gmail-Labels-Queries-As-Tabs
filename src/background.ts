@@ -11,7 +11,6 @@
  * construction: no lock, no retry, no window. See `mutateSettings`.
  */
 
-import '@inboxsdk/core/background.js';
 import {
     MUTATE_SETTINGS_ACTION,
     createMutationQueue,

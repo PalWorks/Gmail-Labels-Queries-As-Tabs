@@ -20,7 +20,6 @@
     "url": "https://github.com/palani/gmail-labels-as-tabs.git"
   },
   "devDependencies": {
-    "@inboxsdk/core": "^2.2.11",
     "@types/chrome": "^0.0.260",
     "@types/jest": "^29.5.12",
     "@types/jsdom": "^27.0.0",

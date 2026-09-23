@@ -14,7 +14,6 @@
  *   modules/modals/  - All modal dialogs (pin, edit, delete, settings, import, uninstall)
  */
 
-import * as InboxSDK from '@inboxsdk/core';
 import {
     getSettings,
     ensureAccountRegistered,
@@ -37,8 +36,6 @@ import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setR
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const APP_ID = 'sdk_Gmail-Tabs_2488593e74';
 
 // Cache of the browser-wide theme so the OS-theme-change listener (which needs
 // a synchronous getter) can read it without an async storage round-trip.
@@ -262,42 +259,6 @@ async function initializeFromDOM(): Promise<void> {
     }
 }
 
-/**
- * Intended as a fallback for account detection and route changes.
- *
- * It does neither today. `InboxSDK.load()` resolves only after the SDK's
- * `pageWorld.js` sets an attribute on <head>, and injecting that file needs
- * the `scripting` permission this extension does not declare, so the promise
- * never settles — and never rejects, so the catch below never fires either.
- * The only symptom is one console error per Gmail load.
- *
- * Both jobs are covered by code we own: `initializeFromDOM()` plus the poller
- * for the account address, and the body MutationObserver plus `popstate` for
- * routes. Removing the dependency is a pending product decision; see
- * ARCHITECTURE.md section 10.
- */
-async function loadInboxSDK(): Promise<void> {
-    try {
-        console.log('Gmail Tabs: Attempting to load InboxSDK (Background)...');
-        const sdk = await InboxSDK.load(2, APP_ID);
-        console.log('Gmail Tabs: InboxSDK loaded.');
-
-        if (!getUserEmail()) {
-            const sdkEmail = sdk.User.getEmailAddress();
-            console.log('Gmail Tabs: Got email from SDK:', sdkEmail);
-            setUserEmail(sdkEmail);
-            initPromise = initPromise || finalizeInit(getUserEmail()!);
-            await initPromise;
-        }
-
-        sdk.Router.handleAllRoutes((_routeView: any) => {
-            updateActiveTab();
-        });
-    } catch (err) {
-        console.warn('Gmail Tabs: InboxSDK failed to load (Non-fatal):', err);
-    }
-}
-
 function injectPageWorld(): void {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('js/xhrInterceptor.js');
@@ -340,9 +301,6 @@ async function init(): Promise<void> {
     initializeFromDOM().catch((err) => {
         console.error('Gmail Tabs: account initialization failed; the tab bar will not appear', err);
     });
-    // Cannot reject: it swallows everything itself. See its doc comment.
-    void loadInboxSDK();
-
     attemptInjection();
     startObserver();
 
