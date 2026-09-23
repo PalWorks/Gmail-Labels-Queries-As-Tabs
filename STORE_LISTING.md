@@ -415,6 +415,13 @@ beyond the version:
   the one asset about colour contained no colour picker. The capture now centres the row
   first and fails loudly if the palette is not inside the frame.
 
+**For 1.7.1, the six assets stand unchanged.** 1.7.1 adds two visible things: the "Show as
+Tabs" entry at the end of Gmail's label menu, and the Gmail integration row on the settings
+page. Neither is on the shipped assets. A seventh screenshot of the menu item would show
+the feature the release notes lead with, and it is the one asset that would have to be shot
+against a real signed-in inbox, with the label list blurred the way screenshot 1 is. Until
+that is shot, the release notes carry the feature and the stills do not.
+
 ---
 
 ## 5. Release notes for 1.7.1
