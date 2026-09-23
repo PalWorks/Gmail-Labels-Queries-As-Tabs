@@ -35,6 +35,9 @@ const mockValidateImportData = jest.fn();
 const mockTriggerDownload = jest.fn().mockResolvedValue({ success: true });
 const mockGenerateAppsScript = jest.fn().mockReturnValue('// generated script');
 
+/** What `chrome.storage.local.get` hands back. Set per test. */
+let localStore: Record<string, unknown> = {};
+
 jest.mock('../src/utils/storage', () => ({
     getSettings: (...args: any[]) => mockGetSettings(...args),
     saveSettings: (...args: any[]) => mockSaveSettings(...args),
@@ -103,8 +106,17 @@ jest.mock('../src/modules/dragdrop', () => ({
 
 beforeAll(() => {
     (global as any).chrome = {
-        storage: { sync: { get: jest.fn(), set: jest.fn() } },
-        runtime: { sendMessage: jest.fn() },
+        storage: {
+            sync: { get: jest.fn(), set: jest.fn() },
+            // The integration-health row reads this. Its absence used to be
+            // invisible because nothing on the page read local storage.
+            local: {
+                get: jest.fn((_keys: string[], cb: (v: Record<string, unknown>) => void) => cb(localStore)),
+                set: jest.fn(),
+            },
+            onChanged: { addListener: jest.fn() },
+        },
+        runtime: { sendMessage: jest.fn(), getManifest: () => ({ version: '1.7.0' }) },
     };
 
     // Mock window.matchMedia (not available in jsdom)
@@ -170,6 +182,10 @@ function buildOptionsDOM(): void {
 
             <input type="checkbox" id="pref-unread">
             <label for="pref-unread">Show Unread Count</label>
+
+            <span id="health-label-menu-name">Label menu item</span>
+            <span class="health-pill" id="health-label-menu">-</span>
+            <button id="health-copy-btn">Copy diagnostics</button>
 
             <button id="settings-export-btn">Export Config</button>
             <button id="settings-import-btn">Import Config</button>
@@ -712,5 +728,99 @@ describe('sidebar theme toggle', () => {
 
         const toggleBtn = document.getElementById('sidebar-theme-toggle');
         expect(toggleBtn).not.toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Gmail integration health
+// ---------------------------------------------------------------------------
+
+describe('Gmail integration health', () => {
+    beforeEach(() => {
+        localStore = {};
+    });
+
+    afterEach(() => {
+        localStore = {};
+    });
+
+    test('with nothing recorded, the row says so rather than claiming a failure', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+        await flushAsync();
+        expect(document.getElementById('health-label-menu')?.textContent).toBe('Not used yet');
+        expect(document.getElementById('health-label-menu')?.classList.contains('is-unavailable')).toBe(false);
+    });
+
+    test('a working integration reads as working', async () => {
+        localStore = { integrationHealth: { labelMenu: { status: 'active', at: Date.now() } } };
+        buildOptionsDOM();
+        await loadOptionsPage();
+        await flushAsync();
+        const pill = document.getElementById('health-label-menu');
+        expect(pill?.textContent).toBe('Working');
+        expect(pill?.classList.contains('is-active')).toBe(true);
+    });
+
+    test('a broken integration says which check gave up', async () => {
+        localStore = {
+            integrationHealth: { labelMenu: { status: 'unavailable', reason: 'no-menu', at: Date.now() } },
+        };
+        buildOptionsDOM();
+        await loadOptionsPage();
+        await flushAsync();
+        const pill = document.getElementById('health-label-menu');
+        expect(pill?.textContent).toContain('Unavailable');
+        expect(pill?.textContent).toContain('menu');
+        expect(pill?.classList.contains('is-unavailable')).toBe(true);
+    });
+
+    test('the copy button puts a diagnostic on the clipboard and says it did', async () => {
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        localStore = {
+            integrationHealth: { labelMenu: { status: 'unavailable', reason: 'no-model', at: Date.now() } },
+        };
+
+        buildOptionsDOM();
+        await loadOptionsPage();
+        await flushAsync();
+
+        const button = document.getElementById('health-copy-btn') as HTMLButtonElement;
+        button.click();
+        await flushAsync();
+        await flushAsync();
+
+        // Not a call count: every loadOptionsPage() in this file leaves another
+        // DOMContentLoaded handler on the shared document, so each page load
+        // wires the button once more. What matters is what was written.
+        expect(writeText).toHaveBeenCalled();
+        const copied = writeText.mock.calls[0][0] as string;
+        expect(copied).toContain('1.7.0');
+        expect(copied).toContain('labelMenu: unavailable (no-model)');
+        // The diagnostic is a support message, not a data disclosure.
+        expect(copied).not.toMatch(/@/);
+        expect(button.textContent).toBe('Copied');
+    });
+
+    test('a refused clipboard reports itself instead of doing nothing', async () => {
+        // A button that silently does nothing is the defect this codebase has
+        // fixed most often. See ADR-017.
+        const writeText = jest.fn().mockRejectedValue(new Error('denied'));
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        buildOptionsDOM();
+        await loadOptionsPage();
+        await flushAsync();
+
+        const button = document.getElementById('health-copy-btn') as HTMLButtonElement;
+        button.click();
+        await flushAsync();
+        await flushAsync();
+
+        expect(button.textContent).toBe('Could not copy');
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
     });
 });

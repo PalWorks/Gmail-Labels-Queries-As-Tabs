@@ -771,9 +771,6 @@ export const GLOBAL_THEME_STORAGE_KEY = GLOBAL_THEME_KEY;
 /** Set on install; consumed by the first Gmail tab that sees it. */
 const PENDING_ONBOARDING_KEY = 'pendingOnboarding';
 
-/** Exported for listener checks and tests. */
-export const PENDING_ONBOARDING_STORAGE_KEY = PENDING_ONBOARDING_KEY;
-
 /**
  * Flag the tour to run in the next Gmail tab that initialises.
  *

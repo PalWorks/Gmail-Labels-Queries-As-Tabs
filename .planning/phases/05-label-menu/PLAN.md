@@ -1,6 +1,6 @@
 # v1.7.0: "Show as Tabs" in Gmail's label menu, with drift detection built first
 
-Status: proposed, awaiting approval
+Status: executed 2026-09-23, shipped as v1.7.0
 Written: 2026-09-23
 Supersedes nothing. Depends on: InboxSDK removal (commit f64a81d, ADR-021).
 
@@ -354,3 +354,35 @@ summary is unchanged and stays true, which is the reason phase 2 is built the wa
 The honest residual risk: everything here is verified against one Google account on one
 Gmail build. The design, not the measurement, is what covers the rest, and the health signal
 is what tells us if the design was wrong.
+
+---
+
+## 7. What execution changed, and why
+
+A plan that is not corrected by contact with the thing it plans is a plan
+nobody followed. Five things came out differently.
+
+| Planned | Actual | Why |
+|---|---|---|
+| C5 (one reused menu node) asserted | Recorded, not asserted | Gmail was observed doing both. Our item is removed on close and rebuilt on open, and its removal searches the whole document, so either behaviour is fine. Asserting it would have failed the canary over something that cannot affect us |
+| `history.ndjson` uncommitted, fingerprint committed | Unchanged, plus a 500-line cap | A daily job appending for years is a file nobody trims |
+| Canary escalates on the second consecutive failure | Unchanged, plus a **second opinion in a fresh browser** within a single run | A cold headless profile sometimes never answers a click at all. Measured roughly one run in four. Without the internal retry, two consecutive false failures would have happened about monthly |
+| Wait 1.5s for Gmail's menu | 10s | Measured: Gmail took 2.3s once and 4.1s another time on a cold profile. The first ceiling would have meant no item at all on a slow machine, which looks exactly like the feature not existing |
+| Health recorded as `not-attempted` on install | Records nothing on install | Every Gmail page load installs it, so a second tab would have wiped the `unavailable` a first tab had just recorded. Absence already reads as "not used yet" |
+
+Three things the plan listed as needing the live browser, now answered:
+
+1. **Closing the menu after our click.** An Escape dispatched on `document.body`
+   plus a `mousedown` on `document` closes it. Verified end to end: after the
+   click, zero menus are visible and the item is gone.
+2. **Hover highlight.** Comes free from the inherited class; the item carries
+   exactly the model's `className`.
+3. **Keyboard.** The item has `tabindex="0"` and its own Enter and Space
+   handlers, and both are tested. Whether it joins Gmail's own arrow-key order
+   is still **unverified**: Gmail walks its own list of items, which will never
+   include ours.
+
+And one the plan did not anticipate: `resolveLabelName` was handed a
+`Document` rather than an `Element` the first time our own dismissal path ran,
+because a `mousedown` dispatched on `document` has no `closest`. The unit tests
+caught it before any browser did.

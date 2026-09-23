@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-09-23T13:51:17.655Z",
+  "verdict": "PASS",
+  "gmailBuild": "fbb486d87c",
+  "chrome": "153.0.8010.52",
+  "labelRows": 36,
+  "extensionActive": true,
+  "menuOpenedAfterMs": 1406,
+  "menuOpenedSinceClickMs": 1406,
+  "labelTriggers": 26,
+  "labelNameSource": "data-label-name",
+  "menuClasses": "J-M J-M-ayU aka",
+  "menuItemClasses": [
+    "J-N J-Ph",
+    "J-N"
+  ],
+  "separatorClasses": null,
+  "triggerClasses": "pM aj0",
+  "visibleMenuItems": 4,
+  "menuNodeReused": true,
+  "contract": {
+    "C1": true,
+    "C2": true,
+    "C3": true,
+    "C4": true,
+    "C5": "recorded, not asserted",
+    "OURS": true
+  },
+  "ownItemText": "Show as Tabs",
+  "failures": []
+}

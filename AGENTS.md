@@ -4,7 +4,7 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## What this project is
 
@@ -116,6 +116,21 @@ Orientation reading order for a new agent:
     content is parsed; with nothing cached it opens light, because that is what
     `getGlobalTheme()` returns when nothing is stored, not because the OS said so. Any
     guessed state must have something that ends it. See ADR-020.
+
+17. **Read Gmail's class names, never write them.** Gmail's classes are obfuscated and
+    change when Gmail ships a build. They are identical for every installation, so a
+    hardcoded one is not wrong for some users: it is right until the day it is wrong for
+    all of them. Find the element by ARIA role or data attribute and clone one of Gmail's
+    own nodes to inherit its styling, as [src/modules/labelMenu.ts](src/modules/labelMenu.ts)
+    does. The five that remain live in [src/utils/selectors.ts](src/utils/selectors.ts) and
+    a guard fails the build if one appears anywhere else in `src/`. See ADR-022.
+
+18. **An integration with Gmail's UI fails closed and says so.** If the structure it needs
+    is not there, add nothing: Gmail is left exactly as it was, with no half-drawn item and
+    no guess. Record why in [src/modules/health.ts](src/modules/health.ts), because the
+    drift canary only ever sees one account in one A/B bucket and the options page's
+    integration row is how everybody else can tell us. Recording is local and is never
+    transmitted. See ADR-023.
 
 ## Coding conventions
 

@@ -3,7 +3,7 @@
 Storage schema and data shapes for **Gmail Labels and Search Queries as Tabs**. The
 source of truth is [src/utils/storage.ts](src/utils/storage.ts); this file explains it.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## Storage areas
 
@@ -15,6 +15,7 @@ The extension uses two Chrome storage areas deliberately, plus one browser-local
 | `chrome.storage.local` | Global theme, key `globalTheme` | Browser-wide, per-window appearance; deliberately not device-synced so all accounts in one window match |
 | `chrome.storage.local` | Last theme Gmail was seen in, key `detectedGmailTheme` | The options page and the toolbar menu have no Gmail DOM to sample, so they read what the content script saw. Only ever written from a real reading, never from a guess |
 | `chrome.storage.local` | A pending first-run tour, key `pendingOnboarding` | Set on install, read and cleared by the first Gmail tab to finish initialising |
+| `chrome.storage.local` | Whether the Gmail integrations are working, key `integrationHealth` | The options page has no Gmail DOM to test against, and the drift canary only ever sees one account in one A/B bucket. A Gmail tab records its verdict here; the options page shows it. Written only when the verdict changes, and never transmitted |
 | `localStorage` (extension origin) | The theme this browser last painted, key `glt.resolvedTheme` | The only storage a page can read **without yielding**. See below |
 
 There is no server and no other persistence. Exported config is a JSON blob the user
@@ -43,6 +44,34 @@ Three properties worth knowing:
   theme from the in-Gmail modal and the next options page load may open in the old theme
   for one frame before correcting. A stale cache costs a frame; it never costs a wrong
   final state.
+
+### Why integration health is stored at all
+
+The label-menu item depends on structure Gmail owns and changes, and Gmail runs
+experiments: a layout present for us can be absent for a slice of users. Nothing run
+locally will ever show that, so the extension records whether its last attempt worked and
+the options page shows it, with a button that copies a short diagnostic string.
+
+Three properties hold it in place:
+
+- **Nothing is transmitted.** Not on a schedule, not on a trigger. The user copies a string
+  and decides where it goes. The listing's "nothing leaves the browser" is worth more than
+  the convenience of an automatic report.
+- **It is written only on change.** The menu decides its fate on every open, which is far
+  too often to touch storage. A repeat of the stored verdict is dropped in
+  [src/modules/health.ts](src/modules/health.ts) before any chrome call.
+- **It carries nothing identifying.** No address, no label names, no tab titles. See
+  [test/health.test.ts](test/health.test.ts), which asserts it.
+
+```ts
+integrationHealth = {
+  labelMenu: {
+    status: 'active' | 'unavailable' | 'not-attempted',
+    reason?: 'no-account' | 'no-label-name' | 'no-menu' | 'no-model' | 'clone-mismatch',
+    at: number   // epoch ms
+  }
+}
+```
 
 ## Types
 

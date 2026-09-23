@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 36 suites, 721 tests as of v1.6.2.
+- 38 suites, 795 tests as of v1.7.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -74,6 +74,7 @@ test.
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
 | ... also: a module reads `prefers-color-scheme` without consulting Gmail's own theme | 'system' means Gmail's theme, not the OS. The 1.6.0 wizard asked the OS and rendered dark over a light Gmail. Twenty theme assertions existed; every one set an explicit Light or Dark, so none could have caught it. See ADR-019 |
 | ... also: an extension page loads `themeBoot.js` late, or not at all, or the options page markup loses its default theme class | The same script deferred, at the foot of the page, or folded into the page's own bundle fixes nothing and looks identical in review. Its whole value is its position. See ADR-020 |
+| ... also: a module outside `src/utils/selectors.ts` hardcodes one of Gmail's obfuscated class names | `labelMenu.ts` finds Gmail's menu by ARIA role and clones an item to inherit whatever Gmail calls it that day. That design erodes silently: one `J-N` pasted into a selector at 11pm makes the bug go away and leaves no diff that looks wrong. See ADR-022 |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 generated hostile inputs | Two comment-breakout bugs, the second found by this test on its sixth case |
 | ... also: the floating-promise lint rules are removed, downgraded to a warning, or lose their type information | A rule that reports nothing looks exactly like a rule that is absent. `npm run lint` tolerates warnings, so "warn" would have retired the guard silently. See ADR-017 |
 
@@ -85,7 +86,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-721 tests below would all have passed on the broken build.
+795 tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:

@@ -63,6 +63,8 @@ Last updated: 2026-09-22 (v1.6.2)
 | Drag-and-drop reordering | [src/modules/dragdrop.ts](src/modules/dragdrop.ts) |
 | Theme resolution: Gmail's own theme, not the OS | [src/modules/theme.ts](src/modules/theme.ts) |
 | Why an extension page opens in the right colour on its first frame | [src/modules/themeMirror.ts](src/modules/themeMirror.ts) |
+| Whether the Gmail integrations are working, and how a user reports that they are not | [src/modules/health.ts](src/modules/health.ts) |
+| How "Show as Tabs" gets into Gmail's own label menu without hardcoding a Gmail class | [src/modules/labelMenu.ts](src/modules/labelMenu.ts) |
 | The script that stamps that theme before any content is parsed | [src/themeBoot.ts](src/themeBoot.ts) |
 | Tab color palette tokens and validation | [src/utils/colors.ts](src/utils/colors.ts) |
 | Shared accessible color swatch picker | [src/modules/colorPicker.ts](src/modules/colorPicker.ts) |

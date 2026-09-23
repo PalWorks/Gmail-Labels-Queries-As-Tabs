@@ -15,6 +15,8 @@
  */
 
 import {
+    addTab,
+    removeTab,
     getSettings,
     ensureAccountRegistered,
     migrateLegacySettingsIfNeeded,
@@ -32,6 +34,7 @@ import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modu
 import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
+import { installLabelMenu } from './modules/labelMenu';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -221,6 +224,11 @@ async function finalizeInit(email: string): Promise<void> {
         // theme without reloading, so keep 'system' mode following Gmail itself
         // rather than the OS.
         watchGmailTheme(() => currentGlobalTheme);
+
+        // Only now: the item reads "Show as Tabs" or "Remove from Tabs"
+        // depending on the tab list, so installing it before settings are
+        // loaded would let it offer to add a tab that already exists.
+        installLabelMenuItem();
     } catch (e) {
         console.error('Gmail Tabs: Error in finalizeInit', e);
     }
@@ -257,6 +265,42 @@ async function initializeFromDOM(): Promise<void> {
 
         setTimeout(() => clearInterval(accountPoller), 60000);
     }
+}
+
+/**
+ * Wire the "Show as Tabs" item in Gmail's own label menu.
+ *
+ * Everything the module needs is passed in rather than imported by it, for
+ * the same reason the modals are wired this way: it keeps the module testable
+ * without a Gmail page, and it keeps the storage write path in one place.
+ *
+ * `getTabs` reads the live settings on every call rather than closing over a
+ * snapshot. The menu can be opened minutes after this runs, and by then the
+ * user may have added or removed tabs from the options page or another Gmail
+ * tab, either of which would make a captured list wrong.
+ */
+function installLabelMenuItem(): void {
+    installLabelMenu({
+        getAccountId: () => getUserEmail(),
+        getTabs: () => getAppSettings()?.tabs ?? [],
+        addLabelTab: async (title, labelName) => {
+            const account = getUserEmail();
+            if (!account) return;
+            setAppSettings(await addTab(account, title, labelName, 'label'));
+        },
+        removeLabelTab: async (tabId) => {
+            const account = getUserEmail();
+            if (!account) return;
+            setAppSettings(await removeTab(account, tabId));
+        },
+        onChanged: () => {
+            renderTabs();
+            broadcastKnownLabels();
+        },
+        onError: (error) => {
+            console.error('Gmail Tabs: the label menu action failed', error);
+        },
+    });
 }
 
 function injectPageWorld(): void {

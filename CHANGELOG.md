@@ -4,7 +4,47 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
-## [Unreleased]
+## [1.7.0] - 2026-09-23
+
+### Added
+
+- **"Show as Tabs" in Gmail's own label menu.** Click the three dots beside any
+  label in Gmail's sidebar and the menu now ends with "Show as Tabs", or
+  "Remove from Tabs" if that label already has one. It works on sublabels the
+  same way, and adds that label only: a tab for "Banking/ADCB Bank" shows what
+  Gmail shows for that label, nothing more.
+
+  A sublabel's tab is named after its leaf ("ADCB Bank"), because the bar is
+  horizontal and width is the scarce resource, unless another tab already reads
+  that, in which case it uses the full path, which is never ambiguous. Either
+  way it can be renamed afterwards.
+
+  The item hardcodes **no Gmail class name**. It finds Gmail's menu by its ARIA
+  role, clones an ordinary item from it and changes the text, so it inherits
+  Gmail's styling and a Gmail rename is not an event. See ADR-022.
+
+  Verified end to end in a real Gmail on 2026-09-23: the item appears styled
+  like its neighbours, adds `Banking/ADCB Bank` as a tab named "ADCB Bank",
+  closes the menu, and on reopening offers to remove it again.
+
+- **A row on the options page saying whether it is working.** Under Gmail
+  integration: "Working", or which check gave up. Nothing is transmitted; there
+  is a button that copies a short diagnostic if you want to send one. It exists
+  because Gmail runs experiments, so a layout present for us can be absent for
+  some users, and nothing we run locally would ever show that. See ADR-023.
+
+- **A daily drift canary** (`scripts/canary/`), for the developer rather than
+  the user. It opens a real Gmail label menu in a throwaway profile and checks
+  the structure the feature depends on, escalating on the second consecutive
+  failure. See [scripts/canary/README.md](scripts/canary/README.md).
+
+### Changed
+
+- The extension now waits up to ten seconds for Gmail to open a menu before
+  giving up, because Gmail was measured taking 2.3 and 4.1 seconds on a cold
+  profile. The first draft waited 1.5 seconds, which would have meant no item
+  at all on a slow machine, and would have looked exactly like the feature not
+  existing.
 
 ### Removed
 

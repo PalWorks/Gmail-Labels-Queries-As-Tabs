@@ -839,3 +839,127 @@ describe("'system' theme resolves from Gmail, not the OS", () => {
         expect(themeModule).toMatch(/source of truth for 'system' mode is \*Gmail's own\* rendered theme/);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Gmail's obfuscated class names stay in one file
+// ---------------------------------------------------------------------------
+
+describe("Gmail's own class names live only in the selector registry", () => {
+    /**
+     * Gmail's classes are obfuscated (`J-N`, `aj0`, `.G-atb`) and change when
+     * Gmail ships a build. They are not randomised per user, so hardcoding one
+     * is not wrong for some people and right for others: it is right until the
+     * day it is wrong for everybody at once.
+     *
+     * Two strategies exist in this repository, and the difference matters:
+     *
+     *  - `src/utils/selectors.ts` hardcodes five of them, deliberately and in
+     *    one place, so a Gmail change is one file to edit.
+     *  - `src/modules/labelMenu.ts` hardcodes none. It finds an element by its
+     *    ARIA role, clones it and inherits whatever Gmail calls it that day.
+     *
+     * The second strategy is the one that survives a Gmail redesign, and it is
+     * exactly the kind that erodes quietly: the first person debugging a menu
+     * at 11pm pastes `J-N` into a selector, the bug goes away, and the design
+     * is gone with no diff that looks wrong. This guard is what stops that.
+     */
+    const REGISTRY = 'src/utils/selectors.ts';
+
+    /**
+     * What tells Gmail's names apart from ours, mechanically.
+     *
+     * Gmail's are short and initialised: `J-N`, `J-M-ayU`, `aj0`, `G-atb`,
+     * `bsU`, `nH`, `wT`, `aim`, `pM`. Ours are lowercase English words:
+     * `nav-item`, `tab-name`, `gmail-tabs-bar`, `health-pill`, `is-active`.
+     *
+     * So: every hyphenated segment is four characters or fewer AND at least
+     * one segment carries an uppercase letter or a digit; or there is no
+     * hyphen at all and the whole name is three characters or fewer.
+     *
+     * A three-character class of our own would be caught by the second rule.
+     * That is the intended trade: the failure message says what to do, and a
+     * name that short is worth a second look anyway.
+     */
+    function looksObfuscated(token: string): boolean {
+        if (!token) return false;
+        const segments = token.split('-');
+        if (segments.length > 1) {
+            return segments.every((s) => s.length > 0 && s.length <= 4) && /[A-Z0-9]/.test(token);
+        }
+        return token.length <= 3 && /^[A-Za-z][A-Za-z0-9]*$/.test(token);
+    }
+
+    /** Every class name mentioned in a selector string. */
+    function classesIn(selector: string): string[] {
+        return Array.from(selector.replace(/\[[^\]]*\]/g, ' ').matchAll(/\.([A-Za-z][\w-]*)/g)).map((m) => m[1]);
+    }
+
+    function selectorLiterals(source: string): string[] {
+        const found: string[] = [];
+        // Only strings that are used as selectors: the argument to a query.
+        for (const m of source.matchAll(/(?:querySelector|querySelectorAll|closest|matches)\(\s*(['"`])([^'"`\n]+)\1/g)) {
+            found.push(m[2]);
+        }
+        // And classList work, where the class is named on its own.
+        for (const m of source.matchAll(/classList\.(?:add|remove|contains|toggle)\(\s*(['"`])([^'"`\n]+)\1/g)) {
+            found.push('.' + m[2]);
+        }
+        return found;
+    }
+
+    const SOURCES = walk(path.join(ROOT, 'src'), (n) => n.endsWith('.ts'))
+        .map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
+        .filter((rel) => rel !== REGISTRY);
+
+    test('no module outside the registry hardcodes one', () => {
+        const offenders: string[] = [];
+        for (const rel of SOURCES) {
+            for (const selector of selectorLiterals(read(rel))) {
+                // Attribute and role selectors are semantic, not obfuscated.
+                const guilty = classesIn(selector).filter(looksObfuscated);
+                if (guilty.length > 0) {
+                    offenders.push(`  ${rel}: ${JSON.stringify(selector)}`);
+                }
+            }
+        }
+        if (offenders.length > 0) {
+            throw new Error(
+                `Gmail class names belong in ${REGISTRY}, where one Gmail change is one file to edit:\n` +
+                    `${offenders.join('\n')}\n` +
+                    `If the module can find the element by role or attribute instead, prefer that: ` +
+                    `see src/modules/labelMenu.ts.`
+            );
+        }
+    });
+
+    test('the guard rejects what it is supposed to reject', () => {
+        // Mutation test. A guard that cannot fail reads like coverage.
+        for (const hostile of ['.J-M.J-M-ayU.aka', '.J-N', '.pM.aj0', '.J-Kh', '.G-atb', '.bsU', '.nH', '.aim']) {
+            const guilty = classesIn(hostile).filter(looksObfuscated);
+            expect(guilty.length).toBeGreaterThan(0);
+        }
+    });
+
+    test('the guard tolerates what it is supposed to tolerate', () => {
+        const fine = [
+            `document.querySelectorAll('[role="menuitem"]');`,
+            `target.closest('[data-label-name]');`,
+            `menu.querySelector('[role="menu"] [aria-haspopup]');`,
+            `el.classList.add('gmail-tabs-bar');`,
+            `bar.querySelectorAll('.tab-name');`,
+            `list.querySelectorAll('.nav-item');`,
+            `row.querySelector('.up-btn');`,
+            `pill.classList.add('is-active');`,
+        ].join('\n');
+        for (const selector of selectorLiterals(fine)) {
+            expect(classesIn(selector).filter(looksObfuscated)).toEqual([]);
+        }
+    });
+
+    test('the registry is still the place they live', () => {
+        // If this file ever stops holding any, the rule above has quietly
+        // become vacuous and should be revisited rather than left standing.
+        const registry = read(REGISTRY);
+        expect(registry).toMatch(/\.G-atb|\.bsU|\.nH|\.wT/);
+    });
+});

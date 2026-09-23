@@ -3,10 +3,10 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.6.2
+**Version this listing describes:** 1.7.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-23
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -117,7 +117,7 @@ Gmail labels and searches as tabs above your inbox: one click per view, live unr
 
 ### 1.4 Description (detailed, 16,000 characters max)
 
-5,119 characters, counting the bullet glyph as one. Plain text: the store renders no
+5,424 characters, counting the bullet glyph as one. Plain text: the store renders no
 markdown, and the bullets below are literal `•` characters.
 
 ```
@@ -128,6 +128,7 @@ Add any label as a tab. Add any Gmail search as a tab too, so "invoices from las
 WHAT YOU GET
 
 • Tabs for labels, saved searches and Gmail views, in a bar above your inbox
+• Add a label straight from Gmail: its own three-dot menu now offers "Show as Tabs"
 • Live unread counts on every tab, read from Gmail itself
 • Tab colors from an accessible palette, so the views that matter stand out
 • Drag to reorder, across as many rows as you need
@@ -171,6 +172,9 @@ Yes. They sync through Chrome's own sync, the same mechanism as your bookmarks, 
 Can I pin a search, not just a label?
 Yes. Any Gmail search works, for example is:unread from:boss or has:attachment older_than:30d, and becomes a tab you click like any other.
 
+Can I add a label without opening settings?
+Yes. Click the three dots beside any label in Gmail's sidebar and the menu ends with "Show as Tabs", or "Remove from Tabs" if it is already there. Sublabels work the same way.
+
 Does it work with Gmail dark mode?
 Yes. Light, Dark and System are all supported, and System follows Gmail's own theme, so a light Gmail on a dark desktop still gets a light tab bar.
 
@@ -192,7 +196,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 721 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 795 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -413,9 +417,32 @@ beyond the version:
 
 ---
 
-## 5. Release notes for 1.6.2
+## 5. Release notes for 1.7.0
 
-Paste this one. It covers 1.6.1 as well, which was never submitted.
+Paste this one.
+
+```
+New: add a label to your tab bar from Gmail itself. Click the three dots beside any label
+in Gmail's sidebar and the menu now ends with "Show as Tabs". If that label already has a
+tab, it says "Remove from Tabs" instead. It works on sublabels too, and adds that label
+by itself, exactly as Gmail shows it.
+
+A sublabel's tab is named after the part you see in Gmail, so "Banking/ADCB Bank" becomes
+"ADCB Bank", unless you already have a tab with that name, in which case it uses the full
+path. Either way you can rename it.
+
+New: the settings page now tells you whether that menu item is working for you, under
+Gmail integration. Gmail sometimes tries different layouts with different people, and this
+is how you can tell, and tell us. Nothing is sent anywhere: there is a button that copies
+a short note to your clipboard if you want to send one yourself.
+```
+
+1.7.0 adds no permission, changes no data flow, and adds no outbound request. It stores one
+extra thing, locally: whether that menu item worked the last time it was tried.
+
+### Release notes for 1.6.2, kept for the record
+
+It covers 1.6.1 as well, which was never submitted.
 
 ```
 Fixed: no more black flash. The tab bar used to appear over Gmail as a dark strip for a
@@ -560,7 +587,7 @@ actually type still resolves to the same entity. The repository directory is sti
 `Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
 breaking inbound links over.
 
-**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 721
+**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 795
 automated tests, three permissions, one outbound request, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets
@@ -679,15 +706,15 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-22 against `main` at the 1.6.2 release commit.
+Verified on 2026-09-23 against `main` at the 1.7.0 release commit.
 
 - [x] `npm run package` produces the zip from a clean `main`
-- [x] `manifest.json` and `package.json` both read 1.6.2 (CI checks parity)
+- [x] `manifest.json` and `package.json` both read 1.7.0 (CI checks parity)
 - [x] Privacy policy page covers the storage model, both outbound paths, all four
       permissions, the Apps Script boundary, and the site's own analytics
 - [x] Privacy policy URL points at the site this repository deploys, not the retired one.
       Guarded by `test/repoConsistency.test.ts`
-- [x] Public changelog updated through 1.6.2
+- [x] Public changelog updated through 1.7.0
 - [x] Permissions unchanged: storage, downloads, management, `https://mail.google.com/*`
 - [x] The uninstall URL is a bare form link carrying no identifying parameter (asserted in
       `test/background.test.ts`; its disclosure is asserted in `test/repoConsistency.test.ts`)
@@ -695,6 +722,15 @@ Verified on 2026-09-22 against `main` at the 1.6.2 release commit.
 - [x] All six screenshots are 1280x800, re-shot for this submission, and contain only demo data
       (Inbox, Clients, Invoices, Newsletters, Unread from team)
 - [x] Support URL points at `#/contact`, a route confirmed present in the deployed bundle
+- [x] 1.7.0 adds no permission, no outbound host and no new data flow, so the published
+      privacy policy needs no edit and CI's published-policy step passes without a deploy
+- [x] The one new stored value, `integrationHealth` in `chrome.storage.local`, is disclosed
+      in SECURITY.md and DATA_MODEL.md, is written only on change, and is never transmitted
+- [x] The label-menu item verified end to end in a real Gmail: it appears styled like its
+      neighbours, adds a nested label as a tab named after its leaf, closes the menu, and
+      offers to remove it on reopening
+- [x] Screenshots still current: 1.7.0 adds a menu item inside Gmail's own menu and one row
+      on the options page, neither of which appears in any of the six shots
 
 Still to do by hand, before submitting:
 

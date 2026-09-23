@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-23 (post 1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -626,3 +626,92 @@ worth keeping rather than an accident.
   reason the next piece of work is a drift canary rather than a feature.
 - If Gmail notifications ever become worth having, the answer is our own strip,
   not a megabyte of someone else's.
+
+## ADR-022: Read Gmail's class names, never write them
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Context:** v1.7.0
+
+Adding an item to Gmail's own label menu means depending on Gmail's markup,
+which is obfuscated and changes when Gmail ships a build.
+
+The first thing established was what actually varies. Gmail's class names are
+**not** randomised per installation: on 2026-09-23, two independent Chrome
+installations with different `--user-data-dir` values and different Chrome patch
+builds produced byte-identical strings (`J-M J-M-ayU aka`, `J-N`, `J-N-Jz`,
+`J-Kh`, `pM aj0`) and identical element counts. A competitor's shipped bundle
+hardcodes the same strings, unchanged between its May and July 2026 builds, and
+one of its selectors has since rotted for everybody at once.
+
+So the risk is not that a hardcoded selector is wrong for some users. It is that
+it is right until the day it is wrong for all of them.
+
+### Decision
+
+`src/modules/labelMenu.ts` hardcodes no Gmail class name. It finds the menu by
+`[role="menu"]`, finds an ordinary item by `[role="menuitem"]` without
+`aria-haspopup`, clones that item and replaces its text. The clone inherits
+whatever Gmail calls it that day. The label name comes from
+`[data-label-name]`, with `data-tooltip` and a `#label/` href as fallbacks.
+
+`src/utils/selectors.ts` keeps the five class names the tab bar still needs, in
+one place, deliberately.
+
+A guard in `test/repoConsistency.test.ts` enforces the split: an obfuscated-looking
+class in a selector anywhere else in `src/` fails the build.
+
+### Consequences
+
+- A Gmail rename is not an event for this feature.
+- The item is styled by Gmail, so it cannot drift away from the menu around it.
+  We ship no CSS for it at all.
+- The guard is the load-bearing part. This design erodes silently: one `J-N`
+  pasted into a selector at 11pm makes a bug go away and leaves no diff that
+  looks wrong.
+- What we still depend on is structural, and is watched daily by the canary in
+  ADR-023: ARIA roles on the menu and its items, and a readable label name.
+
+## ADR-023: Watch the drift, and let the users we cannot see report it
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Context:** v1.7.0
+
+ADR-022 removes the class-name risk but not the structural one. Two things were
+built before the feature, deliberately, because both are useful even if the
+feature is cancelled.
+
+**A drift canary** (`scripts/canary/`) clones the signed-in profile's cookies,
+runs headless Chrome on a private port, loads the built extension through CDP
+`Extensions.loadUnpacked`, opens a real label menu and asserts the contract. It
+runs daily as a systemd user timer and escalates on the **second** consecutive
+failure, with a desktop notification and a deduplicated GitHub issue.
+
+Three of its design choices came from being wrong first:
+
+- **SKIPPED is not FAIL.** A canary that cries wolf when a cookie expires is
+  ignored inside a fortnight.
+- **A failing run never overwrites `fingerprint.json`.** The first version did,
+  destroying the baseline needed to diagnose the failure it had just reported.
+- **It clicks once and waits, rather than retrying quickly.** Measured: a loop
+  clicking every 2.3 seconds for 152 seconds never opened the menu, while a
+  single click with a 12-second window opened it in 4.1 seconds on the same
+  profile. The second click lands while Gmail is still opening the menu and
+  cancels it.
+
+**A local health signal** covers what the canary cannot: one account, one Gmail
+build, one A/B bucket, one machine that has to be on. The content script records
+whether its last attempt worked; the options page shows one row and a button
+that copies a short diagnostic. Nothing is transmitted, on any schedule or
+trigger, and the diagnostic carries no address, label name or tab title.
+
+### Consequences
+
+- No new permission and no new outbound host, so the published privacy policy
+  and the store listing's data-usage answers are unchanged.
+- The canary's git history becomes the dataset nobody had: how often this
+  actually drifts. `fingerprint.json` is rewritten only when something it
+  records moves.
+- It is coupled to one developer machine being switched on. That is accepted:
+  the alternative is Gmail credentials in CI, which is not acceptable.

@@ -39,6 +39,13 @@ import { setAppSettings, setUserEmail } from './modules/state';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { writeMirroredTheme } from './modules/themeMirror';
 import {
+    IntegrationHealth,
+    describeComponentHealth,
+    formatDiagnostics,
+    readIntegrationHealth,
+    INTEGRATION_HEALTH_KEY,
+} from './modules/health';
+import {
     FeedbackCategory,
     MAX_MESSAGE_CHARS,
     buildDiagnostics,
@@ -242,6 +249,72 @@ function renderVersionTag(): void {
     } catch {
         el.textContent = '';
     }
+}
+
+/**
+ * Show whether the Gmail integrations are currently working.
+ *
+ * This exists because the drift canary only ever sees one account on one
+ * Gmail build in one A/B bucket. Gmail runs experiments, so a structure that
+ * is present for us can be absent for a slice of users, and nothing we run
+ * locally will ever show that. This row is what lets those users tell us.
+ *
+ * Nothing is transmitted. The button copies a string; the user decides where
+ * it goes, if anywhere.
+ */
+async function renderIntegrationHealth(): Promise<void> {
+    const pill = document.getElementById('health-label-menu');
+    if (!pill) return;
+
+    const health: IntegrationHealth = await readIntegrationHealth();
+    const entry = health.labelMenu;
+
+    pill.textContent = describeComponentHealth(entry);
+    pill.classList.remove('is-active', 'is-unavailable');
+    if (entry?.status === 'active') pill.classList.add('is-active');
+    else if (entry?.status === 'unavailable') pill.classList.add('is-unavailable');
+}
+
+function setupIntegrationHealth(): void {
+    const button = document.getElementById('health-copy-btn');
+    if (button) {
+        button.addEventListener('click', () => {
+            void (async () => {
+                let version = '';
+                try {
+                    version = chrome.runtime.getManifest().version;
+                } catch {
+                    /* an orphaned page still has something useful to copy */
+                }
+                const text = formatDiagnostics(await readIntegrationHealth(), version);
+                try {
+                    await navigator.clipboard.writeText(text);
+                    button.textContent = 'Copied';
+                } catch {
+                    // Clipboard permission can be refused, and a button that
+                    // silently does nothing is the defect this codebase has
+                    // fixed most often. Show the text instead of hiding it.
+                    button.textContent = 'Could not copy';
+                    console.warn('Options: clipboard unavailable. Diagnostics:\n' + text);
+                }
+                setTimeout(() => {
+                    button.textContent = 'Copy diagnostics';
+                }, 2000);
+            })();
+        });
+    }
+
+    // A Gmail tab records its verdict while this page is open, so follow it
+    // rather than showing whatever was true when the page loaded. Guarded the
+    // same way every other listener here is: an orphaned page has no
+    // `storage.onChanged` to attach to, and a page that cannot follow changes
+    // must still render the ones it already has.
+    if (!chrome.storage?.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes[INTEGRATION_HEALTH_KEY]) {
+            void renderIntegrationHealth();
+        }
+    });
 }
 
 function updateSidebarThemeIcon(theme: string): void {
@@ -1129,6 +1202,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Page chrome that must render even with no Gmail account set up yet.
     renderVersionTag();
+    setupIntegrationHealth();
+    renderIntegrationHealth().catch((e) => {
+        // The row stays on its placeholder rather than the page failing.
+        console.error('Options: could not read integration health', e);
+    });
     applyStoredThemeEarly().catch((e) => {
         // Leaves the page on its default theme rather than unthemed and silent.
         console.error('Options: could not apply the stored theme', e);

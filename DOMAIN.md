@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## The problem it solves
 
@@ -67,7 +67,19 @@ away, and it can automate routine cleanup of those labels.
    profile via a `chrome.storage.local` change event. An extension page opened afterwards
    paints the last resolved theme on its first frame, from a synchronous cache, because
    correcting the colour in front of the user is a defect rather than a detail.
-6. **A settings change is described, not performed.** Every surface that can edit settings
+6. **A label becomes a tab from two places, and they mean the same thing.** The
+   settings modal and the options page have always been able to add a label tab.
+   Since v1.7.0 so has Gmail's own label menu, through the same `addTab` op and
+   the same write path. It adds **that label only**: Gmail's `#label/Parent`
+   shows what Gmail shows for that label, and rolling a parent's sublabels into
+   one tab would be inventing a Gmail feature rather than augmenting one.
+7. **A nested label's tab is named after its leaf, until that is ambiguous.**
+   Gmail shows `Banking/ADCB Bank` as "ADCB Bank" indented under "Banking", and
+   the tab bar is horizontal, where width is what runs out. So the leaf is the
+   default title and the full path is the fallback when another tab already
+   carries that leaf. The stored `value` is always the full label name, because
+   that is what navigation needs.
+8. **A settings change is described, not performed.** Every surface that can edit settings
    sends a `SettingsOp` to the service worker, which applies them one at a time per
    account. Nothing reads settings, edits the object and saves it back; that is what used
    to lose tabs when two surfaces wrote at once. See ADR-013.

@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## Privacy promise
 
@@ -24,6 +24,14 @@ extension is removed. Nothing is sent from the extension; the URL carries no add
 settings and no identifier, so the form host learns only that somebody uninstalled, and
 only you decide whether to answer it. See ADR-014.
 
+v1.7.0 added a record of whether the "Show as Tabs" item is working, in
+`chrome.storage.local` under `integrationHealth`. It is worth being explicit about what it
+is not: it is written only when the verdict changes, it is read only by the options page,
+it holds a status, a reason and a timestamp, and **it is never transmitted**. The options
+page can copy a short diagnostic to the clipboard if you want to send one; where it goes
+after that is entirely your decision, and the string carries no address, label name or tab
+title. See ADR-023.
+
 The disclosure is enforced rather than promised: `test/repoConsistency.test.ts` fails the
 build if the service worker names an outbound host that is missing from this file, the
 in-extension privacy page or [STORE_LISTING.md](STORE_LISTING.md).
@@ -36,7 +44,7 @@ amended by ADR-012.
 
 | Permission | Purpose |
 |------------|---------|
-| `storage` | Persist per-account tabs and rules, and the global theme |
+| `storage` | Persist per-account tabs and rules, the global theme, and whether the Gmail integrations are currently working |
 | _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |

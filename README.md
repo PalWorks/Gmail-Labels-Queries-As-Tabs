@@ -63,6 +63,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | Feature | Description |
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
+| **"Show as Tabs" in Gmail's own menu** | The three-dot menu beside any label, including sublabels, ends with "Show as Tabs", or "Remove from Tabs" if it already has one. The item hardcodes no Gmail class name: it clones one of Gmail's own menu items, so it inherits Gmail's styling and survives a Gmail rename. See ADR-022 |
 | **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
 | **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
@@ -76,6 +77,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | **Guided tour** | Six steps that demonstrate the tab bar in a working miniature inside the panel, not screenshots of it. Opens over Gmail so the theme step retints your real bar; falls back to a standalone page when no Gmail tab is open |
 | **Toolbar menu** | Configure tabs, Show me around, All settings, Help & support, behind the extension icon |
 | **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
+| **Integration health** | One row on the options page saying whether the Gmail menu item is working, with a button that copies a short diagnostic. Nothing is transmitted; the copying is yours to do |
 | **Privacy First** | No background network requests, no telemetry; everything stays local |
 
 ## Architecture
@@ -345,6 +347,8 @@ Gmail-Labels-As-Tabs/
 │   │   ├── dragdrop.ts               # Drag and drop reordering
 │   │   ├── theme.ts                  # Theme management & Gmail dark detection
 │   │   ├── themeMirror.ts            # The last painted theme, readable without yielding
+│   │   ├── labelMenu.ts              # "Show as Tabs" inside Gmail's own label menu
+│   │   ├── health.ts                 # Whether the Gmail integrations are working, locally
 │   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
 │   │   ├── rules.ts                  # Automation rules & Apps Script generation
 │   │   └── modals/                   # Modal dialogs (7 files)
@@ -429,6 +433,8 @@ npx jest test/modals/
 | Tab Rendering | `tabs.test.ts` | Tab creation, active state, hash navigation |
 | Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection, and the window where 'system' is still a guess |
 | First-frame theme | `themeMirror.test.ts` | The synchronous cache and the boot stamp that uses it |
+| Gmail label menu | `labelMenu.test.ts` | Reading which label was clicked, cloning one of Gmail's items, the toggle, sublabel titles, and every way it gives up |
+| Integration health | `health.test.ts` | Recording only on change, surviving an orphaned context, and carrying nothing identifying |
 | Options Page | `options.test.ts` | Account detection, section navigation, rule UI |
 | Import/Export | `importExport.test.ts` | Schema validation, export format, round-trip |
 | Modals | `modals/*.test.ts` | Pin, edit, delete, import, uninstall modal logic |
@@ -443,7 +449,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 36 test files, 721 test cases.**
+**Total: 38 test files, 795 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -471,7 +477,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 721 tests across 36 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 795 tests across 38 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -614,7 +620,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (721 tests across 36 suites)
+npm test          # Jest (795 tests across 38 suites)
 npm run build     # Verify production build
 ```
 

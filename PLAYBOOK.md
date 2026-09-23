@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-23 (v1.7.0)
 
 ## Local setup
 
@@ -101,6 +101,31 @@ almost always in the code or the document it points at.
 | CI: `dist/icons` undeclared | `copy-assets` swept up a file the manifest does not name. Two promo tiles shipped to users that way |
 | CI: published privacy policy | The live page no longer describes this code. Fix the page in the other repository and dispatch its deploy |
 | `rulesProperty` | The escaping is wrong for one of the generator's four output languages. The failure prints the seed case |
+| `repoConsistency` Gmail class | A module outside `src/utils/selectors.ts` hardcoded one of Gmail's obfuscated names. Find the element by role or attribute instead, as `labelMenu.ts` does, or put the selector in the registry with a reason |
+
+## When the drift canary fails
+
+The canary watches the structure Gmail must keep for the "Show as Tabs" item to
+work. It runs daily as a systemd user timer and escalates on the **second**
+consecutive failure. See [scripts/canary/README.md](scripts/canary/README.md).
+
+```
+scripts/canary/install-canary.sh --status     # when it last ran, and what it said
+tail -40 scripts/canary/canary.log            # the last few runs in full
+NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs   # run it now
+```
+
+| Check | What Gmail changed | What to do |
+|---|---|---|
+| C1 | Label rows no longer expose a name through `data-label-name`, `data-tooltip` or a `#label/` href | Add a fourth reader in `resolveLabelName`. Until then the item does not appear, which is correct behaviour, not a bug |
+| C2 | Clicking a label's trigger no longer opens exactly one `[role="menu"]` | Check whether Gmail was merely slow first: the log prints how long it took. If the structure really changed, the feature disables itself and users see Gmail unchanged |
+| C3 | The menu no longer holds an ordinary `[role="menuitem"]` | There is nothing to clone. Do not substitute a hand-built item: it will look foreign and will drift |
+| C4 | A clone no longer renders like the item it came from | Gmail styles items by something other than the class. Investigate before shipping anything |
+| OURS | Our item is missing although C1 to C4 all passed | This one is ours, not Gmail's. Start at `installLabelMenuItem()` in `content.ts` |
+
+Two verdicts are not failures. **SKIPPED** means the canary could not reach a
+signed-in Gmail and learned nothing. A **note** that Gmail took longer to open
+the menu than the extension waits means our item was correctly absent.
 
 ## Troubleshooting (production symptoms)
 
@@ -111,6 +136,7 @@ almost always in the code or the document it points at.
 | Theme not propagating across accounts | `storage.local` change listener not firing | [src/content.ts](src/content.ts), [src/utils/storage.ts](src/utils/storage.ts) |
 | Rules missing for a tab | Tab has no resolvable Gmail label (hash tab) | [src/modules/rules.ts](src/modules/rules.ts) |
 | Build ships console output | esbuild `drop` not applied | [build.js](build.js) |
+| "Show as Tabs" missing from a label menu | Gmail did not open a menu within the wait, or gave nothing to clone | The options page says which, under Gmail integration. Then [src/modules/labelMenu.ts](src/modules/labelMenu.ts) |
 
 ## CI
 

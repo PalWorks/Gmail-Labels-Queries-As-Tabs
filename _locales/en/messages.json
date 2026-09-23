@@ -2,5 +2,13 @@
     "appDescription": {
         "message": "Turn Gmail labels and saved searches into a tab bar above your inbox. Unread counts, colors, cleanup rules.",
         "description": "The description of the application"
+    },
+    "labelMenuShowAsTabs": {
+        "message": "Show as Tabs",
+        "description": "Item added to Gmail's own label menu, which pins that label to the tab bar"
+    },
+    "labelMenuRemoveFromTabs": {
+        "message": "Remove from Tabs",
+        "description": "The same item when the label already has a tab"
     }
 }

@@ -1576,3 +1576,26 @@ body.theme-light .feedback-status.is-success {
         position: static;
     }
 }
+
+/* ── Gmail integration health ─────────────────────────────────── */
+
+/*
+ * One word about whether a Gmail integration is working. It uses the existing
+ * text tokens rather than a colour of its own: the contrast guard reads those
+ * tokens, and a status that is only distinguishable by colour is not a status
+ * a colour-blind user can read, which is why the word carries the meaning and
+ * the colour only reinforces it.
+ */
+.health-pill {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.health-pill.is-active {
+    color: var(--text-accent);
+}
+
+.health-pill.is-unavailable {
+    color: var(--text-danger);
+}
