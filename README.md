@@ -449,7 +449,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 38 test files, 795 test cases.**
+**Total: 38 test files, 802 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -477,7 +477,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 795 tests across 38 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 802 tests across 38 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -620,7 +620,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (795 tests across 38 suites)
+npm test          # Jest (802 tests across 38 suites)
 npm run build     # Verify production build
 ```
 

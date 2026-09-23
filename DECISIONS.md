@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-23 (v1.7.0)
+Last updated: 2026-09-23 (v1.7.1)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -631,7 +631,7 @@ worth keeping rather than an accident.
 
 **Date:** 2026-09-23
 **Status:** Accepted
-**Context:** v1.7.0
+**Context:** v1.7.1
 
 Adding an item to Gmail's own label menu means depending on Gmail's markup,
 which is obfuscated and changes when Gmail ships a build.
@@ -676,7 +676,7 @@ class in a selector anywhere else in `src/` fails the build.
 
 **Date:** 2026-09-23
 **Status:** Accepted
-**Context:** v1.7.0
+**Context:** v1.7.1
 
 ADR-022 removes the class-name risk but not the structural one. Two things were
 built before the feature, deliberately, because both are useful even if the

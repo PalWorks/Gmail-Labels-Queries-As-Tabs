@@ -75,6 +75,15 @@ export const MENU_ITEM_ID = 'glt-show-as-tabs';
 const MENU_WAIT_MS = 10000;
 const MENU_POLL_MS = 50;
 
+/**
+ * How long a menu that was already open when the press happened is ignored.
+ *
+ * Gmail closes the old menu and opens the new one in its own handlers, which
+ * run after ours. Past this grace period, a still-visible menu is taken at face
+ * value, which is right when Gmail reuses one node and simply repositions it.
+ */
+const STALE_MENU_GRACE_MS = 300;
+
 export interface LabelMenuDeps {
     /** The signed-in address, or null before it has been detected. */
     getAccountId: () => string | null;
@@ -344,7 +353,21 @@ function injectInto(menu: HTMLElement, labelName: string): boolean {
         return false;
     }
 
+    // Gmail tears its menu down on **mousedown**, not on click. Measured with
+    // a real mouse through Chrome's input pipeline: our item receives
+    // pointerdown and mousedown, and then the click lands on whatever Gmail has
+    // put under the cursor by the time the button comes back up. Binding to
+    // click alone meant the item did nothing at all for a real user, while
+    // every test and every scripted check passed, because a dispatched click
+    // goes wherever it is aimed.
+    //
+    // So mousedown is the activator, which is also what Gmail's own items do.
+    // Click stays bound for the case where something fires it instead; the
+    // flag makes the pair idempotent.
+    let activated = false;
     const activate = (event: Event): void => {
+        if (activated) return;
+        activated = true;
         event.preventDefault();
         event.stopPropagation();
         // The tab list is read again here rather than reusing the one the
@@ -356,6 +379,7 @@ function injectInto(menu: HTMLElement, labelName: string): boolean {
         // does the thing the user actually asked for.
         void act(labelName);
     };
+    item.addEventListener('mousedown', activate);
     item.addEventListener('click', activate);
     item.addEventListener('keydown', (event) => {
         const key = (event as KeyboardEvent).key;
@@ -428,10 +452,17 @@ function stopWaiting(): void {
  */
 function waitForMenu(labelName: string): void {
     stopWaiting();
+    removeMenuItem();
     const startedAt = Date.now();
+    // Whatever was already on screen when the press happened. Our own capture
+    // listener runs before Gmail's, so at this instant the menu from the
+    // previous label is still open, and a poll 50ms later could inject into it
+    // and then stop, leaving nothing in the menu that actually opens.
+    const alreadyOpen = visibleMenu();
+
     pollTimer = setInterval(() => {
         const menu = visibleMenu();
-        if (menu) {
+        if (menu && (menu !== alreadyOpen || Date.now() - startedAt >= STALE_MENU_GRACE_MS)) {
             stopWaiting();
             injectInto(menu, labelName);
             return;
@@ -448,6 +479,20 @@ function waitForMenu(labelName: string): void {
  * whatever they do to the DOM.
  */
 function onPointerDown(event: Event): void {
+    const target = event.target as Element | null;
+
+    // A press on our own item is not "a click somewhere else". Removing the
+    // item here would take it out of the document between mousedown and
+    // mouseup, and the browser then dispatches the click to the nearest
+    // ancestor still in the document rather than to the removed node: the
+    // handler would never run and the item would do nothing at all.
+    //
+    // Neither the unit tests nor the live check could have caught it, because
+    // both dispatch `click` directly at the element, and a detached node
+    // receives a directly dispatched event perfectly well. Only a real mouse
+    // would have found it.
+    if (typeof target?.closest === 'function' && target.closest(`#${MENU_ITEM_ID}`)) return;
+
     const labelName = resolveLabelName(event.target);
     if (!labelName) {
         // A click anywhere else is the menu closing, or another menu opening.

@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-23 (v1.7.0)
+Last updated: 2026-09-23 (v1.7.1)
 
 ## Privacy promise
 
@@ -24,7 +24,7 @@ extension is removed. Nothing is sent from the extension; the URL carries no add
 settings and no identifier, so the form host learns only that somebody uninstalled, and
 only you decide whether to answer it. See ADR-014.
 
-v1.7.0 added a record of whether the "Show as Tabs" item is working, in
+v1.7.1 added a record of whether the "Show as Tabs" item is working, in
 `chrome.storage.local` under `integrationHealth`. It is worth being explicit about what it
 is not: it is written only when the verdict changes, it is read only by the options page,
 it holds a status, a reason and a timestamp, and **it is never transmitted**. The options

@@ -130,10 +130,17 @@ function clickTrigger(labelName: string): void {
     trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 }
 
-/** Gmail opens the menu a moment after the click; drive the module's poll. */
+/**
+ * Gmail opens the menu a moment after the press; drive the module's poll.
+ *
+ * Past the grace period in which a menu that was already open is ignored, so
+ * this models the ordinary case: press, Gmail closes whatever was open, Gmail
+ * opens the new one. The test that cares about the boundary steps the timers
+ * itself.
+ */
 function letMenuOpen(): void {
     openMenu();
-    jest.advanceTimersByTime(100);
+    jest.advanceTimersByTime(400);
 }
 
 // ---------------------------------------------------------------------------
@@ -666,5 +673,152 @@ describe('what the clone must not inherit', () => {
         letMenuOpen();
 
         expect(document.querySelectorAll('#gmail-owns-this-id').length).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// What only a real mouse would have found
+// ---------------------------------------------------------------------------
+
+describe('a real mouse press, not a dispatched click', () => {
+    /**
+     * A browser fires mousedown, then mouseup, then click. If the mousedown
+     * target has left the document by then, the click goes to the nearest
+     * ancestor still in it, and the removed node's handler never runs.
+     *
+     * Every other test here dispatches `click` straight at the element, and a
+     * detached node receives a directly dispatched event perfectly well. So
+     * does the live browser check. This is the sequence that tells them apart.
+     */
+    function pressAndRelease(el: HTMLElement): void {
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        if (el.isConnected) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+
+    test('pressing the item does not remove it before the click lands', async () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        pressAndRelease(item);
+        await Promise.resolve();
+
+        expect(addLabelTab).toHaveBeenCalledWith('Receipts', 'Receipts');
+    });
+
+    test('pressing anywhere else still takes the item away', () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+        expect(document.getElementById(MENU_ITEM_ID)).not.toBeNull();
+
+        pressAndRelease(document.body);
+        expect(document.getElementById(MENU_ITEM_ID)).toBeNull();
+    });
+});
+
+describe('a menu that was already open', () => {
+    test('is not mistaken for the one the new label is about to open', () => {
+        // Our capture listener runs before Gmail's, so when the user presses a
+        // second label the first label's menu is still on screen. Injecting
+        // into it and stopping would leave nothing in the menu that opens.
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+        expect(document.getElementById(MENU_ITEM_ID)?.textContent).toBe('Show as Tabs');
+
+        // Second label, while the first menu is still laid out.
+        tabs = [{ id: 'tab-1', title: 'Banking', type: 'label', value: 'Banking' }];
+        clickTrigger('Banking');
+
+        // Within the grace period the still-open menu is ignored, so nothing
+        // has been put back yet.
+        jest.advanceTimersByTime(200);
+        expect(document.getElementById(MENU_ITEM_ID)).toBeNull();
+
+        // Past it, the menu is taken at face value: Gmail reuses one node and
+        // repositions it, so this is the right menu after all.
+        jest.advanceTimersByTime(200);
+        expect(document.getElementById(MENU_ITEM_ID)?.textContent).toBe('Remove from Tabs');
+    });
+
+    test('a genuinely new menu node is used at once, with no grace period', () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        // Gmail builds a fresh node for the next label instead of reusing one.
+        closeMenu();
+        const fresh = menu().cloneNode(true) as HTMLElement;
+        fresh.id = 'gmail-label-menu-2';
+        fresh.querySelector(`#${MENU_ITEM_ID}`)?.remove();
+        document.body.appendChild(fresh);
+
+        clickTrigger('Banking');
+        withHeight(fresh, 292);
+        fresh.querySelectorAll('[role="menuitem"]').forEach((i) => withHeight(i, 32));
+        fresh.querySelectorAll('.J-Kh').forEach((s) => withHeight(s, 9));
+        jest.advanceTimersByTime(100);
+
+        expect(fresh.querySelector(`#${MENU_ITEM_ID}`)).not.toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Which event actually activates it
+// ---------------------------------------------------------------------------
+
+describe('activation', () => {
+    /**
+     * Gmail tears its menu down on mousedown, not on click. Measured with a
+     * real mouse through Chrome's input pipeline: our item receives pointerdown
+     * and mousedown, and the click then lands on whatever Gmail has put under
+     * the cursor by the time the button comes back up.
+     *
+     * So binding to click alone meant the item did nothing at all for a real
+     * user, while every test here and every scripted browser check passed,
+     * because a dispatched click goes wherever it is aimed. These tests are
+     * what stop that coming back.
+     */
+    test('mousedown alone is enough', async () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        document.getElementById(MENU_ITEM_ID)!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await Promise.resolve();
+
+        expect(addLabelTab).toHaveBeenCalledWith('Receipts', 'Receipts');
+    });
+
+    test('a mousedown followed by a click acts once, not twice', async () => {
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+
+        const item = document.getElementById(MENU_ITEM_ID) as HTMLElement;
+        item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        item.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+
+        expect(addLabelTab).toHaveBeenCalledTimes(1);
+    });
+
+    test('a rebuilt item can act again', () => {
+        // The one-shot flag lives with the item, not with the module, so the
+        // next menu open gets a fresh one.
+        install();
+        clickTrigger('Receipts');
+        letMenuOpen();
+        document.getElementById(MENU_ITEM_ID)!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        clickTrigger('Banking');
+        letMenuOpen();
+        document.getElementById(MENU_ITEM_ID)!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        expect(addLabelTab).toHaveBeenCalledTimes(2);
     });
 });

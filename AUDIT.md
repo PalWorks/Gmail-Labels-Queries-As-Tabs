@@ -29,7 +29,7 @@
 > theme is known, and extension pages open in the theme the browser last painted,
 > stamped synchronously before any content is parsed. Both of the second pair were
 > reported as a black flash, and neither could have been caught by any assertion about a
-> final state, because every final state was already correct. 38 suites, 795 tests.
+> final state, because every final state was already correct. 38 suites, 802 tests.
 >
 > The website in the sibling repository now runs this extension's own tour, vendored
 > rather than re-created, and its FAQ and structured data were aligned with the store
@@ -68,13 +68,13 @@
 > section 7, and the execution record in
 > [.planning/V1.5-HARDENING-PLAN.md](.planning/V1.5-HARDENING-PLAN.md).
 
-> **Refresh note (2026-09-23, v1.7.0):** `@inboxsdk/core` is gone (ADR-021), so the content
+> **Refresh note (2026-09-23, v1.7.1):** `@inboxsdk/core` is gone (ADR-021), so the content
 > script is 76.5 KB and contains no third-party code. Two modules are new:
 > `src/modules/labelMenu.ts`, which adds "Show as Tabs" to Gmail's own label menu while
 > hardcoding none of Gmail's class names (ADR-022), and `src/modules/health.ts`, which
 > records locally whether that works and is never transmitted (ADR-023). A drift canary in
 > `scripts/canary/` opens a real Gmail label menu daily and checks the structure the feature
-> depends on. The suite is 38 files, 795 tests.
+> depends on. The suite is 38 files, 802 tests.
 
 > **Refresh note (2026-09-21, v1.4.0):** since v1.2.1 the tree gained `src/utils/colors.ts`,
 > `src/modules/colorPicker.ts`, `src/modules/ruleTemplates.ts` and `src/modules/feedback.ts`,

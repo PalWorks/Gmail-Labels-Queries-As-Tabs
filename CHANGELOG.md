@@ -4,7 +4,13 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
-## [1.7.0] - 2026-09-23
+## [1.7.1] - 2026-09-23
+
+> 1.7.0 was tagged and never submitted. Driving Chrome's real input pipeline
+> found that the menu item did nothing at all for an actual mouse, because Gmail
+> takes its menu apart on mouse **down** and the item was bound to `click`.
+> Everything below describes what 1.7.1 actually does; the tag is left in place
+> as the record of a version that was caught before it shipped.
 
 ### Added
 
@@ -40,6 +46,10 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 ### Changed
 
+- The item activates on mouse **down**, because that is when Gmail takes its own
+  menu apart. Bound to `click` it did nothing at all for a real user while every
+  test and every scripted browser check passed, since a dispatched click goes
+  wherever it is aimed. Found by driving Chrome's real input pipeline.
 - The extension now waits up to ten seconds for Gmail to open a menu before
   giving up, because Gmail was measured taking 2.3 and 4.1 seconds on a cold
   profile. The first draft waited 1.5 seconds, which would have meant no item

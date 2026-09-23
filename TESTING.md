@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-23 (v1.7.0)
+Last updated: 2026-09-23 (v1.7.1)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 38 suites, 795 tests as of v1.7.0.
+- 38 suites, 802 tests as of v1.7.1.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -86,7 +86,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-795 tests below would all have passed on the broken build.
+802 tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:
@@ -102,6 +102,45 @@ frame-accurate sampler, and it is recorded here so the next person does not have
 invent it. The unit tests cover the mechanism the fix introduced: that a guess is marked,
 dropped when a real reading arrives, committed when none ever does, and never published as
 though it came from Gmail.
+
+### The bug a dispatched event can never find
+
+v1.7.1 added an item to Gmail's own label menu. Every unit test passed, and so did a
+scripted check in a real Gmail that opened the menu, found the item and clicked it. For a
+real user it did nothing at all.
+
+Gmail tears its menu down on **mousedown**, not on click. A real mouse produces
+pointerdown, mousedown, mouseup, click, and by the time the button comes back up Gmail has
+replaced what is under the cursor, so the click lands on a Gmail element instead. Measured
+through Chrome's own input pipeline, the event trace on our item read:
+
+```
+item:pointerdown   doc:mousedown   item:mousedown   doc:click on pp
+```
+
+`item:click` never appears. A dispatched `new MouseEvent('click')` goes wherever it is
+aimed, including at a node the browser would never have given a click to, which is why
+every test agreed with the broken build.
+
+The item now activates on `mousedown`, which is what Gmail's own items do, and
+[test/labelMenu.test.ts](test/labelMenu.test.ts) asserts that mousedown alone is enough,
+that a mousedown and a click together act once, and that a rebuilt item can act again.
+
+The lesson generalises: **when testing something embedded in another application's UI,
+drive it through the browser's input pipeline at least once.** `page.mouse.click(x, y)`
+found this in one run; nothing else would have.
+
+What that check cannot be made into is a routine one. Gmail reveals a label's three-dot
+trigger only on hover, and headless Chrome raises that hover unreliably: across seven
+attempts the trigger became clickable in three. Two of those three completed the whole
+sequence, a real mouse press adding the tab within 500ms. The other four never got as far
+as opening Gmail's menu.
+
+So the real-mouse check is a **deliberate, occasional** one, run when the way the item is
+activated changes, and the daily canary covers the rest by dispatching events. If the
+activation event is ever changed again, run it. The script is not committed because it is
+throwaway scaffolding; what it proved is above, and the unit tests in
+[test/labelMenu.test.ts](test/labelMenu.test.ts) encode the conclusion.
 
 ### Two gates that cannot live in jest
 

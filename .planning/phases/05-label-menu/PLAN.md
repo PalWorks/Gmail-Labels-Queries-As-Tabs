@@ -1,6 +1,7 @@
-# v1.7.0: "Show as Tabs" in Gmail's label menu, with drift detection built first
+# v1.7.x: "Show as Tabs" in Gmail's label menu, with drift detection built first
 
-Status: executed 2026-09-23, shipped as v1.7.0
+Status: executed 2026-09-23. Tagged v1.7.0, which a real mouse caught as broken before
+it was submitted; shipped as v1.7.1.
 Written: 2026-09-23
 Supersedes nothing. Depends on: InboxSDK removal (commit f64a81d, ADR-021).
 
@@ -20,7 +21,7 @@ with instrumentation already around it.
 | 1 | Drift canary | Measures whether Gmail's structure moves at all, before we bet a feature on it |
 | 2 | Local health signal | Covers the users the canary will never reach: other accounts, other A/B buckets |
 | 3 | The menu item | Built against a contract that is now measured and monitored |
-| 4 | Release 1.7.0 | One release, one review cycle |
+| 4 | Release 1.7.1 | One release, one review cycle |
 
 Phases 1 and 2 are useful even if phase 3 is cancelled. That is the point of the order.
 
@@ -332,7 +333,7 @@ the plan; each could change a detail:
 
 Ordinary `PLAYBOOK.md` release flow, with two notes specific to this one.
 
-1. Version 1.7.0, not 1.6.3: a new user-visible feature.
+1. Version 1.7.x, not 1.6.3: a new user-visible feature.
 2. **No permission change and no new outbound host**, so the published privacy policy in the
    other repository needs no edit and CI's published-policy step passes without a deploy.
    Confirm rather than assume, since that page went four versions stale once before.
@@ -382,7 +383,20 @@ Three things the plan listed as needing the live browser, now answered:
    is still **unverified**: Gmail walks its own list of items, which will never
    include ours.
 
-And one the plan did not anticipate: `resolveLabelName` was handed a
+And two the plan did not anticipate, both found only by driving Chrome's real
+input pipeline rather than dispatching events:
+
+- **Gmail tears its menu down on mousedown, not on click.** Bound to `click`,
+  the item did nothing at all for a real user while every test passed. The
+  event trace read `item:pointerdown, doc:mousedown, item:mousedown,
+  doc:click on pp`: no `item:click` at all. It now activates on mousedown, as
+  Gmail's own items do.
+- **Our own listener was tearing the item out from under the press.** The
+  capture-phase mousedown handler treated a press on our item as "a click
+  somewhere else" and removed it, and a node removed before mouseup never
+  receives the click that follows.
+
+And one from reading rather than running: `resolveLabelName` was handed a
 `Document` rather than an `Element` the first time our own dismissal path ran,
 because a `mousedown` dispatched on `document` has no `closest`. The unit tests
 caught it before any browser did.

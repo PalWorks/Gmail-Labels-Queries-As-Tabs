@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-23 (v1.7.0)
+Last updated: 2026-09-23 (v1.7.1)
 
 ## The problem it solves
 
@@ -69,7 +69,7 @@ away, and it can automate routine cleanup of those labels.
    correcting the colour in front of the user is a defect rather than a detail.
 6. **A label becomes a tab from two places, and they mean the same thing.** The
    settings modal and the options page have always been able to add a label tab.
-   Since v1.7.0 so has Gmail's own label menu, through the same `addTab` op and
+   Since v1.7.1 so has Gmail's own label menu, through the same `addTab` op and
    the same write path. It adds **that label only**: Gmail's `#label/Parent`
    shows what Gmail shows for that label, and rolling a parent's sublabels into
    one tab would be inventing a Gmail feature rather than augmenting one.
