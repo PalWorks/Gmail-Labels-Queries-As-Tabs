@@ -20,6 +20,10 @@ const fakeSettings: Settings = {
     tabs: [{ id: '1', title: 'Inbox', value: '#inbox', type: 'hash' }],
     theme: 'system',
     showUnreadCount: true,
+    senderIcons: false,
+    senderIconsFavicons: false,
+    senderIconsDomain: true,
+    senderIconsMailbox: 'initial',
     rules: [],
 };
 

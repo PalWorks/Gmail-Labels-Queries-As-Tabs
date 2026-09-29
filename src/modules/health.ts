@@ -23,20 +23,39 @@
  *  - **No new permission and no new host.** This is `chrome.storage.local`,
  *    which the extension already uses for the theme.
  *  - **Writes only on change.** The label menu decides its fate every time a
- *    menu opens, which is far too often to write storage. A repeat of the
- *    status already stored is dropped without a write.
+ *    menu opens, and sender icons on every inbox redraw, which is far too
+ *    often to write storage. A repeat of the status a component last stored
+ *    is dropped without a write.
+ *
+ * ## One key per component
+ *
+ * Until v1.8 every component shared one `integrationHealth` object, written
+ * by reading it, changing one entry and writing it back. With one component
+ * that was harmless. With two in the same content script it is a lost update
+ * waiting to happen: both read `{}`, each writes back only its own entry, and
+ * whichever lands second erases the other. So each component now owns its own
+ * key and a write is a single `set` with no read before it. The old shared
+ * object is still read, underneath, so a verdict recorded by an older version
+ * is not lost on upgrade; nothing writes it any more.
  */
 
 import { ignoreChromeError, isExtensionContextAlive } from './extensionContext';
 
 /** Parts of the extension that depend on Gmail's own markup. */
-export type IntegrationComponent = 'labelMenu';
+export type IntegrationComponent = 'labelMenu' | 'senderIcons';
+
+/** Every component, so a reader can ask for all of their keys at once. */
+export const INTEGRATION_COMPONENTS: readonly IntegrationComponent[] = ['labelMenu', 'senderIcons'];
 
 /**
  * `not-attempted` is not a failure: it is the honest answer before the user
  * has opened a label menu even once, and it is what a fresh profile shows.
+ *
+ * `degraded` means working, but only because a fallback held. Nothing is
+ * wrong on screen, which is exactly why it is recorded: it is the warning
+ * that arrives while there is still time to act on it.
  */
-export type HealthStatus = 'active' | 'unavailable' | 'not-attempted';
+export type HealthStatus = 'active' | 'degraded' | 'unavailable' | 'not-attempted';
 
 /**
  * Why an attempt gave up. Each value names the contract check that failed, so
@@ -49,7 +68,14 @@ export type HealthReason =
     | 'no-menu'
     | 'no-model'
     | 'clone-mismatch'
-    | 'write-failed';
+    | 'write-failed'
+    // Sender icons
+    | 'fallback-rows'
+    | 'fallback-anchor'
+    | 'fallback-sender'
+    | 'favicon-unreachable'
+    | 'no-sender'
+    | 'no-anchor';
 
 export interface ComponentHealth {
     status: HealthStatus;
@@ -60,16 +86,32 @@ export interface ComponentHealth {
 
 export type IntegrationHealth = Partial<Record<IntegrationComponent, ComponentHealth>>;
 
+/** The shared object versions before 1.8 wrote. Read, never written. */
 export const INTEGRATION_HEALTH_KEY = 'integrationHealth';
 
+/** The key one component's verdict lives under. */
+export function healthKeyFor(component: IntegrationComponent): string {
+    return `${INTEGRATION_HEALTH_KEY}.${component}`;
+}
+
+/** True for any key a health verdict can arrive under, old or new. */
+export function isHealthKey(key: string): boolean {
+    return key === INTEGRATION_HEALTH_KEY || key.startsWith(`${INTEGRATION_HEALTH_KEY}.`);
+}
+
 /**
- * The last value this context wrote, so an unchanged status costs nothing.
+ * The last value this context wrote for each component, so an unchanged
+ * status costs nothing.
+ *
+ * Per component, because one cache shared between two components thrashes:
+ * the label menu writing `active` and sender icons writing `active` would
+ * each look like a change to the other, and every call would write.
  *
  * Per content script rather than per profile, which is the right scope: two
  * Gmail tabs disagreeing is itself worth recording, and the later write wins
  * in the same way every other storage write here does.
  */
-let lastWritten: { component: IntegrationComponent; status: HealthStatus; reason?: HealthReason } | null = null;
+const lastWritten = new Map<IntegrationComponent, { status: HealthStatus; reason?: HealthReason }>();
 
 /**
  * Record the outcome of an attempt to augment Gmail's UI.
@@ -83,10 +125,10 @@ export function recordIntegrationHealth(
     status: HealthStatus,
     reason?: HealthReason
 ): void {
-    if (lastWritten && lastWritten.component === component && lastWritten.status === status && lastWritten.reason === reason) {
+    const previous = lastWritten.get(component);
+    if (previous && previous.status === status && previous.reason === reason) {
         return;
     }
-    lastWritten = { component, status, reason };
 
     if (!isExtensionContextAlive()) return;
 
@@ -94,14 +136,9 @@ export function recordIntegrationHealth(
     if (reason) entry.reason = reason;
 
     try {
-        chrome.storage.local.get([INTEGRATION_HEALTH_KEY], (stored) => {
-            // An orphaned context surfaces here as a lastError rather than a
-            // throw, and reading `stored` after one is undefined behaviour.
-            if (chrome.runtime.lastError) return;
-            const current: IntegrationHealth = (stored?.[INTEGRATION_HEALTH_KEY] as IntegrationHealth) ?? {};
-            const next: IntegrationHealth = { ...current, [component]: entry };
-            ignoreChromeError(chrome.storage.local.set({ [INTEGRATION_HEALTH_KEY]: next }));
-        });
+        // One key, one set, no read first: see "One key per component".
+        ignoreChromeError(chrome.storage.local.set({ [healthKeyFor(component)]: entry }));
+        lastWritten.set(component, { status, reason });
     } catch {
         // Orphaned context, or storage unavailable. Health information is the
         // first thing that should be dropped when something is wrong, not the
@@ -109,16 +146,28 @@ export function recordIntegrationHealth(
     }
 }
 
-/** Read the recorded health. An unreadable store reads as "nothing recorded". */
+/**
+ * Read the recorded health. An unreadable store reads as "nothing recorded".
+ *
+ * A component's own key wins over the pre-1.8 shared object, which is only
+ * there so an upgrade does not blank the row until the next verdict.
+ */
 export async function readIntegrationHealth(): Promise<IntegrationHealth> {
     return new Promise((resolve) => {
         try {
-            chrome.storage.local.get([INTEGRATION_HEALTH_KEY], (stored) => {
+            const keys = [INTEGRATION_HEALTH_KEY, ...INTEGRATION_COMPONENTS.map(healthKeyFor)];
+            chrome.storage.local.get(keys, (stored) => {
                 if (chrome.runtime.lastError) {
                     resolve({});
                     return;
                 }
-                resolve((stored?.[INTEGRATION_HEALTH_KEY] as IntegrationHealth) ?? {});
+                const legacy = (stored?.[INTEGRATION_HEALTH_KEY] as IntegrationHealth) ?? {};
+                const health: IntegrationHealth = { ...legacy };
+                for (const component of INTEGRATION_COMPONENTS) {
+                    const entry = stored?.[healthKeyFor(component)] as ComponentHealth | undefined;
+                    if (entry) health[component] = entry;
+                }
+                resolve(health);
             });
         } catch {
             resolve({});
@@ -128,13 +177,27 @@ export async function readIntegrationHealth(): Promise<IntegrationHealth> {
 
 /** Reset the write-suppression cache. Tests use this; nothing else should. */
 export function resetHealthCache(): void {
-    lastWritten = null;
+    lastWritten.clear();
 }
 
 /** One line per component, in plain words, for the options page row. */
 export function describeComponentHealth(health: ComponentHealth | undefined): string {
     if (!health || health.status === 'not-attempted') return 'Not used yet';
     if (health.status === 'active') return 'Working';
+    if (health.status === 'degraded') {
+        switch (health.reason) {
+            case 'fallback-rows':
+                return 'Working, on a fallback: Gmail changed how it marks up inbox rows';
+            case 'fallback-anchor':
+                return 'Working, on a fallback: Gmail changed where a row keeps its subject';
+            case 'fallback-sender':
+                return 'Working, on a fallback: Gmail changed how it marks up sender addresses';
+            case 'favicon-unreachable':
+                return 'Working, without website icons: this browser is not loading them';
+            default:
+                return 'Working, on a fallback';
+        }
+    }
     switch (health.reason) {
         case 'no-account':
             return 'Unavailable: the signed-in address has not been detected yet';
@@ -146,6 +209,10 @@ export function describeComponentHealth(health: ComponentHealth | undefined): st
             return 'Unavailable: Gmail has no ordinary menu item to match';
         case 'clone-mismatch':
             return 'Unavailable: the added item did not render like Gmail’s own';
+        case 'no-sender':
+            return 'Unavailable: Gmail is not exposing sender addresses in the list';
+        case 'no-anchor':
+            return 'Unavailable: there is no place in the row to show the icon';
         default:
             return 'Unavailable';
     }

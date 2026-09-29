@@ -1107,3 +1107,92 @@ body.theme-unresolved .gmail-tabs-bar {
     padding: 10px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
+
+/* ==========================================================================
+   Sender icons (ADR-027)
+
+   A chip at the start of an inbox row. The text colour is inherited from the
+   row, so it reads exactly as Gmail's own subject line does in either theme;
+   only the badge carries colours of its own, and every badge colour holds
+   white text at 4.5:1 (test/contrast.test.ts).
+   ========================================================================== */
+
+:root {
+    --glt-sender-border: rgba(0, 0, 0, 0.14);
+    --glt-badge-text: #fff;
+    --glt-badge-0: #1967d2;
+    --glt-badge-1: #137333;
+    --glt-badge-2: #c5221f;
+    --glt-badge-3: #9c4a00;
+    --glt-badge-4: #8430ce;
+    --glt-badge-5: #00707a;
+    --glt-badge-6: #b80672;
+    --glt-badge-7: #5f6368;
+}
+
+body.force-dark {
+    --glt-sender-border: rgba(255, 255, 255, 0.24);
+}
+
+.glt-sender-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    flex-shrink: 0;
+    gap: 4px;
+    box-sizing: border-box;
+    max-width: 160px;
+    height: 18px;
+    margin-right: 6px;
+    padding: 0 6px 0 2px;
+    border: 1px solid var(--glt-sender-border);
+    border-radius: 9px;
+    color: inherit;
+    font-size: 12px;
+    line-height: 16px;
+    vertical-align: middle;
+    overflow: hidden;
+    /* Clicks belong to the row: the chip sits inside Gmail's row link. */
+    cursor: inherit;
+}
+
+.glt-sender-chip--bare {
+    padding: 0 2px;
+}
+
+.glt-sender-icon,
+.glt-sender-badge {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+}
+
+.glt-sender-icon {
+    border-radius: 3px;
+}
+
+.glt-sender-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--glt-badge-text);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.glt-sender-domain {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.glt-badge-0 { background: var(--glt-badge-0); }
+.glt-badge-1 { background: var(--glt-badge-1); }
+.glt-badge-2 { background: var(--glt-badge-2); }
+.glt-badge-3 { background: var(--glt-badge-3); }
+.glt-badge-4 { background: var(--glt-badge-4); }
+.glt-badge-5 { background: var(--glt-badge-5); }
+.glt-badge-6 { background: var(--glt-badge-6); }
+.glt-badge-7 { background: var(--glt-badge-7); }

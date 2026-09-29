@@ -7,7 +7,7 @@
  *
  * Settings section mirrors the Gmail modal:
  * Theme buttons, Add Tab (smart detection), Draggable tab list,
- * Show Unread Count, Export/Import, Uninstall, Connected account.
+ * Show Unread Count, Sender icons, Export/Import, Uninstall, Connected account.
  */
 
 import {
@@ -24,6 +24,7 @@ import {
     Tab,
     Rule,
     Settings,
+    PrefKey,
     Theme,
 } from './utils/storage';
 import {
@@ -39,11 +40,12 @@ import { setAppSettings, setUserEmail } from './modules/state';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { writeMirroredTheme } from './modules/themeMirror';
 import {
+    ComponentHealth,
     IntegrationHealth,
     describeComponentHealth,
     formatDiagnostics,
     readIntegrationHealth,
-    INTEGRATION_HEALTH_KEY,
+    isHealthKey,
 } from './modules/health';
 import {
     FeedbackCategory,
@@ -263,14 +265,26 @@ function renderVersionTag(): void {
  * it goes, if anywhere.
  */
 async function renderIntegrationHealth(): Promise<void> {
-    const pill = document.getElementById('health-label-menu');
-    if (!pill) return;
-
     const health: IntegrationHealth = await readIntegrationHealth();
-    const entry = health.labelMenu;
+    renderHealthPill('health-label-menu', health.labelMenu);
+    renderHealthPill(
+        'health-sender-icons',
+        health.senderIcons,
+        currentSettings && !currentSettings.senderIcons ? 'Off' : undefined
+    );
+}
 
-    pill.textContent = describeComponentHealth(entry);
+/**
+ * One row's pill. The word carries the meaning; the colour only reinforces
+ * it, and a degraded verdict deliberately has none of its own: it is
+ * working, and its sentence says what it is working around.
+ */
+function renderHealthPill(id: string, entry: ComponentHealth | undefined, override?: string): void {
+    const pill = document.getElementById(id);
+    if (!pill) return;
+    pill.textContent = override ?? describeComponentHealth(entry);
     pill.classList.remove('is-active', 'is-unavailable');
+    if (override) return;
     if (entry?.status === 'active') pill.classList.add('is-active');
     else if (entry?.status === 'unavailable') pill.classList.add('is-unavailable');
 }
@@ -311,7 +325,7 @@ function setupIntegrationHealth(): void {
     // must still render the ones it already has.
     if (!chrome.storage?.onChanged) return;
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes[INTEGRATION_HEALTH_KEY]) {
+        if (area === 'local' && Object.keys(changes).some(isHealthKey)) {
             void renderIntegrationHealth();
         }
     });
@@ -425,12 +439,80 @@ function renderSettingsTabList(tabs: Tab[]): void {
 
 function setupPreferences(): void {
     const unreadCheck = document.getElementById('pref-unread') as HTMLInputElement | null;
-    if (!unreadCheck) return;
+    if (unreadCheck) {
+        unreadCheck.addEventListener('change', async () => {
+            if (!currentAccountId) return;
+            const next = await savePreferences(currentAccountId, { showUnreadCount: unreadCheck.checked });
+            currentSettings = next;
+        });
+    }
+    setupSenderIconPreferences();
+}
 
-    unreadCheck.addEventListener('change', async () => {
+/** The sender icon controls, by id. Absent on a page that does not carry the card. */
+function senderIconControls(): {
+    enabled: HTMLInputElement;
+    domain: HTMLInputElement;
+    favicons: HTMLInputElement;
+    mailbox: HTMLSelectElement;
+} | null {
+    const enabled = document.getElementById('pref-sender-icons');
+    const domain = document.getElementById('pref-sender-domain');
+    const favicons = document.getElementById('pref-sender-favicons');
+    const mailbox = document.getElementById('pref-sender-mailbox');
+    if (
+        !(enabled instanceof HTMLInputElement) ||
+        !(domain instanceof HTMLInputElement) ||
+        !(favicons instanceof HTMLInputElement) ||
+        !(mailbox instanceof HTMLSelectElement)
+    ) {
+        return null;
+    }
+    return { enabled, domain, favicons, mailbox };
+}
+
+/**
+ * The detail controls only mean anything while the feature is on, so they
+ * are disabled rather than hidden: a user deciding whether to turn it on can
+ * still read what turning it on would offer.
+ */
+function syncSenderIconControlState(): void {
+    const c = senderIconControls();
+    if (!c) return;
+    const off = !c.enabled.checked;
+    c.domain.disabled = off;
+    c.favicons.disabled = off;
+    c.mailbox.disabled = off;
+}
+
+function setupSenderIconPreferences(): void {
+    const c = senderIconControls();
+    if (!c) return;
+
+    // One save path for all four, so a failure reads the same wherever it
+    // happens and the page falls back to what storage actually holds.
+    const save = (prefs: Partial<Pick<Settings, PrefKey>>) => {
         if (!currentAccountId) return;
-        const next = await savePreferences(currentAccountId, { showUnreadCount: unreadCheck.checked });
-        currentSettings = next;
+        savePreferences(currentAccountId, prefs)
+            .then((next) => {
+                currentSettings = next;
+            })
+            .catch((e) => {
+                console.error('Options: could not save sender icon preference', e);
+                alert('That change could not be saved. Please try again.');
+                if (currentSettings) renderPreferences(currentSettings);
+            });
+    };
+
+    c.enabled.addEventListener('change', () => {
+        syncSenderIconControlState();
+        save({ senderIcons: c.enabled.checked });
+    });
+    c.domain.addEventListener('change', () => save({ senderIconsDomain: c.domain.checked }));
+    c.favicons.addEventListener('change', () => save({ senderIconsFavicons: c.favicons.checked }));
+    c.mailbox.addEventListener('change', () => {
+        const value = c.mailbox.value === 'provider' ? 'provider' : 'initial';
+        save({ senderIconsMailbox: value });
     });
 }
 
@@ -439,6 +521,18 @@ function renderPreferences(settings: Settings): void {
     if (unreadCheck) {
         unreadCheck.checked = settings.showUnreadCount;
     }
+    const c = senderIconControls();
+    if (c) {
+        c.enabled.checked = settings.senderIcons;
+        c.domain.checked = settings.senderIconsDomain;
+        c.favicons.checked = settings.senderIconsFavicons;
+        c.mailbox.value = settings.senderIconsMailbox;
+        syncSenderIconControlState();
+    }
+    // The health row reads "Off" while the feature is off, rather than
+    // reporting the last verdict of a feature nobody is using. Bare `void`:
+    // readIntegrationHealth resolves `{}` on every failure, so this cannot reject.
+    void renderIntegrationHealth();
 }
 
 // ---------------------------------------------------------------------------

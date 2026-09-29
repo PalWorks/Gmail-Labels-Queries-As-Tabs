@@ -169,11 +169,55 @@
                     </div>
                 </div>
 
+                <!-- Sender icons (ADR-027) -->
+                <div class="card" id="sender-icons-card">
+                    <h3>Sender icons</h3>
+                    <p class="muted">
+                        A small chip at the start of each inbox row saying which organisation the mail is from,
+                        such as <code>mashreq.com</code>. Off until you turn it on.
+                    </p>
+                    <div class="pref-row">
+                        <span id="pref-sender-icons-label">Show sender icons</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pref-sender-icons" aria-labelledby="pref-sender-icons-label">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="pref-row">
+                        <span id="pref-sender-domain-label">Show the domain beside the icon</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pref-sender-domain" aria-labelledby="pref-sender-domain-label">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="pref-row">
+                        <span id="pref-sender-favicons-label">Load website icons</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pref-sender-favicons" aria-labelledby="pref-sender-favicons-label"
+                                aria-describedby="pref-sender-favicons-note">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <p class="muted" id="pref-sender-favicons-note">
+                        Off, each sender gets a coloured letter and nothing is requested from anywhere. On, the
+                        domain of each sender in view (never the address, the name or the subject) is sent to
+                        Google&rsquo;s icon service at <code>t0.gstatic.com</code>, or <code>www.google.com</code>
+                        if that cannot be reached, to fetch the website&rsquo;s icon.
+                    </p>
+                    <div class="pref-row">
+                        <label for="pref-sender-mailbox" id="pref-sender-mailbox-label">Mail from gmail.com, outlook.com and other mailbox providers</label>
+                        <select id="pref-sender-mailbox" class="input-select">
+                            <option value="initial">The sender&rsquo;s initial</option>
+                            <option value="provider">The provider&rsquo;s icon</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Gmail integration health -->
                 <div class="card">
                     <h3>Gmail integration</h3>
                     <p class="muted">
-                        Parts of this extension add to Gmail&rsquo;s own menus. Gmail changes,
+                        Parts of this extension add to Gmail&rsquo;s own menus and inbox list. Gmail changes,
                         and sometimes tries different layouts with different people, so this
                         says whether they are working for you right now. Nothing here is sent
                         anywhere.
@@ -181,6 +225,10 @@
                     <div class="pref-row">
                         <span id="health-label-menu-name">Label menu item</span>
                         <span class="health-pill" id="health-label-menu" aria-labelledby="health-label-menu-name">&ndash;</span>
+                    </div>
+                    <div class="pref-row">
+                        <span id="health-sender-icons-name">Sender icons</span>
+                        <span class="health-pill" id="health-sender-icons" aria-labelledby="health-sender-icons-name">&ndash;</span>
                     </div>
                     <button id="health-copy-btn" class="btn-secondary full-width">Copy diagnostics</button>
                 </div>
@@ -305,10 +353,21 @@
                     <h3>No Tracking, No Telemetry</h3>
                     <p>This extension makes <strong>no background network requests</strong>. No analytics, no tracking,
                         no telemetry. Your browsing data never leaves your browser.</p>
-                    <p>There is exactly one exception, and only when you ask for it: pressing <strong>Send
-                            Feedback</strong> on the Support &amp; Feedback page sends your message, your optional email address,
+                    <p>There are two exceptions, and each happens only because you asked for it. One is the website
+                        icons described below, which stay off unless you turn them on. The other is pressing <strong>Send
+                            Feedback</strong> on the Support &amp; Feedback page, which sends your message, your optional email address,
                         and, if you leave the box ticked, the extension version, your browser build and how many tabs,
                         rules and accounts you have. Never your labels, tab names, contacts or mail.</p>
+                </div>
+                <div class="card">
+                    <h3>Website Icons, Only If You Ask</h3>
+                    <p>Sender icons are off unless you turn them on, and even then they draw a coloured letter and
+                        request nothing. Only if you also turn on <strong>Load website icons</strong> does the
+                        extension ask Google&rsquo;s icon service for each sender&rsquo;s website icon, at
+                        <code>t0.gstatic.com</code>, or <code>www.google.com</code> if that cannot be reached. What it
+                        sends is the domain alone, such as <code>mashreq.com</code>: never the address, the name, the
+                        subject or anything in the message. The request carries no referrer, and each domain is asked
+                        once and remembered.</p>
                 </div>
                 <div class="card">
                     <h3>When You Leave, We Ask Why</h3>

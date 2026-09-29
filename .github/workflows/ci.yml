@@ -200,7 +200,8 @@ jobs:
           # named two of four permissions, and adding the fifth would have been
           # one more thing to remember. Now adding a permission fails this step
           # until the published policy names it.
-          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev mail.google.com"
+          # t0.gstatic.com and www.google.com: website icons for sender icons (ADR-027).
+          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev mail.google.com t0.gstatic.com www.google.com"
           required="$required $(node -p "require('./manifest.json').permissions.join(' ')")"
           # Microsoft Clarity runs on the site itself and must be disclosed too.
           required="$required Microsoft Clarity"

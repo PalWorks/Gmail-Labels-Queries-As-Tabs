@@ -11,6 +11,7 @@
  *   modules/unread.ts   – Unread count (Atom feed + DOM scraping + XHR updates)
  *   modules/dragdrop.ts – Drag-and-drop for tab bar & modal list
  *   modules/tabs.ts     – Tab rendering, navigation, dropdown menus
+ *   modules/senderIcons.ts – Sender chips in the inbox list (opt-in)
  *   modules/modals/  - All modal dialogs (pin, edit, delete, settings, import, uninstall)
  */
 
@@ -35,6 +36,7 @@ import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
 import { installLabelMenu, uninstallLabelMenu } from './modules/labelMenu';
+import { installSenderIcons, refreshSenderIcons, uninstallSenderIcons, SenderIconPrefs } from './modules/senderIcons';
 import { claimPage, removeOurPageFurniture } from './modules/handover';
 import { PING_ACTION } from './modules/messages';
 
@@ -240,6 +242,10 @@ async function finalizeInit(email: string): Promise<void> {
         // depending on the tab list, so installing it before settings are
         // loaded would let it offer to add a tab that already exists.
         installLabelMenuItem();
+
+        // Also only now, for a stronger reason: whether it may fetch icons at
+        // all is a setting, and until settings are loaded the answer is no.
+        installSenderIcons({ getAccountId: () => getUserEmail(), getPrefs: senderIconPrefs });
     } catch (e) {
         console.error('Gmail Tabs: Error in finalizeInit', e);
     }
@@ -314,6 +320,22 @@ function installLabelMenuItem(): void {
     });
 }
 
+/**
+ * The sender icon preferences, read fresh on every scan so a change made on
+ * the options page applies without a reload. Null until settings are loaded,
+ * which the module reads as "off".
+ */
+function senderIconPrefs(): SenderIconPrefs | null {
+    const settings = getAppSettings();
+    if (!settings) return null;
+    return {
+        enabled: settings.senderIcons,
+        favicons: settings.senderIconsFavicons,
+        domainText: settings.senderIconsDomain,
+        mailboxStyle: settings.senderIconsMailbox,
+    };
+}
+
 function injectPageWorld(): void {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('js/xhrInterceptor.js');
@@ -373,6 +395,7 @@ function standDown(): void {
         injectionRetryTimer = null;
     }
     uninstallLabelMenu();
+    uninstallSenderIcons();
     removeOurPageFurniture();
     console.log('Gmail Tabs: a newer copy has taken this tab over; standing down');
 }
@@ -425,6 +448,7 @@ async function init(): Promise<void> {
                         console.log('Gmail Tabs: Reloaded settings for', getUserEmail(), getAppSettings());
                         renderTabs();
                         broadcastKnownLabels();
+                        refreshSenderIcons();
                     }).catch((err) => {
                         console.error('Gmail Tabs: Failed to reload settings', err);
                     });

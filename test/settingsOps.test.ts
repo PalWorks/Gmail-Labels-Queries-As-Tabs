@@ -32,7 +32,17 @@ function tab(id: string, value = id): Tab {
 }
 
 function baseSettings(tabs: Tab[] = [], rules: Rule[] = []): Settings {
-    return { tabs, rules, theme: 'light', showUnreadCount: true, rev: 0 };
+    return {
+        tabs,
+        rules,
+        theme: 'light',
+        showUnreadCount: true,
+        senderIcons: false,
+        senderIconsFavicons: false,
+        senderIconsDomain: true,
+        senderIconsMailbox: 'initial',
+        rev: 0,
+    };
 }
 
 // ---------------------------------------------------------------------------

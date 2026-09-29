@@ -49,6 +49,17 @@ interface LegacyTabLabel {
 
 export type Theme = 'system' | 'light' | 'dark';
 
+export type SenderIconsMailbox = 'initial' | 'provider';
+
+/** The preferences `setPrefs` may change. Tabs and rules have ops of their own. */
+export type PrefKey =
+    | 'theme'
+    | 'showUnreadCount'
+    | 'senderIcons'
+    | 'senderIconsFavicons'
+    | 'senderIconsDomain'
+    | 'senderIconsMailbox';
+
 export type RuleAction = 'trash' | 'archive' | 'markRead' | 'moveToLabel';
 
 export interface Rule {
@@ -66,6 +77,17 @@ export interface Settings {
     labels?: LegacyTabLabel[];
     theme: Theme;
     showUnreadCount: boolean;
+    /** Sender icons in the inbox list. Off until the user turns it on. See ADR-027. */
+    senderIcons: boolean;
+    /**
+     * Fetch website icons for sender icons. A second, separate opt-in because
+     * it is the one part of the feature that makes a request.
+     */
+    senderIconsFavicons: boolean;
+    /** Show the sender's domain as text beside the icon. */
+    senderIconsDomain: boolean;
+    /** Mailbox-provider senders (gmail.com and the like): their initial, or the provider's icon. */
+    senderIconsMailbox: SenderIconsMailbox;
     /**
      * Optimistic-concurrency token, bumped on every successful write. Absent in
      * anything written before v1.5, which reads as 0. Never set by callers:
@@ -98,8 +120,27 @@ const DEFAULT_SETTINGS: Settings = {
     rules: [],
     theme: 'light',
     showUnreadCount: true,
+    senderIcons: false,
+    senderIconsFavicons: false,
+    senderIconsDomain: true,
+    senderIconsMailbox: 'initial',
     rev: 0,
 };
+
+/**
+ * Sender icon preferences are read from storage that can be hand-edited,
+ * corrupt, or written by a future version. A privacy opt-in in particular must
+ * never read as "on" because a value was malformed, so anything that is not
+ * exactly a boolean falls back to the default, which for both opt-ins is off.
+ */
+function sanitizeSenderIconPrefs(settings: Settings): void {
+    for (const key of ['senderIcons', 'senderIconsFavicons', 'senderIconsDomain'] as const) {
+        if (typeof settings[key] !== 'boolean') settings[key] = DEFAULT_SETTINGS[key];
+    }
+    if (settings.senderIconsMailbox !== 'initial' && settings.senderIconsMailbox !== 'provider') {
+        settings.senderIconsMailbox = DEFAULT_SETTINGS.senderIconsMailbox;
+    }
+}
 
 /**
  * Drop a tab's color unless it is a known palette token. Storage is the trust
@@ -166,6 +207,10 @@ export async function getSettings(accountId: string): Promise<Settings> {
                     rules: [...DEFAULT_SETTINGS.rules.map((r) => ({ ...r }))],
                     theme: DEFAULT_SETTINGS.theme,
                     showUnreadCount: DEFAULT_SETTINGS.showUnreadCount,
+                    senderIcons: DEFAULT_SETTINGS.senderIcons,
+                    senderIconsFavicons: DEFAULT_SETTINGS.senderIconsFavicons,
+                    senderIconsDomain: DEFAULT_SETTINGS.senderIconsDomain,
+                    senderIconsMailbox: DEFAULT_SETTINGS.senderIconsMailbox,
                     rev: 0,
                 };
                 const settings = { ...defaults, ...stored } as Settings;
@@ -179,6 +224,7 @@ export async function getSettings(accountId: string): Promise<Settings> {
                 // not a known palette token becomes "no color" here, so no
                 // render path ever has to reason about a junk token.
                 settings.tabs = settings.tabs.map(sanitizeTabColor);
+                sanitizeSenderIconPrefs(settings);
                 resolve(settings);
             });
         } catch (e) {
@@ -207,7 +253,7 @@ export type SettingsOp =
     | { kind: 'removeTab'; tabId: string }
     | { kind: 'updateTab'; tabId: string; updates: Partial<Tab> }
     | { kind: 'reorderTabs'; order: string[] }
-    | { kind: 'setPrefs'; prefs: Partial<Pick<Settings, 'theme' | 'showUnreadCount'>> }
+    | { kind: 'setPrefs'; prefs: Partial<Pick<Settings, PrefKey>> }
     | { kind: 'addRule'; rule: Rule }
     | { kind: 'upsertRule'; rule: Rule }
     | { kind: 'updateRule'; tabId: string; updates: Partial<Rule> }
@@ -659,10 +705,7 @@ export async function updateTabOrder(accountId: string, newTabs: Tab[]): Promise
 }
 
 /** Updates the account-level preferences that are not tabs or rules. */
-export async function savePreferences(
-    accountId: string,
-    prefs: Partial<Pick<Settings, 'theme' | 'showUnreadCount'>>
-): Promise<Settings> {
+export async function savePreferences(accountId: string, prefs: Partial<Pick<Settings, PrefKey>>): Promise<Settings> {
     return mutateSettings(accountId, { kind: 'setPrefs', prefs });
 }
 
@@ -924,6 +967,10 @@ export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<
                         rules: [],
                         theme: items.theme || 'light',
                         showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true,
+                        senderIcons: DEFAULT_SETTINGS.senderIcons,
+                        senderIconsFavicons: DEFAULT_SETTINGS.senderIconsFavicons,
+                        senderIconsDomain: DEFAULT_SETTINGS.senderIconsDomain,
+                        senderIconsMailbox: DEFAULT_SETTINGS.senderIconsMailbox,
                     };
 
                     await saveSettings(accountId, newSettings);

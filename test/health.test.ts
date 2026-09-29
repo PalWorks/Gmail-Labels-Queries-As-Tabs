@@ -20,6 +20,8 @@ import {
     formatDiagnostics,
     INTEGRATION_HEALTH_KEY,
     IntegrationHealth,
+    healthKeyFor,
+    isHealthKey,
 } from '../src/modules/health';
 
 let store: Record<string, unknown>;
@@ -100,10 +102,28 @@ describe('recording', () => {
         expect(setSpy).not.toHaveBeenCalled();
     });
 
-    test('a lastError during the read abandons the write rather than writing over the record', () => {
-        installChrome({ lastError: true });
+    test('a write reads nothing first, so it cannot write back a stale copy of anything', () => {
         recordIntegrationHealth('labelMenu', 'active');
-        expect(setSpy).not.toHaveBeenCalled();
+        expect((chrome.storage.local.get as jest.Mock).mock.calls).toHaveLength(0);
+        expect(setSpy).toHaveBeenCalledWith({ [healthKeyFor('labelMenu')]: expect.objectContaining({ status: 'active' }) });
+    });
+
+    test('two components recording at once both survive', async () => {
+        // The lost update this layout exists to prevent: with one shared
+        // object, the second component's write erased the first's.
+        recordIntegrationHealth('labelMenu', 'active');
+        recordIntegrationHealth('senderIcons', 'degraded', 'fallback-rows');
+        const health = await readIntegrationHealth();
+        expect(health.labelMenu?.status).toBe('active');
+        expect(health.senderIcons).toMatchObject({ status: 'degraded', reason: 'fallback-rows' });
+    });
+
+    test('two components alternating do not defeat each other\'s write suppression', () => {
+        recordIntegrationHealth('labelMenu', 'active');
+        recordIntegrationHealth('senderIcons', 'active');
+        recordIntegrationHealth('labelMenu', 'active');
+        recordIntegrationHealth('senderIcons', 'active');
+        expect(setSpy).toHaveBeenCalledTimes(2);
     });
 
     test('storage that throws does not take the caller down with it', () => {
@@ -127,6 +147,26 @@ describe('reading', () => {
         installChrome({ throwOnGet: true });
         await expect(readIntegrationHealth()).resolves.toEqual({});
     });
+
+    test('a verdict written by a version before 1.8 is still shown', async () => {
+        store[INTEGRATION_HEALTH_KEY] = { labelMenu: { status: 'unavailable', reason: 'no-menu', at: 1 } };
+        const health = await readIntegrationHealth();
+        expect(health.labelMenu).toMatchObject({ status: 'unavailable', reason: 'no-menu' });
+    });
+
+    test('a component\'s own key wins over the old shared object', async () => {
+        store[INTEGRATION_HEALTH_KEY] = { labelMenu: { status: 'unavailable', reason: 'no-menu', at: 1 } };
+        store[healthKeyFor('labelMenu')] = { status: 'active', at: 2 };
+        const health = await readIntegrationHealth();
+        expect(health.labelMenu).toEqual({ status: 'active', at: 2 });
+    });
+
+    test('every key a verdict can arrive under is recognised, and nothing else', () => {
+        expect(isHealthKey(INTEGRATION_HEALTH_KEY)).toBe(true);
+        expect(isHealthKey(healthKeyFor('senderIcons'))).toBe(true);
+        expect(isHealthKey('globalTheme')).toBe(false);
+        expect(isHealthKey('integrationHealthy')).toBe(false);
+    });
 });
 
 describe('what the user sees', () => {
@@ -139,8 +179,15 @@ describe('what the user sees', () => {
         expect(describeComponentHealth({ status: 'active', at: 0 })).toBe('Working');
     });
 
+    test('a fallback that held says it is working, and what it is working around', () => {
+        const reasons = ['fallback-rows', 'fallback-anchor', 'fallback-sender', 'favicon-unreachable'] as const;
+        const sentences = reasons.map((reason) => describeComponentHealth({ status: 'degraded', reason, at: 0 }));
+        expect(new Set(sentences).size).toBe(reasons.length);
+        for (const s of sentences) expect(s.startsWith('Working, ')).toBe(true);
+    });
+
     test('every reason has its own sentence', () => {
-        const reasons = ['no-account', 'no-label-name', 'no-menu', 'no-model', 'clone-mismatch'] as const;
+        const reasons = ['no-account', 'no-label-name', 'no-menu', 'no-model', 'clone-mismatch', 'no-sender', 'no-anchor'] as const;
         const sentences = reasons.map((reason) =>
             describeComponentHealth({ status: 'unavailable', reason, at: 0 })
         );

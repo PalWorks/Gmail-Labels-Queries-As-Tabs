@@ -101,7 +101,8 @@ describe('getSettings', () => {
     });
 
     test('returns stored settings when present', async () => {
-        const stored: Settings = {
+        // Written by a version before sender icons existed, so it lacks their fields.
+        const stored: Partial<Settings> = {
             tabs: [{ id: 'tab1', title: 'Work', type: 'label', value: 'Work' }],
             rules: [],
             theme: 'dark',
@@ -144,6 +145,61 @@ describe('getSettings', () => {
         expect(settings.tabs[1]).not.toHaveProperty('color');
         // The rest of the tab survives untouched.
         expect(settings.tabs[0].title).toBe('Work');
+    });
+
+    test('sender icons are off for a new account, and so are website icons', async () => {
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.senderIcons).toBe(false);
+        expect(settings.senderIconsFavicons).toBe(false);
+        expect(settings.senderIconsDomain).toBe(true);
+        expect(settings.senderIconsMailbox).toBe('initial');
+    });
+
+    test('settings written before sender icons existed read them as off', async () => {
+        mockStorage['account_user@gmail.com'] = { tabs: [], rules: [], theme: 'light', showUnreadCount: true };
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.senderIcons).toBe(false);
+        expect(settings.senderIconsFavicons).toBe(false);
+    });
+
+    test('a malformed opt-in never reads as on', async () => {
+        // A privacy opt-in that a truthy string could switch on would be a
+        // request the user never agreed to. Only exactly `true` is on.
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [],
+            rules: [],
+            theme: 'light',
+            showUnreadCount: true,
+            senderIcons: 'yes',
+            senderIconsFavicons: 1,
+            senderIconsDomain: null,
+            senderIconsMailbox: 'everything',
+        };
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.senderIcons).toBe(false);
+        expect(settings.senderIconsFavicons).toBe(false);
+        expect(settings.senderIconsDomain).toBe(true);
+        expect(settings.senderIconsMailbox).toBe('initial');
+    });
+
+    test('valid sender icon choices survive the read', async () => {
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [],
+            rules: [],
+            theme: 'light',
+            showUnreadCount: true,
+            senderIcons: true,
+            senderIconsFavicons: true,
+            senderIconsDomain: false,
+            senderIconsMailbox: 'provider',
+        };
+        const settings = await getSettings('user@gmail.com');
+        expect(settings).toMatchObject({
+            senderIcons: true,
+            senderIconsFavicons: true,
+            senderIconsDomain: false,
+            senderIconsMailbox: 'provider',
+        });
     });
 });
 

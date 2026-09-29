@@ -47,6 +47,7 @@ const OUR_PAGE_FURNITURE = [
     '.gmail-tab-dropdown',
     '.glt-ob-scrim',
     '.color-popover',
+    '.glt-sender-chip',
 ];
 
 /** Remove every element this extension has added to the page. */

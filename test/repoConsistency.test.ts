@@ -411,10 +411,45 @@ describe('every extension page is themed before its content', () => {
 describe('outbound hosts are disclosed wherever a user would look', () => {
     const DISCLOSURE_FILES = ['SECURITY.md', 'src/options.html', 'STORE_LISTING.md'];
 
+    /**
+     * Every source that can make a request of its own. The service worker was
+     * the only one until sender icons, which fetch website icons from the
+     * content script when, and only when, the user turned them on.
+     */
+    const REQUESTING_SOURCES = ['src/background.ts', 'src/modules/senderIcons.ts'];
+
     function hostsIn(source: string): string[] {
         const urls = source.match(/https?:\/\/[^\s'"`)]+/g) ?? [];
-        return [...new Set(urls.map((u) => new URL(u).host))];
+        const hosts: string[] = [];
+        for (const u of urls) {
+            // A scheme with nothing after it (`'https://' + domain`) is
+            // building a URL, not naming a host.
+            try {
+                const host = new URL(u).host;
+                if (host) hosts.push(host);
+            } catch {
+                /* not a URL on its own */
+            }
+        }
+        return [...new Set(hosts)];
     }
+
+    test('sender icons name the hosts they fetch icons from', () => {
+        // The premise of the check below for the second source: if these ever
+        // move behind a variable, the disclosure check passes vacuously.
+        expect(hostsIn(read('src/modules/senderIcons.ts')).sort()).toEqual(['t0.gstatic.com', 'www.google.com']);
+    });
+
+    test('each host a requesting source names is disclosed in every required place', () => {
+        const missing = REQUESTING_SOURCES.flatMap((file) => undisclosed(read(file)).map((m) => `${file}: ${m}`));
+        if (missing.length > 0) {
+            throw new Error(
+                'An outbound host is undisclosed:\n' +
+                    missing.map((m) => `  ${m}`).join('\n') +
+                    '\n\nDisclose it, or remove the host from the source that names it.'
+            );
+        }
+    });
 
     test('the service worker names at least one outbound host', () => {
         // If this ever goes to zero the guard below passes vacuously, which

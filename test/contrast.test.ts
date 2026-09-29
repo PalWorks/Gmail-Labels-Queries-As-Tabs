@@ -172,6 +172,40 @@ describe('in-Gmail toolbar palette', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Sender icon badges
+// ---------------------------------------------------------------------------
+
+describe('sender icon badges', () => {
+    /** The `:root` block that declares the badge palette, wherever it sits. */
+    function badgeTokens(): Record<string, string> {
+        for (let i = 0; ; i++) {
+            const tokens = readTokens('src/ui/toolbar.css', ':root', i);
+            if (tokens['--glt-badge-text']) return tokens;
+        }
+    }
+
+    const tokens = badgeTokens();
+    const palette = Object.keys(tokens).filter((k) => /^--glt-badge-\d+$/.test(k));
+
+    test('the palette has one colour per badge class the module can emit', () => {
+        // BADGE_PALETTE_SIZE in senderIcons.ts; a hash landing on a class
+        // with no colour would draw an invisible letter.
+        expect(palette).toHaveLength(8);
+    });
+
+    test.each(Array.from({ length: 8 }, (_, i) => i))('badge %i holds its letter at AA', (i) => {
+        expectContrast(`badge ${i}`, tokens['--glt-badge-text'], tokens[`--glt-badge-${i}`], AA_NORMAL);
+    });
+
+    test('every badge colour has the class that paints it', () => {
+        const css = readCss('src/ui/toolbar.css');
+        for (let i = 0; i < 8; i++) {
+            expect(css).toMatch(new RegExp(`\\.glt-badge-${i}\\s*\\{\\s*background:\\s*var\\(--glt-badge-${i}\\)`));
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Welcome page palette
 // ---------------------------------------------------------------------------
 
