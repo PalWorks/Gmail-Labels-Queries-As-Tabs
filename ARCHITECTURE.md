@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## 1. High-Level Overview
 
@@ -10,8 +10,9 @@ Last updated: 2026-09-24 (v1.7.4)
 **Primary Use Case:** Power Gmail users who rely on labels and saved searches can navigate between views without digging through the sidebar. Tabs are persistent, reorderable via drag-and-drop, and synced across devices via `chrome.storage.sync`.
 
 **Key Differentiators:**
-- No background network requests (privacy-first); the only outbound call is the feedback
-  message a user chooses to send
+- No background network requests (privacy-first); the only outbound calls are the feedback
+  message a user chooses to send and, if the user turns them on, website icons for sender
+  icons (ADR-027)
 - Multi-account support (per-email settings)
 - Real-time unread counts via XHR interception of Gmail's internal API
 - Full theme support (System / Light / Dark)
@@ -41,6 +42,7 @@ Gmail-Labels-As-Tabs/
 │   ├── modules/               # ★ Feature modules, one concern each
 │   │   ├── tabs.ts            # Tab bar rendering, dropdowns, keyboard and aria
 │   │   ├── unread.ts          # Unread waterfall: Atom feed (cached) → XHR → DOM
+│   │   ├── senderIcons.ts     # ★ Sender chips in the inbox list: ARIA first, fallback behind every step
 │   │   ├── dragdrop.ts        # Drag-and-drop reordering, bar and modal
 │   │   ├── tabManager.ts      # Shared add-tab parsing + managed list behavior
 │   │   ├── rules.ts           # Apps Script generation from rules
@@ -63,17 +65,19 @@ Gmail-Labels-As-Tabs/
 │   │   ├── importExport.ts    # Export / import serialization and validation
 │   │   ├── tabListRenderer.ts # Shared tab-row rendering for bar and options
 │   │   ├── colors.ts          # Tab color palette tokens and validation
+│   │   ├── domain.ts          # Sender address to organisation domain
 │   │   └── selectors.ts       # Gmail DOM selectors, in one place
 │   ├── ui/
 │   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
 │   ├── popup.html/.css/.ts    # The toolbar icon's menu (1 KB bundle)
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 35 suites: one per module, plus four repo-wide guards
+├── test/                      # 44 suites: one per module, four repo-wide guards, three for the canary tooling
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
-├── scripts/                   # Manual tooling (rendered-pixel contrast audit)
+├── scripts/                   # Tooling: rendered-pixel contrast audit, and the daily drift canary
+│                              #   (Google Chat alerts, selector refresh pull requests; ADR-028)
 ├── _locales/                  # i18n (internationalization) strings
 ├── dist/                      # Build output (loaded into Chrome)
 └── .github/workflows/         # CI only, manual dispatch (the website is another repo)
@@ -283,6 +287,7 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 ```
 content.ts ──imports──▶ storage.ts
 content.ts ──imports──▶ modules/labelMenu.ts ──imports──▶ modules/health.ts
+content.ts ──imports──▶ modules/senderIcons.ts ──imports──▶ modules/health.ts, utils/domain.ts, utils/selectors.ts
 xhrInterceptor.ts ──(standalone, no imports)──
 welcome.ts ──(standalone, uses chrome.* APIs)──
 ```
@@ -311,7 +316,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 39 suites, 844 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback |
+| Unit suites | `test/*.test.ts`, one per module | 44 suites, 965 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback, sender icons and their domain rules, and the drift canary's alerting, escalation and selector refresh |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -338,8 +343,9 @@ options-page link *passed*, because they mocked the call that was failing. See A
 ### Known gaps
 
 > [!NOTE]
-> - No end-to-end or visual regression tests. The contrast script is the only browser-driven
->   check, and it is run by hand.
+> - No end-to-end or visual regression tests in `npm test`. The browser-driven checks are the
+>   contrast script and the drift canary, which runs daily against a real Gmail, plus the
+>   cross-browser run recorded in TESTING.md, which is run by hand.
 > - CI runs on manual dispatch only (`gh workflow run ci.yml`), by product-owner decision, so
 >   a push does not verify itself.
 
@@ -392,8 +398,9 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 |---|---|---|
 | **Gmail theme detection is heuristic** | Reads painted background colors; a Gmail redesign could defeat it, falling back to the OS preference. Since 1.6.2 that fallback is marked rather than painted, so a wrong guess shows as no background rather than the wrong one, and is committed only once the settle ladder gives up | `src/modules/theme.ts` |
 | **The first-frame theme is a cache, and one writer cannot reach it** | `localStorage` is per-origin, so the Gmail content script cannot update it. Change the theme in the in-Gmail modal and the next extension page can open in the previous theme for one frame. Costs a frame, never a final state | `src/modules/themeMirror.ts` |
-| **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT` are Gmail's obfuscated class names and can change. They are now confined to `src/utils/selectors.ts` by a guard, and the newest Gmail integration (`labelMenu.ts`) uses none of them: it finds elements by ARIA role and clones one to inherit Gmail's own classes. See ADR-022 | `src/utils/selectors.ts` |
+| **Hardcoded selectors** | `.G-atb`, `.bsU`, `.aeF`, `.wT`, and the sender icon fallbacks `tr.zA` and `.xT`, are Gmail's obfuscated class names and can change. They are confined to `src/utils/selectors.ts` by a guard. `labelMenu.ts` uses none of them: it finds elements by ARIA role and clones one to inherit Gmail's own classes. `senderIcons.ts` uses its two only after ARIA fails. See ADR-022 | `src/utils/selectors.ts` |
 | **The label menu depends on structure Gmail owns** | ARIA roles on Gmail's menu and a readable label name. If either goes, the item does not appear and Gmail is untouched, which is the designed behaviour rather than a fault. Watched daily by `scripts/canary/`, and reported per user by the options page's integration row. See ADR-023 | `src/modules/labelMenu.ts` |
+| **Sender icons depend on structure Gmail owns** | `tr[role="row"]` rows, an `email` attribute on the sender, and a `[role="link"]` around the subject. Each has a fallback (a class learned at runtime, the two registry fallbacks, `data-hovercard-id`, the sender's own cell), a fallback that held is recorded as `degraded`, and the canary checks the chain daily and proposes a new fallback value when one rots. Website icons come from an undocumented Google endpoint, so a second provider stands behind it and the badge is always drawn first. See ADR-027 and ADR-028 | `src/modules/senderIcons.ts` |
 | **The item's highlight depends on Gmail's own handler** | Gmail lights up a hovered item by adding a class from `jsaction`, not by a `:hover` rule, so the class is learned at runtime and applied to our item. If it cannot be learned, the item paints a translucent wash read from the menu's own background instead, so it always reacts. See ADR-024 | `src/modules/labelMenu.ts` |
 | **An orphaned copy of the content script keeps running after an update** | Chrome leaves it in the page with its `chrome.*` calls dead. The new copy announces itself on a DOM event and the old one stands down, but a copy from before 1.7.3 cannot hear that announcement. Measured on the real 1.7.2 upgrade: one tab bar, populated, and one menu item, not two. It is gone the moment that tab is reloaded. See ADR-025 | `src/modules/handover.ts` |
 | **No error boundary** | If init throws, the bar silently does not appear; failures are logged, not surfaced | `src/content.ts` |

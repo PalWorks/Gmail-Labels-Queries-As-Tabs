@@ -2,7 +2,7 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## Privacy promise
 
@@ -17,6 +17,18 @@ stays ticked) the extension version, browser build and counts of tabs, rules and
 Never label names, tab titles, contacts or mail. It goes to the relay in [worker/](worker/),
 which holds the mail provider's API key precisely so the extension does not have to, and
 which stores nothing.
+
+One further outbound request exists, and only if you ask for it twice over: **website
+icons for sender icons** (v1.8.0). Sender icons are off by default; turned on, they draw a
+coloured letter for each inbox row and request nothing. Only if you also turn on **Load
+website icons** does the content script ask Google's favicon service for each sender's
+icon, at `t0.gstatic.com`, or `www.google.com` (its `/s2/favicons` endpoint, which answers
+by redirecting to another `gstatic.com` host) if that cannot be reached. What is sent is the
+sender's domain alone, such as `mashreq.com`: never the address, the name, the subject or
+anything in a message. The request carries no referrer, and each domain is asked once and
+remembered for the session. `t0.gstatic.com` is tried first because it is a separate domain
+from `google.com`, so the request does not carry the Google account cookies a request to
+`www.google.com` would. See ADR-027.
 
 One further outbound page exists, and only after you have already left: uninstalling opens
 a short feedback form at `tally.so`, hosted by Tally. Chrome opens it in a new tab once the
@@ -33,18 +45,18 @@ after that is entirely your decision, and the string carries no address, label n
 title. See ADR-023.
 
 The disclosure is enforced rather than promised: `test/repoConsistency.test.ts` fails the
-build if the service worker names an outbound host that is missing from this file, the
-in-extension privacy page or [STORE_LISTING.md](STORE_LISTING.md).
+build if the service worker, or the sender icons module, names an outbound host that is
+missing from this file, the in-extension privacy page or [STORE_LISTING.md](STORE_LISTING.md).
 
 Any other request to a non `mail.google.com` origin, and any request the user did not
 explicitly trigger, is a blocking defect. See [DECISIONS.md](DECISIONS.md) ADR-008 as
-amended by ADR-012.
+amended by ADR-012, ADR-014 and ADR-027.
 
 ## Permissions and why each is needed
 
 | Permission | Purpose |
 |------------|---------|
-| `storage` | Persist per-account tabs and rules, the global theme, and whether the Gmail integrations are currently working |
+| `storage` | Persist per-account tabs, rules and preferences (including the sender icon opt-ins), the global theme, whether the Gmail integrations are currently working, and the Gmail class names sender icons last saw working |
 | _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
@@ -105,6 +117,12 @@ itself runs. Treat that page as part of the release, not as marketing.
   [test/rulesProperty.test.ts](test/rulesProperty.test.ts) drives 1,000 generated hostile
   inputs through the generator, evaluates each result, and fails on a parse error, a lossy
   round trip, an unquoted label, or any canary global being set.
+- **Markup in sender data.** Sender icons read the `email`, `name` and
+  `data-hovercard-id` attributes of Gmail's rows, which carry text the sender chose. They
+  are written only through `textContent`, the address is validated as a hostname before it
+  is used, and a class name learned from the page is put in a selector only if it is a
+  plain token (`[A-Za-z_][A-Za-z0-9_-]*`). The drift canary's selector proposals are held
+  to the same shape before anything is written to the registry.
 - **No secrets.** The extension holds no API keys, OAuth tokens, or credentials. There is
   nothing server-side to compromise.
 
@@ -112,6 +130,12 @@ itself runs. Treat that page as part of the release, not as marketing.
 
 There are no secrets in this repository. Do not add API keys, tokens, or `.env` values.
 `.env` is gitignored as a safety net only.
+
+The one credential the tooling uses, the Google Chat webhook the drift canary alerts
+through, lives outside the repository in `~/.config/gmail-labels-as-tabs/alerts.env`
+(created mode 600 by `scripts/canary/install-canary.sh --alerts`). `notify.mjs` never prints
+it, accepts only a `chat.googleapis.com` URL, and its tests run with an empty `HOME` so a
+real one on the machine can never be read by a test. See ADR-028.
 
 ## Build integrity
 

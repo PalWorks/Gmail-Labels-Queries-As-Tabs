@@ -44,12 +44,20 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 39 suites, 844 tests as of v1.7.4.
+- 44 suites, 965 tests as of v1.8.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
   the toolbar menu, modals, drag-and-drop, state accessors, import/export, the shared tab
-  manager, tab colors, rule templates, in-product feedback, and the color-contrast palette.
+  manager, tab colors, rule templates, in-product feedback, the color-contrast palette,
+  sender icons (every fallback layer, website icons only on opt-in, slow and blocked
+  networks) and the sender domain rules.
+- Three suites run the drift canary's tooling as real processes:
+  [canaryNotify](test/canaryNotify.test.ts) posts Google Chat alerts to a local server,
+  [canaryRun](test/canaryRun.test.ts) runs `run-canary.sh` in a sandbox with a fake canary
+  and stub `gh` and `notify-send`, and [canaryPropose](test/canaryPropose.test.ts) holds the
+  selector refresh to its whitelist. They run with an empty `HOME`, so a real webhook on the
+  machine can never be reached from a test.
 - The onboarding wizard is covered once, in
   [test/onboarding/wizardView.test.ts](test/onboarding/wizardView.test.ts), because both
   surfaces mount the same module. The two host suites
@@ -68,7 +76,7 @@ test.
 | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value is interpolated into `innerHTML` anywhere in `src/` | 22 sites were reviewed by eye and pronounced fine; one was a stored XSS reachable from an imported backup |
 | [test/contrast.test.ts](test/contrast.test.ts) | A palette token drops below AA, or any colour literal appears in a `.ts` or `.html` file | Two failing colours shipped inside TypeScript template strings, invisible to guards that only read `.css` |
 | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A live document contradicts the code, names a path that does not exist, omits a module from CONTEXT_MAP, or a CSS rule outlives its component | Five documents once claimed a network behaviour the code had not had for months, including the rule an agent reads first |
-| ... also: an outbound host in `background.ts` is missing from SECURITY.md, the privacy page or STORE_LISTING | The uninstall URL opened a third-party form for four versions, disclosed nowhere |
+| ... also: an outbound host in `background.ts` or `senderIcons.ts` is missing from SECURITY.md, the privacy page or STORE_LISTING | The uninstall URL opened a third-party form for four versions, disclosed nowhere. Sender icons made the content script a second place that can name a host |
 | ... also: live documents disagree on the test count | Four of them stated four different totals inside one release, each correct when written |
 | ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
@@ -86,7 +94,7 @@ coverage.
 
 Both theme fixes in 1.6.2 were about a *frame*, not a value. Every final state was already
 correct, so no assertion about the end of a render could have caught either one, and the
-844 tests below would all have passed on the broken build.
+tests below would all have passed on the broken build.
 
 They were verified by sampling the computed background on every animation frame through a
 real load, before and after, in the configuration that was reported:
@@ -195,6 +203,41 @@ real-mouse check is not. What they established is written above and encoded in
 [test/handover.test.ts](test/handover.test.ts) and
 [test/content.test.ts](test/content.test.ts). **If the sweep's rules for which tabs to
 touch change again, measure them against a real Gmail before trusting the suite.**
+
+### Sender icons in real browsers
+
+jsdom loads no image and lays nothing out, so the unit suite proves the decisions and
+nothing about the page. Two runs, on 2026-09-29, proved the page.
+
+**Live Gmail, Chrome 154**, the build loaded unpacked into a copy of a signed-in profile:
+43 of 43 inbox rows drew a chip in the ARIA anchor, rows kept their 28px height, 23 real
+icons and 20 badges (mailbox providers in the default style), a real mouse click on a chip
+opened its thread, the open thread showed no chip, and all 43 were back on returning.
+
+Gmail replaces the subject cells of its top rows on its own every so often, with nothing
+happening on screen. Traced over 30 seconds: Gmail removed ten cells and the chips were
+back in the same millisecond, and **0 of 1,801 animation frames** had a row without its
+chip. That is because the observer rescans inside its own callback, which runs before the
+browser paints. The first version rescanned from a timer, and the same trace put the chips
+back 16ms later, a frame late; `test/senderIcons.test.ts` now pins the pre-paint path. The chip that goes back is the same node Gmail discarded, not a rebuilt one, so its icon is already decoded and cannot paint blank for a frame (InboxSDK does the same; it was the one part of its approach worth copying). The drift canary's S1 to S4 and W1 to W3 assert the same
+against the same inbox every day.
+
+**Four Chromium browsers**, against a sanitised copy of that inbox (every address, name and
+subject replaced) served at the real Gmail address with Playwright's request routing, so
+each browser runs the content script exactly as it would on Gmail:
+
+| Browser | Icons allowed | Icons blocked | Icons delayed 5s | Badges only | Feature off |
+|---|---|---|---|---|---|
+| Chrome 154 | 43 chips, 27 icons, 9 requests | 43 badges, health `degraded/favicon-unreachable` | badges at 2s, icons after | 0 requests | 0 chips, 0 requests |
+| Edge 154 | same | same | same | same | same |
+| Opera 152 | same | same | same | same | same |
+| Chromium 151 | same | same | same | same | same |
+
+No request carried a referrer, the tab bar drew in every run, and no page error was raised.
+Edge and Opera were not run against a live Gmail, because neither was signed in on the test
+machine. Brave was not installed. The harness is throwaway scaffolding, like the other
+real-browser proofs here; what it established is encoded in
+[test/senderIcons.test.ts](test/senderIcons.test.ts) and asserted daily by the canary.
 
 ### Two gates that cannot live in jest
 

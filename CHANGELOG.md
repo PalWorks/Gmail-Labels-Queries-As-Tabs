@@ -4,6 +4,55 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.8.0] - 2026-09-29
+
+> 1.7.4 was built, tagged and never submitted. This carries it, and everything since 1.6.2.
+
+### Added
+
+- **Sender icons, off until you turn them on.** A chip at the start of each inbox row
+  names the organisation the mail is from (`alerts@email.mashreq.com` shows as
+  `mashreq.com`, `billing@icici.bank.in` as `icici.bank.in`), with a coloured letter.
+  Turn on **Load website icons** as well and the organisation's own icon replaces the
+  letter once it has loaded. Mail from `gmail.com`, `outlook.com` and other mailbox
+  providers shows the sender's initial rather than thirty copies of the provider's logo;
+  the provider's icon is an option. Settings apply at once, without reloading Gmail.
+  Controls are on the options page under Sender icons.
+
+  Rebuilt from the "Gmail Sender Icons" extension without its InboxSDK, which finds rows by
+  the same obfuscated class names, injects a page script, and by default reports errors
+  and usage to its vendor (ADR-027). Here every step has a fallback: rows by ARIA role,
+  then a class learned from the page, then a shipped fallback; the sender by `email`, then
+  `data-hovercard-id`; placement in the row's link, then two further fallbacks. A fallback
+  that held is shown as "Working, on a fallback" on the options page.
+
+  Website icons are the only part of the extension that makes a request on its own
+  initiative, and only after both switches are on: the domain alone goes to
+  `t0.gstatic.com`, or `www.google.com` if that cannot be reached, with no referrer, once
+  per domain. The badge is always drawn first; at most four icon requests run at once,
+  each with an eight second timeout, and five unreachable hosts in a row pause fetching
+  for ten minutes, so a slow or blocking network changes nothing on screen.
+
+  Verified in a live Gmail in Chrome 154 (43 of 43 rows, rows keep their height, a click
+  on a chip opens its thread), and against a sanitised inbox in Chrome 154, Edge 154,
+  Opera 152 and Chromium 151 with icons allowed, blocked, delayed and off.
+- **The drift canary alerts Google Chat, and refreshes what it can.** A webhook in
+  `~/.config/gmail-labels-as-tabs/alerts.env` (`install-canary.sh --alerts`) receives the
+  same escalations as the desktop and GitHub, one thread per kind of break, with the
+  recovery announced where the break was. A new verdict, DEGRADED (exit 5), reports a
+  fallback doing the work, or a shipped fallback that has stopped matching. When a sender
+  fallback rots while ARIA still works, the canary writes the value Gmail uses today, and
+  `propose-selectors.mjs` opens a pull request with it, tested, never merged (ADR-028).
+
+### Fixed
+
+- **Integration health could lose a verdict.** `health.ts` kept one write-suppression
+  cache for every component and wrote one shared object by reading it, changing one entry
+  and writing it back. With a single component that was harmless; with two, alternating
+  verdicts defeated the suppression and a verdict recorded at the same moment as another
+  could erase it. Each component now owns its own key, written with a single `set`, and
+  the old shared key is still read so an upgrade does not blank the row.
+
 ## [1.7.4] - 2026-09-24
 
 > 1.7.3 was tagged and never submitted. This supersedes it, and carries

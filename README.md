@@ -55,7 +55,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 |----------|-----|
 | **Power Gmail users** | Navigate labels and saved searches without the sidebar |
 | **Multi-account users** | Independent tab configurations per Gmail account |
-| **Privacy-focused users** | Client-side tool with no background network requests. Two things ever leave the browser and neither happens on its own: feedback you choose to send, and a form Chrome opens after you uninstall |
+| **Privacy-focused users** | Client-side tool with no background network requests. Three things can ever leave the browser and none happens on its own: feedback you choose to send, a form Chrome opens after you uninstall, and website icons for sender icons if you turn them on |
 | **Teams** | Exportable configs let you share tab setups across team members |
 
 ## Features
@@ -64,6 +64,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
 | **"Show as Tabs" in Gmail's own menu** | The three-dot menu beside any label, including sublabels, ends with "Show as Tabs", or "Remove from Tabs" if it already has one. The item hardcodes no Gmail class name: it clones one of Gmail's own menu items, so it inherits Gmail's styling and survives a Gmail rename. It lights up under the pointer like Gmail's own items, using a highlight learned from them at runtime. See ADR-022 and ADR-024 |
+| **Sender icons (opt-in)** | A chip at the start of each inbox row naming the sender's organisation (`email.mashreq.com` shows as `mashreq.com`), with a coloured letter, or the organisation's own icon if you also turn on website icons. Mailbox providers such as gmail.com show the sender's initial instead of the provider's logo, unless you choose otherwise. Found by ARIA roles with a fallback behind every step, no InboxSDK, and applied live without a Gmail reload. See ADR-027 |
 | **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
 | **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
@@ -77,8 +78,9 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | **Guided tour** | Six steps that demonstrate the tab bar in a working miniature inside the panel, not screenshots of it. Opens over Gmail so the theme step retints your real bar; falls back to a standalone page when no Gmail tab is open |
 | **Toolbar menu** | Configure tabs, Show me around, All settings, Help & support, behind the extension icon |
 | **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
-| **Integration health** | One row on the options page saying whether the Gmail menu item is working, with a button that copies a short diagnostic. Nothing is transmitted; the copying is yours to do |
-| **Privacy First** | No background network requests, no telemetry; everything stays local |
+| **Integration health** | Rows on the options page saying whether the Gmail menu item and sender icons are working, or working only because a fallback held, with a button that copies a short diagnostic. Nothing is transmitted; the copying is yours to do |
+| **Privacy First** | No background network requests, no telemetry; everything stays local. The one optional request is website icons, which you turn on yourself |
+| **Chromium browsers** | Tested in Chrome, Microsoft Edge, Opera and Chromium |
 
 ## Architecture
 
@@ -229,6 +231,10 @@ interface Settings {
   rules: Rule[];
   theme: 'system' | 'light' | 'dark'; // retained for migration; the live theme is global (see below)
   showUnreadCount: boolean;
+  senderIcons: boolean;                // off by default
+  senderIconsFavicons: boolean;        // a second opt-in, off by default
+  senderIconsDomain: boolean;
+  senderIconsMailbox: 'initial' | 'provider';
 }
 
 interface Tab {
@@ -271,7 +277,7 @@ Options page and passed directly to the Apps Script generator.
 
 | Permission | Purpose |
 |------------|---------|
-| `storage` | Save tab configurations and rules |
+| `storage` | Save tab configurations, rules and preferences |
 | `downloads` | Export settings as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
 | `scripting` | Start the content script in a Gmail tab that was already open, so an install or an update does not require a manual reload (ADR-025) |
@@ -349,6 +355,7 @@ Gmail-Labels-As-Tabs/
 │   │   ├── theme.ts                  # Theme management & Gmail dark detection
 │   │   ├── themeMirror.ts            # The last painted theme, readable without yielding
 │   │   ├── labelMenu.ts              # "Show as Tabs" inside Gmail's own label menu
+│   │   ├── senderIcons.ts            # Sender chips in the inbox list (opt-in)
 │   │   ├── health.ts                 # Whether the Gmail integrations are working, locally
 │   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
 │   │   ├── rules.ts                  # Automation rules & Apps Script generation
@@ -365,6 +372,7 @@ Gmail-Labels-As-Tabs/
 │   │   ├── storage.ts                # chrome.storage.sync wrapper (CRUD, migration)
 │   │   ├── importExport.ts           # Import/Export logic with schema validation
 │   │   ├── selectors.ts              # DOM selector constants
+│   │   ├── domain.ts                 # Sender address to organisation domain
 │   │   └── tabListRenderer.ts        # Reusable tab list rendering
 │   │
 │   ├── ui/
@@ -435,7 +443,9 @@ npx jest test/modals/
 | Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection, and the window where 'system' is still a guess |
 | First-frame theme | `themeMirror.test.ts` | The synchronous cache and the boot stamp that uses it |
 | Gmail label menu | `labelMenu.test.ts` | Reading which label was clicked, cloning one of Gmail's items, the toggle, sublabel titles, and every way it gives up |
-| Integration health | `health.test.ts` | Recording only on change, surviving an orphaned context, and carrying nothing identifying |
+| Integration health | `health.test.ts` | Recording only on change, one key per component, surviving an orphaned context, and carrying nothing identifying |
+| Sender icons | `senderIcons.test.ts`, `domain.test.ts` | Every fallback layer, the badge before any request, website icons only on opt-in, slow and blocked networks, the observer not looping |
+| Drift canary tooling | `canaryNotify.test.ts`, `canaryRun.test.ts`, `canaryPropose.test.ts` | Google Chat alerts, escalation streaks and recovery, and what a selector proposal may write, all as real processes against stubs |
 | Options Page | `options.test.ts` | Account detection, section navigation, rule UI |
 | Import/Export | `importExport.test.ts` | Schema validation, export format, round-trip |
 | Modals | `modals/*.test.ts` | Pin, edit, delete, import, uninstall modal logic |
@@ -450,7 +460,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 39 test files, 844 test cases.**
+**Total: 44 test files, 965 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -478,7 +488,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 844 tests across 39 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 965 tests across 44 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -609,7 +619,7 @@ Quick start:
 - All user-facing strings must be HTML escaped (XSS prevention), including ids; `test/htmlSinks.test.ts` enforces this against the AST
 - All settings writes go through `mutateSettings`, never read-modify-save; see ADR-013
 - No colour literals outside the stylesheets; `test/contrast.test.ts` enforces this
-- No background network requests (privacy-first principle). The single user-initiated exception is the feedback relay; see ADR-012 in DECISIONS.md
+- No background network requests (privacy-first principle). The user-initiated exceptions are the feedback relay and opt-in website icons; see ADR-012 and ADR-027 in DECISIONS.md
 - Production builds strip all `console.log` via esbuild's `drop` option
 - Keep modules focused with a single responsibility per file
 - Format code with Prettier before committing: `npm run format`
@@ -621,7 +631,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (844 tests across 39 suites)
+npm test          # Jest (965 tests across 44 suites)
 npm run build     # Verify production build
 ```
 
@@ -633,11 +643,12 @@ This extension is designed with privacy as a non-negotiable principle:
 - **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send, and it stores nothing
+- **Website icons, only if you turn them on**: sender icons are off by default and draw a coloured letter without any request. With **Load website icons** also on, the sender's domain alone (such as `mashreq.com`) is sent to Google's icon service at `t0.gstatic.com`, or `www.google.com` if that cannot be reached, with no referrer, once per domain (ADR-027)
 - **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
 - **Minimal permissions**: Only `storage`, `downloads`, `management` and `scripting`, the last of which injects this extension's own content script into Gmail and nothing else
 - **Open source**: Full codebase available for audit
 
-The Atom feed used for unread counts fetches from `mail.google.com` (same origin). No cross-origin requests are made.
+The Atom feed used for unread counts fetches from `mail.google.com` (same origin). The only cross-origin requests are the ones listed above, each of which you trigger.
 
 The automation rules feature generates Google Apps Script code that runs entirely under your own Google account. The extension has no access to your Gmail API, no OAuth tokens, and no API keys.
 

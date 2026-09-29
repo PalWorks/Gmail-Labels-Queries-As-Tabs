@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -96,9 +96,10 @@ timers. See [src/content.ts](src/content.ts) and [src/modules/unread.ts](src/mod
 **Consequences.** No analytics or remote config is possible. Unread data must come from
 Gmail's feed, XHR, or DOM only. This is a hard constraint, see [SECURITY.md](SECURITY.md).
 
-**Amended by ADR-012 and ADR-014.** Two exceptions exist and neither happens on its own:
-feedback the user types and submits, and the uninstall page Chrome opens after the
-extension has already been removed. Nothing is sent in the background, ever. Both hosts
+**Amended by ADR-012, ADR-014 and ADR-027.** Three exceptions exist and none happens on
+its own: feedback the user types and submits; the uninstall page Chrome opens after the
+extension has already been removed; and, from v1.8.0, website icons for sender icons, fetched
+only after the user has turned on both the feature and, separately, the icons themselves. Nothing is sent in the background, ever. Both hosts
 must be disclosed in SECURITY.md, the in-extension privacy page and STORE_LISTING.md, or
 the build fails.
 
@@ -716,6 +717,14 @@ trigger, and the diagnostic carries no address, label name or tab title.
 - It is coupled to one developer machine being switched on. That is accepted:
   the alternative is Gmail credentials in CI, which is not acceptable.
 
+**Amended by ADR-027 and ADR-028 (v1.8.0).** Health gained a second component
+(`senderIcons`) and a `degraded` status, and each component now owns its own
+`chrome.storage.local` key (`integrationHealth.<component>`), written with one
+`set` and no read. The shared object this ADR introduced was read-modify-write,
+which loses one component's verdict the first time two components record at
+once. The old key is still read so an upgrade does not blank the row. The canary
+gained the sender icons contract and alerts that reach Google Chat.
+
 ## ADR-024: The highlight under the pointer is learned, not written down
 
 **Date:** 2026-09-23
@@ -897,3 +906,140 @@ behaviour the old substring test was really there for.
   the same-prefix decoy and the open-thread case, because the obvious
   "simplification" back to an exact match would silently unlight a tab whenever
   a thread is open.
+
+## ADR-027: Sender icons, built on ARIA with a fallback behind every step
+
+**Date:** 2026-09-29
+**Status:** Accepted
+**Context:** v1.8.0
+
+A user asked for what the "Gmail Sender Icons" extension (Digital Inspiration,
+v4.0) does: a chip in each inbox row naming the sender's organisation, with its
+icon. That extension is sixty lines of its own on top of InboxSDK 2.1.62, a
+snapshot built on 2024-07-19. Reading InboxSDK's source settled whether to reuse
+it, and the answer is ADR-021's again, with two findings of its own:
+
+- InboxSDK finds rows by `.bGI.nH` → `[gh=tl]` → `div.Cp` → `tbody`, and places
+  its label in `td.a4W div.xS div.xT`, styled with Gmail's own label classes. It
+  is the same obfuscated markup a hand-written module would use. What it adds is
+  lifecycle plumbing: a MutationObserver per row that re-adds the label when
+  Gmail re-renders it.
+- Called as that extension calls it, `InboxSDK.load(2, key)` defaults to
+  `globalErrorLogging: true` and `eventTracking: true`: error reports with
+  censored HTML go to `api.inboxsdk.com/api/v2/errors`, and usage events with a
+  hashed user email go to the same host. The whole feature also waits on a page
+  world script injected through the service worker, so a worker that is slow to
+  answer leaves every row without a label and no error anyone sees.
+
+Measured on 2026-09-29 against a live inbox of 43 rows: every row is
+`tr[role="row"]` with an id, every row carries its sender in an `email`
+attribute and an identical `data-hovercard-id`, and every row's
+`[role="link"]` wraps the subject container. Gmail's CSP has no `img-src`
+directive. Both of Google's favicon endpoints return a 16px placeholder for a
+domain with no icon when 32px is asked for.
+
+### Decision
+
+Build it in `src/modules/senderIcons.ts`, in the content script alone, with no
+page world and no service worker round trip, and give every step a fallback
+that ends in drawing nothing:
+
+- **Rows:** `tr[role="row"][id]` in `[role="main"]`, then the class Gmail used
+  for those rows the last time ARIA worked (learned at runtime, kept in
+  `chrome.storage.local`), then `SENDER_ROW_FALLBACK` in the registry.
+- **Sender:** the `email` attribute, then `data-hovercard-id`. The first
+  participant who is not the user names the thread.
+- **Placement:** the first child of the row's `[role="link"]`, then the learned
+  subject class, then `SENDER_SUBJECT_FALLBACK`, then the sender's own cell.
+- **Icon:** a lettered badge, drawn at once without any request. Only if the
+  user turned on website icons, a favicon for the host, then for the
+  registrable domain, from `t0.gstatic.com` (which carries no Google account
+  cookies) and then `www.google.com/s2`. It replaces the badge only after it has
+  loaded and proved larger than the placeholder.
+- **Re-rendering:** one observer on the list rather than one per row, which
+  rescans inside its own callback so a chip is back before the browser paints.
+  The chip put back is the node Gmail discarded, kept per row, so its icon is
+  already decoded. That reuse is InboxSDK's idea, and the one part of its
+  approach copied.
+
+Off by default. Website icons are a second, separate opt-in, because they are
+the only part that makes a request; what is sent is the domain, never the
+address, name or subject, with no referrer, once per domain. Mailbox providers
+(`gmail.com`, `outlook.com`) show the sender's initial by default rather than
+the provider's icon on every personal row; the provider style is an option.
+The chip is ours, styled from `toolbar.css` tokens rather than Gmail's label
+classes, and every badge colour holds white text at AA.
+
+### Consequences
+
+- A third outbound path, disclosed wherever the other two are, and gated by the
+  same test: `test/repoConsistency.test.ts` now checks the hosts named in
+  `senderIcons.ts` as well as the service worker's. No new permission.
+- A fallback that held is recorded as `degraded` in `health.ts`, and the canary
+  checks the same chain daily (ADR-028), so a Gmail change shows up while the
+  feature still works rather than after it stops.
+- Slow or blocked networks cost nothing visible: at most four icon requests in
+  flight, eight seconds each, and five unreachable hosts in a row pause fetching
+  for ten minutes. Verified in Chrome 154, Edge 154, Opera 152 and Chromium 151,
+  with icons allowed, blocked, delayed five seconds, off, and the feature off.
+- The registry grows from five class names to seven. Both new ones are
+  fallbacks, not the primary path, and the canary proposes a replacement for
+  either when it stops matching.
+- Split reading pane and Multiple Inboxes have not been measured live. The
+  module handles the split pane's continuation rows the way InboxSDK does, and
+  fails closed on any structure it does not recognise.
+
+## ADR-028: Alerts that reach a person, and fallbacks that refresh themselves
+
+**Date:** 2026-09-29
+**Status:** Accepted
+**Context:** v1.8.0
+
+The drift canary (ADR-023) told its owner through a desktop notification and a
+GitHub issue: one only seen at the machine, and one only seen when someone
+looks. The request was to be pinged in Google Chat when something breaks, and
+for the weak links in the code to be kept current without waiting to notice.
+
+### Decision
+
+**Alerts.** `scripts/canary/notify.mjs` posts to a Google Chat incoming webhook.
+The webhook is a credential, so it lives in
+`~/.config/gmail-labels-as-tabs/alerts.env` (mode 600, created by
+`install-canary.sh --alerts`) and never in the repository, and it is never
+printed. Only a `chat.googleapis.com/v1/spaces/...` URL is accepted. Delivery is
+three attempts of ten seconds; a 4xx other than 429 is not retried. Each kind of
+break has its own thread, and a recovery is announced in the thread of what
+broke. `run-canary.sh` keeps deciding when: the second consecutive failure, then
+weekly.
+
+**A verdict between PASS and FAIL.** The canary exits 5, `DEGRADED`, when the
+feature works but a fallback is doing the work, or a shipped fallback has stopped
+matching and would not hold next time, or a favicon provider has stopped
+answering. It escalates like a failure but is worded as a warning and opens no
+issue.
+
+**Refresh.** Weak links are refreshed at two levels.
+
+- In every user's browser, while the ARIA path works, the sender icons module
+  records what Gmail calls the same elements today, and tries that before the
+  value this release shipped with.
+- On the canary's machine, when a shipped fallback stops matching while the
+  ARIA path still finds the elements, the right new value is known exactly. The
+  canary writes it to `selector-proposal.json`, and `propose-selectors.mjs`
+  applies it to `src/utils/selectors.ts` in a throwaway git worktree, runs the
+  tests that exercise it, and opens a pull request. It never merges, it opens at
+  most one pull request per value, and it may change only the two sender
+  fallbacks, each only to a plain class selector.
+
+### Consequences
+
+- The label menu has nothing to refresh: it hardcodes no class name (ADR-022).
+  Only the sender fallbacks are refreshable, because they are the only Gmail
+  values written into the source that a canary can re-derive with certainty.
+- Nothing about this reaches users on its own. A refreshed selector ships in a
+  release like any other change; the in-browser learning is what bridges the gap.
+- Alerts depend on one machine being on, as the canary does. The in-product
+  health row remains how users on other Gmail builds can tell us.
+- The escalation logic is tested end to end in a sandbox
+  (`test/canaryRun.test.ts`) with stub `gh` and `notify-send`, so a change to it
+  cannot open a real issue or post a real message from a test run.

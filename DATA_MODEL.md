@@ -3,7 +3,7 @@
 Storage schema and data shapes for **Gmail Labels and Search Queries as Tabs**. The
 source of truth is [src/utils/storage.ts](src/utils/storage.ts); this file explains it.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## Storage areas
 
@@ -15,7 +15,8 @@ The extension uses two Chrome storage areas deliberately, plus one browser-local
 | `chrome.storage.local` | Global theme, key `globalTheme` | Browser-wide, per-window appearance; deliberately not device-synced so all accounts in one window match |
 | `chrome.storage.local` | Last theme Gmail was seen in, key `detectedGmailTheme` | The options page and the toolbar menu have no Gmail DOM to sample, so they read what the content script saw. Only ever written from a real reading, never from a guess |
 | `chrome.storage.local` | A pending first-run tour, key `pendingOnboarding` | Set on install, read and cleared by the first Gmail tab to finish initialising |
-| `chrome.storage.local` | Whether the Gmail integrations are working, key `integrationHealth` | The options page has no Gmail DOM to test against, and the drift canary only ever sees one account in one A/B bucket. A Gmail tab records its verdict here; the options page shows it. Written only when the verdict changes, and never transmitted |
+| `chrome.storage.local` | Whether the Gmail integrations are working, one key per component: `integrationHealth.labelMenu`, `integrationHealth.senderIcons` | The options page has no Gmail DOM to test against, and the drift canary only ever sees one account in one A/B bucket. A Gmail tab records its verdict here; the options page shows it. Written only when the verdict changes, and never transmitted. Before v1.8.0 this was one shared object under `integrationHealth`, which is still read but no longer written |
+| `chrome.storage.local` | What Gmail called its inbox rows and subject containers the last time sender icons found them by ARIA, key `senderIconsLearned` | A fresher fallback than the one a release shipped with, for the day an ARIA attribute goes missing. Two class tokens and a timestamp, written only on change, never transmitted. See ADR-028 |
 | `localStorage` (extension origin) | The theme this browser last painted, key `glt.resolvedTheme` | The only storage a page can read **without yielding**. See below |
 
 There is no server and no other persistence. Exported config is a JSON blob the user
@@ -64,14 +65,28 @@ Three properties hold it in place:
   [test/health.test.ts](test/health.test.ts), which asserts it.
 
 ```ts
-integrationHealth = {
-  labelMenu: {
-    status: 'active' | 'unavailable' | 'not-attempted',
-    reason?: 'no-account' | 'no-label-name' | 'no-menu' | 'no-model' | 'clone-mismatch',
-    at: number   // epoch ms
-  }
+// One key per component, each written with a single set and no read first,
+// so two components recording at once cannot erase each other (ADR-023, as amended).
+'integrationHealth.labelMenu' = ComponentHealth
+'integrationHealth.senderIcons' = ComponentHealth
+
+interface ComponentHealth {
+  status: 'active' | 'degraded' | 'unavailable' | 'not-attempted',
+  reason?:
+    // label menu
+    | 'no-account' | 'no-label-name' | 'no-menu' | 'no-model' | 'clone-mismatch'
+    // sender icons: degraded, a fallback held
+    | 'fallback-rows' | 'fallback-anchor' | 'fallback-sender' | 'favicon-unreachable'
+    // sender icons: unavailable
+    | 'no-sender' | 'no-anchor',
+  at: number   // epoch ms
 }
+
+senderIconsLearned = { row?: string, subject?: string, at: number }  // plain class tokens only
 ```
+
+`degraded` means working, but only because a fallback held. The options page words it as
+working, and says what it is working around.
 
 ## Types
 
@@ -120,16 +135,29 @@ interface Settings {
   labels?: LegacyTabLabel[];  // legacy, retained only for migration
   theme: Theme;               // retained for migration seeding, see note below
   showUnreadCount: boolean;
+  senderIcons: boolean;           // v1.8.0: chips in the inbox list, off by default
+  senderIconsFavicons: boolean;   // v1.8.0: fetch website icons, a second opt-in, off by default
+  senderIconsDomain: boolean;     // v1.8.0: show the domain beside the icon
+  senderIconsMailbox: 'initial' | 'provider'; // v1.8.0: gmail.com and the like
   rev?: number;               // optimistic-concurrency token, see below
 }
 
 type Theme = 'system' | 'light' | 'dark';
 ```
 
+The four sender icon fields are sanitised on every read in `getSettings`: anything that is
+not exactly a boolean (or one of the two mailbox styles) reads as the default. For the two
+opt-ins the default is off, so a corrupt or hand-edited value can never switch on a request
+the user did not agree to. Settings written before v1.8.0 lack the fields and read them as
+defaults, which is why no migration exists for them. They are not part of export or import,
+the same as `showUnreadCount`.
+
 ### Default settings
 
 New accounts start with two `hash` tabs (Inbox `#inbox`, Sent `#sent`), no rules,
-`showUnreadCount: true`, `theme: 'light'` and `rev: 0`.
+`showUnreadCount: true`, `theme: 'light'`, sender icons off (`senderIcons: false`,
+`senderIconsFavicons: false`, `senderIconsDomain: true`, `senderIconsMailbox: 'initial'`)
+and `rev: 0`.
 
 ### rev
 
@@ -157,7 +185,7 @@ type SettingsOp =
   | { kind: 'removeTab'; tabId: string }
   | { kind: 'updateTab'; tabId: string; updates: Partial<Tab> }
   | { kind: 'reorderTabs'; order: string[] }
-  | { kind: 'setPrefs'; prefs: Partial<Pick<Settings, 'theme' | 'showUnreadCount'>> }
+  | { kind: 'setPrefs'; prefs: Partial<Pick<Settings, PrefKey>> }  // theme, showUnreadCount, the four senderIcons* fields
   | { kind: 'addRule'; rule: Rule }
   | { kind: 'upsertRule'; rule: Rule }
   | { kind: 'updateRule'; tabId: string; updates: Partial<Rule> }

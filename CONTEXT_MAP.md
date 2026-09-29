@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## Documentation index
 
@@ -52,7 +52,7 @@ Last updated: 2026-09-22 (v1.6.2)
 | Message names shared between surfaces, so a name drags no implementation | [src/modules/messages.ts](src/modules/messages.ts) |
 | Typed storage access + migrations + global theme | [src/utils/storage.ts](src/utils/storage.ts) |
 | Export / import serialization | [src/utils/importExport.ts](src/utils/importExport.ts) |
-| Gmail DOM selectors | [src/utils/selectors.ts](src/utils/selectors.ts) |
+| Gmail DOM selectors, including the two sender icon fallbacks the drift canary refreshes | [src/utils/selectors.ts](src/utils/selectors.ts) |
 | Shared module state + accessors | [src/modules/state.ts](src/modules/state.ts) |
 | Detecting that this content script was orphaned by an extension update | [src/modules/extensionContext.ts](src/modules/extensionContext.ts) |
 | The "reload Gmail" notice every modal shows once orphaned | [src/modules/modals/contextNotice.ts](src/modules/modals/contextNotice.ts) |
@@ -66,6 +66,8 @@ Last updated: 2026-09-22 (v1.6.2)
 | Why an extension page opens in the right colour on its first frame | [src/modules/themeMirror.ts](src/modules/themeMirror.ts) |
 | Whether the Gmail integrations are working, and how a user reports that they are not | [src/modules/health.ts](src/modules/health.ts) |
 | How "Show as Tabs" gets into Gmail's own label menu without hardcoding a Gmail class | [src/modules/labelMenu.ts](src/modules/labelMenu.ts) |
+| Sender icons in the inbox list: ARIA first, a fallback behind every step, opt-in website icons | [src/modules/senderIcons.ts](src/modules/senderIcons.ts) |
+| From a sender's address to the organisation's domain (`email.mashreq.com` → `mashreq.com`) | [src/utils/domain.ts](src/utils/domain.ts) |
 | The script that stamps that theme before any content is parsed | [src/themeBoot.ts](src/themeBoot.ts) |
 | Tab color palette tokens and validation | [src/utils/colors.ts](src/utils/colors.ts) |
 | Shared accessible color swatch picker | [src/modules/colorPicker.ts](src/modules/colorPicker.ts) |

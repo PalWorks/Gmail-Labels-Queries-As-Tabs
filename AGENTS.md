@@ -4,7 +4,7 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## What this project is
 
@@ -24,14 +24,18 @@ Orientation reading order for a new agent:
 
 1. **No background network requests, and every outbound host is disclosed.** Unread counts
    come only from Gmail's own Atom feed, Gmail's XHR responses, or the DOM. No analytics,
-   telemetry, or remote config, ever. Exactly two outbound paths exist, and neither happens
+   telemetry, or remote config, ever. Exactly three outbound paths exist, and none happens
    on its own: the relay in [worker/](worker/), reached from
-   [src/modules/feedback.ts](src/modules/feedback.ts) when the user presses Send; and the
+   [src/modules/feedback.ts](src/modules/feedback.ts) when the user presses Send; the
    uninstall URL, which Chrome opens after the user has already removed the extension
-   (ADR-014). Any other request to a non `mail.google.com` origin, or any request the user
-   did not explicitly trigger, is a blocking defect.
+   (ADR-014); and website icons for sender icons, fetched from `t0.gstatic.com` (then
+   `www.google.com`) only after the user has turned on both sender icons and, separately,
+   "Load website icons" (ADR-027). Both of those settings default to off and must stay off by
+   default. Any other request to a non `mail.google.com` origin, or any request the user did
+   not explicitly turn on, is a blocking defect.
    Adding a host is not enough on its own: `test/repoConsistency.test.ts` fails the build
-   unless every host named in [src/background.ts](src/background.ts) also appears in
+   unless every host named in [src/background.ts](src/background.ts) or
+   [src/modules/senderIcons.ts](src/modules/senderIcons.ts) also appears in
    [SECURITY.md](SECURITY.md), the in-extension privacy page and
    [STORE_LISTING.md](STORE_LISTING.md). The uninstall URL shipped undisclosed for four
    versions, which is why this is a gate and not a habit. See ADR-012 and ADR-014.
@@ -122,15 +126,21 @@ Orientation reading order for a new agent:
     hardcoded one is not wrong for some users: it is right until the day it is wrong for
     all of them. Find the element by ARIA role or data attribute and clone one of Gmail's
     own nodes to inherit its styling, as [src/modules/labelMenu.ts](src/modules/labelMenu.ts)
-    does. The five that remain live in [src/utils/selectors.ts](src/utils/selectors.ts) and
-    a guard fails the build if one appears anywhere else in `src/`. See ADR-022.
+    does. The seven that remain live in [src/utils/selectors.ts](src/utils/selectors.ts) and
+    a guard fails the build if one appears anywhere else in `src/`. Two of them,
+    `SENDER_ROW_FALLBACK` and `SENDER_SUBJECT_FALLBACK`, are fallbacks behind ARIA anchors,
+    and the drift canary opens a pull request to refresh either one when it stops matching;
+    keep them as single quoted string constants so that refresh can find them. See ADR-022
+    and ADR-028.
 
 18. **An integration with Gmail's UI fails closed and says so.** If the structure it needs
     is not there, add nothing: Gmail is left exactly as it was, with no half-drawn item and
     no guess. Record why in [src/modules/health.ts](src/modules/health.ts), because the
     drift canary only ever sees one account in one A/B bucket and the options page's
     integration row is how everybody else can tell us. Recording is local and is never
-    transmitted. See ADR-023.
+    transmitted. A fallback that held is recorded as `degraded`, not `active`: it is the
+    warning that arrives while there is still time. Each component writes its own key
+    (`healthKeyFor`), never a shared object. See ADR-023 and ADR-027.
 
 ## Coding conventions
 
@@ -174,6 +184,13 @@ statement about the repository, not about a function:
 | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component; an outbound host goes undisclosed; live documents disagree on the test count; anything links to the retired Pages site; a `website/` folder reappears; a workflow gains an automatic trigger |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 hostile inputs |
 
+Three more exercise the drift canary's tooling as real processes, with stubs where a real
+call would reach the outside: [test/canaryNotify.test.ts](test/canaryNotify.test.ts) (the
+Google Chat alert, against a local server), [test/canaryRun.test.ts](test/canaryRun.test.ts)
+(the escalation in `run-canary.sh`, in a sandbox with stub `gh` and `notify-send`) and
+[test/canaryPropose.test.ts](test/canaryPropose.test.ts) (what a selector proposal may
+write). None of them can post a real message or open a real issue.
+
 Two further gates live in CI rather than jest, because they need the built artefact or the
 network: `dist/icons` may hold only icons the manifest declares, and the **published**
 privacy policy must still name every outbound host and permission this build has.
@@ -207,6 +224,15 @@ Then verify `manifest.json` and `package.json` versions match. See
 - [src/utils/storage.ts](src/utils/storage.ts): the single write path for everything the
   user configures. `applyOp` must stay pure, total (an unknown op throws, never returns
   `undefined`) and idempotent.
+- [src/modules/senderIcons.ts](src/modules/senderIcons.ts): runs on every inbox redraw and is
+  the one content-script module that makes a request. Keep every step's fallback ending in
+  "draw nothing", keep the badge drawn before any network wait, and keep the icon fetch
+  behind `prefs.favicons`. A scan must be idempotent: a second scan with nothing changed must
+  touch no DOM, or its own insertions feed the observer in a loop.
+- `scripts/canary/`: runs unattended from a systemd timer. `propose-selectors.mjs` writes into
+  the selector registry and opens pull requests; it must stay limited to the two sender
+  fallbacks, work only in a throwaway worktree, and never merge. `notify.mjs` handles a
+  credential (the Google Chat webhook) and must never print it.
 - [src/background.ts](src/background.ts): the only serialization point for settings writes.
   Do not return `true` from the message listener for a message you do not answer; that holds
   the sender's channel open and a promise-form `sendMessage` never settles.

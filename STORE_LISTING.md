@@ -3,10 +3,10 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.7.4
+**Version this listing describes:** 1.8.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-29
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -117,7 +117,7 @@ Gmail labels and searches as tabs above your inbox: one click per view, live unr
 
 ### 1.4 Description (detailed, 16,000 characters max)
 
-5,424 characters, counting the bullet glyph as one. Plain text: the store renders no
+6,565 characters, counting the bullet glyph as one. Plain text: the store renders no
 markdown, and the bullets below are literal `•` characters.
 
 ```
@@ -129,6 +129,7 @@ WHAT YOU GET
 
 • Tabs for labels, saved searches and Gmail views, in a bar above your inbox
 • Add a label straight from Gmail: its own three-dot menu now offers "Show as Tabs"
+• Optional sender icons: a small chip in each inbox row showing which organisation the mail is from
 • Live unread counts on every tab, read from Gmail itself
 • Tab colors from an accessible palette, so the views that matter stand out
 • Drag to reorder, across as many rows as you need
@@ -152,7 +153,9 @@ PRIVACY
 
 No analytics. No telemetry. No tracking pixels. No remote configuration. Your tabs, labels and settings stay in your browser's own storage, synced by Chrome through your Google account the same way your bookmarks are.
 
-Nothing is sent anywhere on its own. There is exactly one outbound request, and only when you ask for it: pressing Send Feedback on the Support page sends your message, your optional reply address, and, if you leave the box ticked, the extension version, your browser build, and how many tabs, rules and accounts you have. Never your label names, tab names, contacts or mail.
+Nothing is sent anywhere on its own. There are two outbound requests, and each happens only because you asked for it. Pressing Send Feedback on the Support page sends your message, your optional reply address, and, if you leave the box ticked, the extension version, your browser build, and how many tabs, rules and accounts you have. Never your label names, tab names, contacts or mail.
+
+Sender icons are off until you turn them on, and even then they draw a coloured letter and request nothing. Only if you also turn on "Load website icons" does the extension ask Google's icon service, at t0.gstatic.com or www.google.com, for each sender's website icon. What it sends is the domain alone, such as example.com: never the address, the name, the subject or anything in the message.
 
 One page opens after you have already left: uninstalling opens a short feedback form at tally.so, so we can learn why. The link carries no address, no settings and no identifier, nothing is sent from the extension, and closing the tab answers nothing.
 
@@ -179,13 +182,16 @@ Does it work with Gmail dark mode?
 Yes. Light, Dark and System are all supported, and System follows Gmail's own theme, so a light Gmail on a dark desktop still gets a light tab bar.
 
 Does it slow Gmail down?
-No. It draws one small bar on a page you have already loaded, and it fetches nothing of its own.
+No. It draws one small bar on a page you have already loaded, and it fetches nothing of its own unless you turn on website icons for sender icons.
+
+Can it show who an email is from at a glance?
+Yes, if you turn on sender icons in Settings. Each inbox row gets a small chip naming the sender's organisation, such as mashreq.com, with a coloured letter or, if you allow it, the organisation's own icon. Mail from gmail.com and similar providers shows the sender's initial instead of the provider's logo.
 
 Is it free?
 Yes. Free, no account, no upsell, and open source under the MIT license.
 
 Does it work in Edge, Brave or Firefox?
-It is built on Manifest V3 and published for Chrome. Chromium browsers that install from the Chrome Web Store, such as Edge, Brave and Opera, can run it. Firefox and Safari cannot.
+It is built on Manifest V3 and published for Chrome. It is tested in Chrome, Microsoft Edge, Opera and Chromium, and other Chromium browsers that install from the Chrome Web Store, such as Brave, can run it. Firefox and Safari cannot.
 
 How do I get my tabs back if something goes wrong?
 Export your configuration to a JSON file from Settings at any time, and import it back into a fresh profile or a new machine.
@@ -196,7 +202,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 
 OPEN SOURCE
 
-The full source is public and auditable, with 844 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 965 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
@@ -204,12 +210,13 @@ Source code: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
 Support: support@palworks.ai
 ```
 
-**One line in that block is not verified by a test or by a run:** "Chromium browsers that
-install from the Chrome Web Store, such as Edge, Brave and Opera, can run it." The
-extension has never been installed in Edge, Brave or Opera by us. It is a reasonable
-statement about Manifest V3 extensions in general and it answers a question models are
-asked constantly, which is why it earns its place. If you are not willing to support those
-browsers when someone writes in, cut the sentence; do not soften it.
+**What the browser line rests on.** On 2026-09-29 the 1.8.0 build was loaded unpacked into
+Chrome 154, Microsoft Edge 154, Opera 152 and Chromium 151 and driven against a sanitised
+copy of a real Gmail inbox, served at the Gmail address: the tab bar and sender icons drew
+in all four, with website icons allowed, blocked, delayed and off. Against a live, signed-in
+Gmail only Chrome was run, because no other browser on the test machine was signed in.
+Brave was not installed and is named only as a Chromium browser that installs from the
+store; if you are not willing to support it when someone writes in, cut the name.
 
 ### 1.5 Category
 
@@ -230,7 +237,8 @@ English (United States)
 
 ```
 This extension adds a tab bar to Gmail that lets the user open their own Gmail labels and
-saved searches in one click, and configure optional cleanup rules for those labels.
+saved searches in one click, configure optional cleanup rules for those labels, and, if
+they choose, see at a glance in the inbox list which organisation each email is from.
 ```
 
 ### 2.2 Permission justifications
@@ -242,9 +250,10 @@ do" but "what does this extension do with it".
 
 ```
 Stores the user's tab configuration: which labels and searches are tabs, their order,
-their colors, their cleanup rules, and the theme preference. Stored per Gmail account in
-chrome.storage.sync so the same tabs appear on every Chrome the user signs into. No
-browsing data, message content or contacts are stored.
+their colors, their cleanup rules, their display preferences (including whether sender
+icons are on), and the theme preference. Stored per Gmail account in chrome.storage.sync
+so the same tabs appear on every Chrome the user signs into. No browsing data, message
+content or contacts are stored.
 ```
 
 **`downloads`**
@@ -278,9 +287,12 @@ never any code from anywhere else.
 **Host permission `https://mail.google.com/*`**
 
 ```
-The extension's entire function is a tab bar inside Gmail, so it must run on Gmail's own
-pages to inject that bar, read the user's label list, and read unread counts from Gmail's
-Atom feed and its own network responses. It requests no other host.
+The extension's entire function is inside Gmail, so it must run on Gmail's own pages to
+inject the tab bar, read the user's label list, read unread counts from Gmail's Atom feed
+and its own network responses, and, if the user turns sender icons on, mark each inbox row
+with its sender's organisation. It requests no other host permission. Website icons for
+sender icons, which are off unless the user turns them on, are ordinary image loads from
+Google's icon service and need no permission.
 ```
 
 **Remote code**
@@ -292,13 +304,15 @@ runtime.
 
 ### 2.3 Outbound hosts, for the reviewer
 
-Two hosts appear in the source. Naming them here, unprompted, is cheaper than answering a
+Four hosts appear in the source. Naming them here, unprompted, is cheaper than answering a
 rejection.
 
 | Host | When it is reached | What it carries |
 |---|---|---|
 | `gmail-tabs-feedback.sunmooncal.workers.dev` | Only when the user presses Send Feedback | The message, an optional reply address, and optional version and counts |
 | `tally.so` | Only after uninstall, opened by Chrome, not by the extension | Nothing. A bare form URL with no identifier |
+| `t0.gstatic.com` | Only with sender icons on **and** "Load website icons" on, both off by default | The domain of a sender shown in the inbox, such as `example.com`, as an image request with no referrer |
+| `www.google.com` (`/s2/favicons`) | As above, only when `t0.gstatic.com` could not be reached | The same domain, the same way |
 
 `https://mail.google.com/*` is the host permission, not an outbound call of our own.
 
@@ -314,7 +328,7 @@ Tick exactly these, and no others.
 | Health information | No | |
 | Financial and payment information | No | |
 | Authentication information | No | |
-| Personal communications | No | Message content is never read, stored or transmitted |
+| Personal communications | **Yes, only if the user turns on website icons** | Message content is never read, stored or transmitted. With sender icons and website icons both on, the domain part of each visible sender's address is sent to Google's icon service to fetch that organisation's icon. Declared here because a sender's domain comes from the email's header |
 | Location | No | |
 | Web history | No | |
 | User activity | No | No analytics, no clickstream, no telemetry |
@@ -331,6 +345,13 @@ versions transmitted nothing at all. They are unchanged in 1.5.0, 1.6.0, 1.6.1 a
 none of which add a permission or a new outbound path. The in-product feedback form is the reason
 "Personally identifiable information" is Yes. If the form is ever removed, the answer goes
 back to No.
+
+**1.8.0 changes one answer**, and only for users who opt in twice: "Personal communications"
+becomes Yes because of website icons for sender icons (ADR-027). The feature is off by
+default, the icons are a second switch, and what leaves is the sender's domain, for one
+purpose the user can see on screen. That use is within the single purpose above and within
+the Limited Use certifications. If you would rather keep the answer No, remove the website
+icons switch before submitting; the lettered badges make no request.
 
 The uninstall URL (`tally.so`, ADR-014) does not change any answer above. Chrome navigates
 to it after removal and the extension attaches nothing to it, so no user data is collected
@@ -438,10 +459,38 @@ that is shot, the release notes carry the feature and the stills do not.
 
 ---
 
-## 5. Release notes for 1.7.4
+## 5. Release notes for 1.8.0
 
 Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0
-through 1.7.3 were each built and never submitted.
+through 1.7.4 were each built and never submitted, and their notes follow below.
+
+```
+New: sender icons, off until you turn them on in Settings. Each row in your inbox gets a
+small chip saying which organisation the mail is from, such as mashreq.com, with a coloured
+letter. Turn on "Load website icons" as well and the organisation's own icon replaces the
+letter. Mail from gmail.com, outlook.com and other mailbox providers shows the sender's
+initial rather than the provider's logo, unless you choose otherwise. Changes apply at
+once, without reloading Gmail.
+
+Website icons are the only part that asks anything of the network, and only if you turn
+them on: the sender's domain, and nothing else, goes to Google's icon service.
+
+New: add a label to your tab bar from Gmail itself. Click the three dots beside any label
+in Gmail's sidebar and the menu now ends with "Show as Tabs", or "Remove from Tabs" if it
+already has a tab. Sublabels work too.
+
+New: the settings page tells you whether the parts that reach into Gmail are working for
+you, under Gmail integration. Nothing is sent anywhere.
+
+Fixed: a Gmail tab you already had open gets the tab bar without a reload when you install
+or update, and only the tab you are looking at is highlighted.
+```
+
+**This release adds no permission beyond 1.7.4's `scripting`** (see the justification
+above), but it changes one data usage answer: see section 2.4. Paste the new single purpose
+statement and the new storage and host justifications from section 2 with it.
+
+### Release notes for 1.7.4, kept for the record
 
 ```
 New: add a label to your tab bar from Gmail itself. Click the three dots beside any label
@@ -626,8 +675,8 @@ actually type still resolves to the same entity. The repository directory is sti
 `Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
 breaking inbound links over.
 
-**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 809
-automated tests, four permissions, one outbound request, 30 days in Trash, five starter
+**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 965
+automated tests, four permissions, no request the user did not ask for, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets
 repeated.
@@ -714,7 +763,7 @@ listing and the site have to agree and this file is where that agreement is reco
 - Free, MIT licensed, no account required.
 - Runs only on mail.google.com. Message content is never read, stored or transmitted.
 - Permissions: storage, downloads, management, scripting, and the host mail.google.com.
-- One outbound request, and only on a user action: the feedback form.
+- Outbound requests only on a user action: the feedback form, and website icons for the optional sender icons.
 - Settings sync through Chrome's own sync, per Gmail account.
 ```
 
@@ -780,6 +829,13 @@ Verified on 2026-09-24 against `main` at the 1.7.4 release commit.
       offers to remove it on reopening
 - [x] Screenshots still current: 1.7.0 adds a menu item inside Gmail's own menu and one row
       on the options page, neither of which appears in any of the six shots
+- [ ] **1.8.0:** the data usage answer for "Personal communications" changes (section 2.4),
+      the single purpose statement and the storage and host justifications change
+      (section 2). Paste all four. The two new hosts are disclosed in SECURITY.md, on the
+      in-extension privacy page and in 2.3, and the website's privacy policy needs the same
+      paragraph deployed before submitting
+- [ ] **1.8.0:** consider a seventh screenshot showing sender icons in an inbox of demo data;
+      none of the six shows them
 
 Still to do by hand, before submitting:
 

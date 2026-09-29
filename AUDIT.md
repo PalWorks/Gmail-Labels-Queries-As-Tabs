@@ -18,6 +18,18 @@
 > (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
 > CHANGELOG).
 
+> **Refresh note (2026-09-29, v1.8.0):** sender icons, rebuilt from the "Gmail Sender Icons"
+> extension without its InboxSDK (ADR-027). `src/modules/senderIcons.ts` finds inbox rows by
+> ARIA with a fallback behind every step, draws a lettered badge before any request, and
+> fetches website icons only behind a second opt-in; `src/utils/domain.ts` reduces an address
+> to the organisation's domain. The master audit for the phase found and fixed two defects in
+> existing code: `health.ts` kept one write-suppression cache for every component and wrote a
+> shared object by read-modify-write, so a second component would have thrashed the cache and
+> could erase the first component's verdict. Each component now owns its own key. The canary
+> gained the sender icons contract, a DEGRADED verdict, Google Chat alerts and selector
+> refresh pull requests (ADR-028). Verified in live Gmail on Chrome and against a sanitised
+> inbox in Chrome, Edge, Opera and Chromium. 44 suites, 965 tests.
+
 > **Refresh note (2026-09-22, v1.6.2):** onboarding was rebuilt as a tour that
 > demonstrates rather than describes, running over Gmail and reachable four ways
 > (ADR-018); a toolbar menu replaced an icon that did nothing outside Gmail; and two

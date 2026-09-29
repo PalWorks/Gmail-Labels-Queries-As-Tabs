@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## Local setup
 
@@ -106,11 +106,20 @@ almost always in the code or the document it points at.
 | `rulesProperty` | The escaping is wrong for one of the generator's four output languages. The failure prints the seed case |
 | `repoConsistency` Gmail class | A module outside `src/utils/selectors.ts` hardcoded one of Gmail's obfuscated names. Find the element by role or attribute instead, as `labelMenu.ts` does, or put the selector in the registry with a reason |
 
-## When the drift canary fails
+## When the drift canary fails, or says DEGRADED
 
-The canary watches the structure Gmail must keep for the "Show as Tabs" item to
-work. It runs daily as a systemd user timer and escalates on the **second**
-consecutive failure. See [scripts/canary/README.md](scripts/canary/README.md).
+The canary watches the structure Gmail must keep for the "Show as Tabs" item and for
+sender icons to work. It runs daily as a systemd user timer and escalates on the
+**second** consecutive failure, to the desktop, a GitHub issue and, once a webhook is
+configured, Google Chat. See [scripts/canary/README.md](scripts/canary/README.md).
+
+To get Google Chat alerts on a machine that runs the canary:
+
+```
+scripts/canary/install-canary.sh --alerts      # creates ~/.config/gmail-labels-as-tabs/alerts.env, mode 600
+# paste the space's incoming webhook URL into GCHAT_WEBHOOK_URL in that file
+scripts/canary/install-canary.sh --test-alert  # sends one test message
+```
 
 ```
 scripts/canary/install-canary.sh --status     # when it last ran, and what it said
@@ -126,6 +135,18 @@ NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs   # run it n
 | C4 | A clone no longer renders like the item it came from | Gmail styles items by something other than the class. Investigate before shipping anything |
 | OURS | Our item is missing although C1 to C4 all passed | This one is ours, not Gmail's. Start at `installLabelMenuItem()` in `content.ts` |
 | HOVER | Our item no longer lights up under the pointer | Check what the run recorded for Gmail's own highlight class. If Gmail stopped adding one, the wash should have taken over, so the fault is in `discoverHoverClasses` or `fallbackHighlight` in `labelMenu.ts`, not in Gmail |
+| S1 | Inbox rows are no longer `tr[role="row"]` with an id | Sender icons fall back to the learned class, then `SENDER_ROW_FALLBACK`, and record `degraded`. If S1 fails, check W1 in the same run: if the fallback still matches, users are fine for now; find the new ARIA shape and add it as the primary |
+| S2 | Rows no longer carry the sender in an `email` attribute | `data-hovercard-id` is the fallback. If both are gone, the feature draws nothing, correctly. Find where the address went before adding a reader for it |
+| S3 | A row's `[role="link"]` no longer has a first child for the chip | Placement falls back to the subject class, then the sender's cell. Look at the row's markup in the log before moving the primary |
+| S4 | Our chips are missing, or rows changed height, while S1 to S3 held | This one is ours. Start at `scanNow()` in `senderIcons.ts`; a height change means `toolbar.css`'s chip rules no longer fit Gmail's row |
+
+**DEGRADED** (exit 5) is not a failure: everything works, but a fallback is doing the work,
+or would not hold next time.
+
+| Check | What it means | What to do |
+|---|---|---|
+| W1, W2 | A sender fallback in `src/utils/selectors.ts` no longer matches the elements ARIA found | Nothing by hand, usually: the canary wrote `selector-proposal.json` and, with `GLT_CANARY_AUTO_PR=1`, opened a pull request with the value Gmail uses today. Review the diff and merge it; it ships with the next release |
+| W3 | A favicon provider no longer answers with a real icon | If only the first fails, the second is carrying it. If both fail, users with website icons on see badges, and the options page says so. Check whether Google changed the endpoint before changing `FAVICON_PROVIDERS` in `senderIcons.ts` |
 
 Two verdicts are not failures. **SKIPPED** means the canary could not reach a
 signed-in Gmail and learned nothing. A **note** that Gmail took longer to open
@@ -141,6 +162,8 @@ the menu than the extension waits means our item was correctly absent.
 | Rules missing for a tab | Tab has no resolvable Gmail label (hash tab) | [src/modules/rules.ts](src/modules/rules.ts) |
 | Build ships console output | esbuild `drop` not applied | [build.js](build.js) |
 | "Show as Tabs" missing from a label menu | Gmail did not open a menu within the wait, or gave nothing to clone | The options page says which, under Gmail integration. Then [src/modules/labelMenu.ts](src/modules/labelMenu.ts) |
+| Sender icons missing | The feature is off (it is off by default), or Gmail's rows changed | The options page's Gmail integration row says which, including "working, on a fallback". Then [src/modules/senderIcons.ts](src/modules/senderIcons.ts) |
+| Sender icons show letters but never logos | "Load website icons" is off, or the browser or another extension blocks Google's icon host | The integration row reads "Working, without website icons" when every host failed; fetching pauses for ten minutes after five failures in a row |
 
 ## CI
 

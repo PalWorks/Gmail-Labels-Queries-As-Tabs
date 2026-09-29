@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-29 (v1.8.0)
 
 ## The problem it solves
 
@@ -38,6 +38,15 @@ away, and it can automate routine cleanup of those labels.
   a tab's label and applies an action to messages older than a threshold.
 - **Rule action.** One of `trash`, `archive`, `markRead`, `moveToLabel`. `moveToLabel`
   additionally carries a `targetLabel`.
+- **Sender chip.** The optional mark at the start of an inbox row naming the organisation
+  a thread is from: a lettered badge, or the organisation's website icon, and its domain.
+  Off by default, per account.
+- **Organisation domain.** What a chip names: the registrable part of the sender's host,
+  so `alerts@email.mashreq.com` is `mashreq.com` and `billing@icici.bank.in` stays
+  `icici.bank.in`, because `bank.in` is a registry and not a company.
+- **Mailbox provider.** A domain like `gmail.com` or `outlook.com` that says who hosts an
+  address and nothing about who is writing. By default a chip shows the sender's own
+  initial for these, not the provider's logo.
 
 ## Key domain rules
 
@@ -79,7 +88,14 @@ away, and it can automate routine cleanup of those labels.
    default title and the full path is the fallback when another tab already
    carries that leaf. The stored `value` is always the full label name, because
    that is what navigation needs.
-8. **A settings change is described, not performed.** Every surface that can edit settings
+8. **A thread is named after the other side.** A sender chip names the first participant
+   who is not the signed-in user, so a thread the user replied to keeps the correspondent's
+   organisation. A thread with only the user in it is named after the user, as Gmail's own
+   list does.
+9. **Nothing about a message leaves the browser unless the user asked for website icons.**
+   Sender chips are drawn from what is already on the page. The one request, a website
+   icon, is behind a second switch, and sends the organisation domain and nothing else.
+10. **A settings change is described, not performed.** Every surface that can edit settings
    sends a `SettingsOp` to the service worker, which applies them one at a time per
    account. Nothing reads settings, edits the object and saves it back; that is what used
    to lose tabs when two surfaces wrote at once. See ADR-013.
@@ -93,7 +109,11 @@ away, and it can automate routine cleanup of those labels.
   and detect the signed-in address. **Removed after v1.6.2.** It never ran in any shipped
   build, because its page world needs the `scripting` permission this extension does not
   declare, and it cost 1,031,092 of the 1,103,251 bytes of the content script. Both jobs were already
-  done by code we own. See ADR-021.
+  done by code we own. See ADR-021. Sender icons (v1.8.0) were rebuilt from an extension
+  that uses it, again without it. See ADR-027.
+- **Degraded.** An integration that works only because a fallback held, or whose shipped
+  fallback has stopped matching. Recorded in health as `degraded` and reported by the drift
+  canary as exit 5: not broken on screen, and the moment to act.
 - **SettingsOp.** A description of a change to an account's settings, as plain data, so it
   can be sent to the service worker and applied there. See DATA_MODEL.md.
 - **rev.** A counter on an account's stored settings, bumped on every write. Used to detect
