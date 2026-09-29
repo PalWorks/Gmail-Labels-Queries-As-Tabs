@@ -604,7 +604,7 @@ describe('links point at the marketing site that still exists', () => {
 
     test('the extension ships a help link to a route that exists on that site', () => {
         const source = read('src/modules/modals/settingsModal.ts');
-        expect(source).toContain(`${SITE}#/contact`);
+        expect(source).toContain(`${SITE}contact/`);
         // `#/#contact` is not a route; it silently degrades to the homepage.
         // Checked on the call, not the file, so the comment explaining it is fine.
         expect(source).not.toMatch(/window\.open\(\s*'[^']*#\/#/);
@@ -612,7 +612,9 @@ describe('links point at the marketing site that still exists', () => {
 
     test('the listing names the surviving site for privacy, homepage and support', () => {
         const listing = read('STORE_LISTING.md');
-        expect(listing).toContain(`${SITE}#/privacy`);
+        expect(listing).toContain(`${SITE}privacy/`);
+        // The site has real pages now; a #/ route only survives as a redirect.
+        expect(listing).not.toContain(`${SITE}#/`);
         const urls = listing.match(/https:\/\/palworks\.github\.io\/[^\s`)|]*/g) ?? [];
         const wrong = [...new Set(urls.filter((u) => !u.startsWith(SITE)))];
         if (wrong.length > 0) {

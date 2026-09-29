@@ -21,7 +21,7 @@ import { OPEN_OPTIONS_PAGE_ACTION } from '../messages';
 export { OPEN_OPTIONS_PAGE_ACTION };
 
 /** Contact route on the marketing site (PalWorks/Gmail-Labels-As-Tabs). */
-export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact';
+export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/contact/';
 
 export function toggleSettingsModal(): void {
     const modal = document.getElementById(MODAL_ID);
@@ -245,8 +245,9 @@ function createSettingsModal(): void {
     // The marketing site lives in PalWorks/Gmail-Labels-As-Tabs, not in this
     // repository. Until v1.5.0 this pointed at a second Pages site built from
     // a leftover `website/` folder here; that site is retired, so this link
-    // would have started 404ing for every installed user. `#/contact` is a
-    // real route there, unlike the `#/#contact` this used to send people to.
+    // would have started 404ing for every installed user. Since 2026-09-29
+    // the site serves real pages, so this is `/contact/`; the old `#/contact`
+    // form still works there, redirected, for versions already installed.
     modal.querySelector('#modal-help-btn')?.addEventListener('click', () => {
         window.open(SITE_CONTACT_URL, '_blank');
     });

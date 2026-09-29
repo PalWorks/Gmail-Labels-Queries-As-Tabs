@@ -117,7 +117,7 @@ Gmail labels and searches as tabs above your inbox: one click per view, live unr
 
 ### 1.4 Description (detailed, 16,000 characters max)
 
-6,565 characters, counting the bullet glyph as one. Plain text: the store renders no
+7,740 characters, counting the bullet glyph as one. Plain text: the store renders no
 markdown, and the bullets below are literal `•` characters.
 
 ```
@@ -172,8 +172,14 @@ Yes. Each account, identified by its address, keeps its own tabs, colors, order 
 Do my tabs follow me to another computer?
 Yes. They sync through Chrome's own sync, the same mechanism as your bookmarks, so signing into Chrome elsewhere brings them with you.
 
+Can I add custom tabs to Gmail?
+Yes, with this extension. Gmail on its own offers only a fixed set of five category tabs (Primary, Promotions, Social, Updates and Forums). The extension adds a bar above the inbox where any label or any search can be a tab, alongside the categories rather than instead of them.
+
 Can I pin a search, not just a label?
 Yes. Any Gmail search works, for example is:unread from:boss or has:attachment older_than:30d, and becomes a tab you click like any other.
+
+How do I pin a Gmail search as a tab?
+Run the search in Gmail as usual, for example from:accounts@ has:attachment newer_than:30d, then press the + button at the end of the tab bar. The search becomes a tab with its unread count, and clicking it runs the search again live. To rename it or give it a colour, open the tab's menu and choose Edit Tab.
 
 Can I add a label without opening settings?
 Yes. Click the three dots beside any label in Gmail's sidebar and the menu ends with "Show as Tabs", or "Remove from Tabs" if it is already there. Sublabels work the same way.
@@ -190,8 +196,14 @@ Yes, if you turn on sender icons in Settings. Each inbox row gets a small chip n
 Is it free?
 Yes. Free, no account, no upsell, and open source under the MIT license.
 
+Does it work with Google Workspace accounts?
+Yes. Workspace Gmail runs on mail.google.com like personal Gmail, so the extension works the same way, unless your organisation's administrator blocks Chrome extensions. Each Workspace and personal account keeps its own tabs.
+
 Does it work in Edge, Brave or Firefox?
 It is built on Manifest V3 and published for Chrome. It is tested in Chrome, Microsoft Edge, Opera and Chromium, and other Chromium browsers that install from the Chrome Web Store, such as Brave, can run it. Firefox and Safari cannot.
+
+What happens to my tabs if I uninstall it?
+Chrome removes the extension's storage with it, so your tabs, colours and rules go too. Export them to a JSON file from Settings first if you might come back, and import the file after reinstalling.
 
 How do I get my tabs back if something goes wrong?
 Export your configuration to a JSON file from Settings at any time, and import it back into a fresh profile or a new machine.
@@ -205,7 +217,7 @@ OPEN SOURCE
 The full source is public and auditable, with 965 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
-Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
+Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
 Source code: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
 Support: support@palworks.ai
 ```
@@ -362,7 +374,7 @@ without having to ask.
 ### 2.5 Privacy policy URL
 
 ```
-https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
+https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
 ```
 
 This page states the storage model, both outbound paths in full, all four permissions, the
@@ -390,7 +402,7 @@ the help link stops matching a real route, or if a `website/` folder reappears.
 | Field | Value |
 |---|---|
 | Homepage URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
-| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/#/contact` |
+| Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/contact/` |
 | Support email | `support@palworks.ai` |
 
 The site has five routes: `/`, `/privacy`, `/terms`, `/changelog` and `/contact`. The last
@@ -755,8 +767,8 @@ listing and the site have to agree and this file is where that agreement is reco
 
 - Install: https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
 - Source: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
-- Privacy: https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy
-- Changelog: https://palworks.github.io/Gmail-Labels-As-Tabs/#/changelog
+- Privacy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
+- Changelog: https://palworks.github.io/Gmail-Labels-As-Tabs/changelog/
 
 ## Facts
 
@@ -819,7 +831,7 @@ Verified on 2026-09-24 against `main` at the 1.7.4 release commit.
       unchanged
 - [x] All six screenshots are 1280x800 and contain only demo data
       (Inbox, Clients, Invoices, Newsletters, Unread from team)
-- [x] Support URL points at `#/contact`, a route confirmed present in the deployed bundle
+- [x] Support URL points at `/contact/`, a prerendered page on the deployed site (the old `#/contact` redirects to it)
 - [x] 1.7.2 adds no permission, no outbound host and no new data flow, so the published
       privacy policy needs no edit and CI's published-policy step passes without a deploy
 - [x] The one new stored value, `integrationHealth` in `chrome.storage.local`, is disclosed

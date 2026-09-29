@@ -44,6 +44,13 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
   fallback rots while ARIA still works, the canary writes the value Gmail uses today, and
   `propose-selectors.mjs` opens a pull request with it, tested, never merged (ADR-028).
 
+### Changed
+
+- **The Help button opens the website's real contact page**, `/contact/`. The site now
+  serves every page as real HTML at its own address; the old `#/contact` form still
+  redirects there, so versions already installed keep working. The store listing's
+  privacy, support and changelog links move to the same real addresses.
+
 ### Fixed
 
 - **Integration health could lose a verdict.** `health.ts` kept one write-suppression

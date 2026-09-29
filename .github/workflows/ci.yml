@@ -183,14 +183,16 @@ jobs:
       - name: Verify the published privacy policy matches what the code does
         run: |
           site="https://palworks.github.io/Gmail-Labels-As-Tabs/"
-          bundle=$(curl -sSfL --retry 3 --retry-delay 5 --max-time 30 "$site" \
-            | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1)
+          # The site is prerendered: /privacy/ is the policy as served, the
+          # same HTML a reviewer or a crawler reads, with no script to run.
+          curl -sSfL --retry 3 --retry-delay 5 --max-time 30 "${site}privacy/" -o /tmp/policy.html
+          echo "Fetched ${site}privacy/ ($(stat --format=%s /tmp/policy.html) bytes)"
+          bundle=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' /tmp/policy.html | head -1)
           if [ -z "$bundle" ]; then
-            echo "::error::Could not find the site bundle at $site"
+            echo "::error::Could not find the site bundle referenced from ${site}privacy/"
             exit 1
           fi
           curl -sSfL --retry 3 --retry-delay 5 --max-time 60 "$site$bundle" -o /tmp/site.js
-          echo "Fetched $bundle ($(stat --format=%s /tmp/site.js) bytes)"
 
           # Every outbound host the extension can reach, and every permission
           # the manifest asks for, has to appear on that page.
@@ -207,7 +209,7 @@ jobs:
           required="$required Microsoft Clarity"
           status=0
           for term in $required; do
-            if grep -qF "$term" /tmp/site.js; then
+            if grep -qF "$term" /tmp/policy.html; then
               echo "  ok       $term"
             else
               echo "::error::The published privacy policy never mentions '$term'"

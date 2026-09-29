@@ -77,7 +77,7 @@ back. See the row in [ARCHITECTURE.md](ARCHITECTURE.md) section 10.
 ## Where the published privacy policy lives
 
 The policy the Chrome Web Store listing links to is
-<https://palworks.github.io/Gmail-Labels-As-Tabs/#/privacy>, served from
+<https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/>, served from
 [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs), a
 separate repository that deploys only on manual dispatch.
 
