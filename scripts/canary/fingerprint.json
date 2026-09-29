@@ -1,12 +1,12 @@
 {
-  "observedAt": "2026-09-23T14:39:18.038Z",
+  "observedAt": "2026-09-29T14:55:22.388Z",
   "verdict": "PASS",
   "gmailBuild": "fbb486d87c",
-  "chrome": "153.0.8010.52",
+  "chrome": "154.0.8037.57",
   "labelRows": 42,
   "extensionActive": true,
-  "menuOpenedAfterMs": 1206,
-  "menuOpenedSinceClickMs": 1206,
+  "menuOpenedAfterMs": 549,
+  "menuOpenedSinceClickMs": 549,
   "labelTriggers": 32,
   "labelNameSource": "data-label-name",
   "menuClasses": "J-M J-M-ayU aka",
@@ -30,5 +30,20 @@
     "HOVER": "recorded, not asserted"
   },
   "ownItemText": "Show as Tabs",
+  "senderRowClass": "zA",
+  "senderSubjectClass": "xT",
+  "senderContract": {
+    "S1": true,
+    "S2": true,
+    "S3": true,
+    "S4": true,
+    "W1": true,
+    "W2": true,
+    "W3": {
+      "t0.gstatic.com": true,
+      "www.google.com": true
+    }
+  },
+  "degradations": [],
   "failures": []
 }

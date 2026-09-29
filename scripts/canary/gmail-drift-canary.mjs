@@ -1,11 +1,12 @@
 /**
  * gmail-drift-canary.mjs
  *
- * Watches the five structural facts about Gmail that the label-menu feature
- * depends on, and reports when one of them stops being true.
+ * Watches the structural facts about Gmail that the label-menu and sender
+ * icons features depend on, and reports when one of them stops being true.
  *
- * It does NOT watch Gmail's obfuscated class names. Those are read at runtime
- * and never written into our source, so a rename cannot break us. Measured on
+ * It does NOT watch Gmail's obfuscated class names, with the two exceptions
+ * W1 and W2 below. The rest are read at runtime and never written into our
+ * source, so a rename cannot break us. Measured on
  * 2026-09-23: two independent Chrome installations, different user-data-dirs
  * and different Chrome patch builds, produced byte-identical class strings.
  * What varies is the Gmail build, and what a build can take away is structure.
@@ -17,6 +18,24 @@
  *   C3  that menu holds a [role="menuitem"] with no aria-haspopup and height
  *   C4  a clone of that item renders identically to it
  *   OURS  our own item is present, correctly labelled and correctly styled
+ *
+ * And, since v1.8, the sender icons contract (ADR-027):
+ *
+ *   S1  inbox rows are found by ARIA: tr[role="row"][id] inside [role="main"]
+ *   S2  those rows expose the sender in an `email` attribute
+ *   S3  each row's [role="link"] has a first child to hold the chip
+ *   S4  our chips are drawn on the rows, and do not change the row height
+ *   W1  the shipped row fallback (selectors.ts) still matches those rows
+ *   W2  the shipped subject fallback still matches the chip's container
+ *   W3  both favicon providers still answer with a real icon
+ *
+ * S1 to S4 failing is FAIL: the feature cannot draw. W1 to W3 failing, or the
+ * extension drawing only through a fallback, is DEGRADED: nothing is broken
+ * on screen yet, and that is the point of hearing about it now. When W1 or W2
+ * fails while S1 to S3 hold, the canary knows exactly which elements the
+ * fallback should have matched, reads what Gmail calls them today, and writes
+ * a proposal (selector-proposal.json) that propose-selectors.mjs turns into a
+ * pull request.
  *
  * C5, whether Gmail reuses one menu node across labels, is **recorded but not
  * asserted**. It was written as an assertion because an implementation that
@@ -40,6 +59,10 @@
  *     --dist <dir>      built extension to load (default: ./dist)
  *     --json            print the fingerprint and nothing else
  *     --keep            do not delete the temporary profile (debugging)
+ *     --no-record       judge, but write nothing to fingerprint.json or history
+ *     --selectors-file <f>  read the sender fallbacks from f instead of
+ *                       src/utils/selectors.ts (to rehearse a rotted fallback)
+ *     --proposal-out <f>    where a selector proposal is written
  *
  * Exit codes, which the systemd unit and install-canary.sh depend on:
  *
@@ -47,6 +70,8 @@
  *     2  FAIL     at least one contract broke
  *     3  SKIPPED  could not reach a signed-in Gmail; nothing was learned
  *     4  ERROR    the canary itself could not run (no Playwright, no Chrome)
+ *     5  DEGRADED everything works, but only because a fallback held, or a
+ *                 fallback has stopped matching and would not hold next time
  *
  * SKIPPED is deliberately not FAIL. A canary that cries wolf when a cookie
  * expires is a canary that gets ignored inside a fortnight.
@@ -76,7 +101,7 @@ try {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 
-const EXIT = { PASS: 0, FAIL: 2, SKIPPED: 3, ERROR: 4 };
+const EXIT = { PASS: 0, FAIL: 2, SKIPPED: 3, ERROR: 4, DEGRADED: 5 };
 
 // ---------------------------------------------------------------------------
 // Arguments
@@ -448,6 +473,140 @@ const PROBE = async () => {
 };
 
 // ---------------------------------------------------------------------------
+// The sender icons probe
+// ---------------------------------------------------------------------------
+
+/**
+ * The sender icon fallbacks as this build ships them, read out of the source
+ * rather than copied: a copy here would be a second place to update, and the
+ * one that got missed would make W1 and W2 measure the wrong thing.
+ */
+function readSenderFallbacks() {
+    // --selectors-file exists to rehearse a rotted fallback without editing
+    // the real registry: point it at a copy with a stale value in it.
+    const file = arg('--selectors-file', path.join(REPO, 'src', 'utils', 'selectors.ts'));
+    const src = fs.readFileSync(file, 'utf8');
+    const read = (name) => src.match(new RegExp(`export const ${name}\\s*=\\s*'([^']+)'`))?.[1] ?? null;
+    return { row: read('SENDER_ROW_FALLBACK'), subject: read('SENDER_SUBJECT_FALLBACK') };
+}
+
+/**
+ * The favicon endpoints the extension uses, read out of its source for the
+ * same reason. Each is a string prefix the domain is appended to.
+ */
+function readFaviconProviders() {
+    const src = fs.readFileSync(path.join(REPO, 'src', 'modules', 'senderIcons.ts'), 'utf8');
+    const block = src.slice(src.indexOf('const FAVICON_PROVIDERS'), src.indexOf('];', src.indexOf('const FAVICON_PROVIDERS')));
+    return [...block.matchAll(/'(https:\/\/[^']+)'/g)].map((m) => m[1]);
+}
+
+/**
+ * Turn the sender icons on in the canary's own throwaway profile. The
+ * extension ships with them off, so without this S4 would measure nothing.
+ * Every chip is made eligible for an icon (the provider style for mailbox
+ * senders too), so W3 is judged against the real inbox rather than luck.
+ */
+async function enableSenderIcons(ctx, extensionId) {
+    const ours = (w) => w.url().startsWith(`chrome-extension://${extensionId}/`);
+    let sw = ctx.serviceWorkers().find(ours);
+    for (let i = 0; i < 40 && !sw; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        sw = ctx.serviceWorkers().find(ours);
+    }
+    if (!sw) return false;
+    // The content script registers the account once it has read it from the
+    // page, so the key to write into may not exist for a few seconds.
+    for (let i = 0; i < 60; i++) {
+        const done = await sw
+            .evaluate(async () => {
+                const all = await chrome.storage.sync.get(null);
+                const keys = Object.keys(all).filter((k) => k.startsWith('account_'));
+                for (const k of keys) {
+                    await chrome.storage.sync.set({
+                        [k]: {
+                            ...(all[k] || {}),
+                            senderIcons: true,
+                            senderIconsFavicons: true,
+                            senderIconsDomain: true,
+                            senderIconsMailbox: 'provider',
+                        },
+                    });
+                }
+                return keys.length > 0;
+            })
+            .catch(() => false);
+        if (done) return true;
+        await new Promise((r) => setTimeout(r, 500));
+    }
+    return false;
+}
+
+const SENDER_PROBE = async ({ fallbacks, providers }) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const main = document.querySelector('[role="main"]') || document;
+    const hasSender = (row) => Boolean(row.querySelector('[email], [data-hovercard-id]'));
+    const shared = (els) => {
+        if (els.length < 3) return null;
+        let set = new Set(els[0].classList);
+        for (const el of els.slice(1)) set = new Set([...el.classList].filter((c) => set.has(c)));
+        return [...set].find((c) => /^[A-Za-z_][A-Za-z0-9_-]{0,40}$/.test(c)) || null;
+    };
+    const r = { s1: {}, s2: {}, s3: {}, s4: {}, w1: {}, w2: {}, w3: {}, observed: {} };
+
+    // The chips are drawn by the extension on its own schedule; give it a
+    // moment rather than racing it.
+    for (let i = 0; i < 50 && !document.querySelector('[data-glt-sender]'); i++) await sleep(200);
+
+    const aria = [...main.querySelectorAll('tr[role="row"][id]')].filter(hasSender);
+    const anyRows = [...main.querySelectorAll('tr[id]')].filter(hasSender);
+    r.s1 = { ok: aria.length > 0, aria: aria.length, anyStructure: anyRows.length, senders: main.querySelectorAll('[email], [data-hovercard-id]').length };
+
+    const withEmail = aria.filter((row) => row.querySelector('[email]'));
+    r.s2 = { ok: aria.length > 0 && withEmail.length === aria.length, withEmail: withEmail.length, hovercardOnly: aria.length - withEmail.length };
+
+    const anchors = aria.map((row) => row.querySelector('[role="link"]')?.firstElementChild).filter(Boolean);
+    r.s3 = { ok: aria.length > 0 && anchors.length === aria.length, anchored: anchors.length };
+
+    const chips = [...document.querySelectorAll('[data-glt-sender]')].filter((c) => c.getBoundingClientRect().height > 0);
+    const heights = aria.map((row) => Math.round(row.getBoundingClientRect().height)).filter((h) => h > 0);
+    r.s4 = {
+        ok: aria.length > 0 && chips.length >= Math.ceil(aria.length * 0.9) && Math.max(...heights) - Math.min(...heights) <= 1,
+        chips: chips.length,
+        icons: chips.filter((c) => c.getAttribute('data-glt-kind') === 'icon').length,
+        rowHeights: [...new Set(heights)],
+        inAnchor: chips.filter((c) => anchors.includes(c.parentElement)).length,
+    };
+
+    // W1/W2: would the shipped fallbacks find the same elements?
+    const rowMatch = fallbacks.row ? aria.filter((row) => row.matches(fallbacks.row)).length : 0;
+    r.w1 = { ok: aria.length > 0 && rowMatch === aria.length, selector: fallbacks.row, matched: rowMatch, of: aria.length };
+    const subjMatch = fallbacks.subject ? anchors.filter((a) => a.matches(fallbacks.subject)).length : 0;
+    r.w2 = { ok: anchors.length > 0 && subjMatch === anchors.length, selector: fallbacks.subject, matched: subjMatch, of: anchors.length };
+    r.observed.rowClass = shared(aria);
+    r.observed.subjectClass = shared(anchors);
+
+    // W3: each provider, asked about a domain that certainly has an icon.
+    const probeImg = (url) =>
+        new Promise((res) => {
+            const img = new Image();
+            const t = setTimeout(() => res({ ok: false, why: 'timeout' }), 10000);
+            img.referrerPolicy = 'no-referrer';
+            img.onload = () => { clearTimeout(t); res({ ok: img.naturalWidth >= 24, why: `${img.naturalWidth}px` }); };
+            img.onerror = () => { clearTimeout(t); res({ ok: false, why: 'error' }); };
+            img.src = url;
+        });
+    r.w3.providers = [];
+    for (const prefix of providers) {
+        const url = prefix + encodeURIComponent(prefix.includes('url=') ? 'https://github.com' : 'github.com');
+        const got = await probeImg(url);
+        r.w3.providers.push({ host: new URL(prefix).host, ...got });
+    }
+    r.w3.ok = r.w3.providers.length > 0 && r.w3.providers.every((p) => p.ok);
+    r.w3.anyOk = r.w3.providers.some((p) => p.ok);
+    return r;
+};
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -554,11 +713,29 @@ function record(result, verdict, failures, probe) {
             HOVER: 'recorded, not asserted',
         },
         ownItemText: probe?.ours?.text ?? null,
+        // Sender icons. Structure only: counts change with the inbox every
+        // day, and recording them would rewrite this file every day too.
+        senderRowClass: result.sender?.observed?.rowClass ?? null,
+        senderSubjectClass: result.sender?.observed?.subjectClass ?? null,
+        senderContract: result.sender
+            ? {
+                  S1: result.sender.s1.ok,
+                  S2: result.sender.s2.ok,
+                  S3: result.sender.s3.ok,
+                  S4: result.sender.s4.ok,
+                  W1: result.sender.w1.ok,
+                  W2: result.sender.w2.ok,
+                  W3: Object.fromEntries(result.sender.w3.providers.map((p) => [p.host, p.ok])),
+              }
+            : null,
+        degradations: result.degradations ?? [],
         failures,
     };
 
     const fpPath = path.join(HERE, 'fingerprint.json');
     const historyPath = path.join(HERE, 'history.ndjson');
+    // A rehearsal (--no-record) must not become part of the record.
+    if (FLAG('--no-record')) return { fp, changed: false };
 
     // Append every run, including skips: the rate of change is only knowable
     // if the quiet runs are recorded too.
@@ -598,7 +775,8 @@ function record(result, verdict, failures, probe) {
             changed = strip(prev) !== strip(fp);
         } catch { changed = true; }
     }
-    if (changed && verdict === 'PASS') {
+    // DEGRADED is a working state, so it may record what working looks like.
+    if (changed && (verdict === 'PASS' || verdict === 'DEGRADED')) {
         fs.writeFileSync(fpPath, JSON.stringify(fp, null, 2) + '\n');
     }
     return { fp, changed };
@@ -643,10 +821,11 @@ async function runAgainst(chrome, src) {
 
     // Chrome 137 and later ignore --load-extension. This is the supported way.
     let extensionLoaded = false;
+    let extensionId = null;
     try {
         if (FLAG('--no-extension')) throw new Error('skipped by --no-extension');
         const session = await browser.newBrowserCDPSession();
-        await session.send('Extensions.loadUnpacked', { path: DIST });
+        extensionId = (await session.send('Extensions.loadUnpacked', { path: DIST }))?.id ?? null;
         extensionLoaded = true;
     } catch (err) {
         say(`note: could not load the extension (${err.message.split('\n')[0]}); contract checks still run`);
@@ -655,6 +834,8 @@ async function runAgainst(chrome, src) {
     const ctx = browser.contexts()[0];
     const page = await ctx.newPage();
     let probe = null;
+    let senderProbe = null;
+    let senderEnabled = false;
     try {
         // Gmail replaces its own initial navigation, which surfaces as
         // ERR_ABORTED even though the page goes on to load perfectly. The
@@ -701,7 +882,17 @@ async function runAgainst(chrome, src) {
         // which is not covered by any Gmail signal.
         await page.waitForTimeout(3000);
         say(`landed on: ${page.url()}`);
+        // Sender icons first, so they draw while the menu checks run.
+        senderEnabled = extensionLoaded && extensionId ? await enableSenderIcons(ctx, extensionId) : false;
         probe = await page.evaluate(PROBE);
+        if (probe?.signedIn) {
+            senderProbe = await page
+                .evaluate(SENDER_PROBE, { fallbacks: readSenderFallbacks(), providers: readFaviconProviders() })
+                .catch((err) => {
+                    say(`note: the sender icons probe could not run (${err.message.split('\n')[0]})`);
+                    return null;
+                });
+        }
     } catch (err) {
         say(`navigation failed: ${err.message.split('\n')[0]}`);
     } finally {
@@ -771,15 +962,69 @@ async function runAgainst(chrome, src) {
         ]);
     }
 
-    const failures = checks.filter(([, ok]) => !ok).map(([id, , why]) => `${id}: ${why}`);
-    const verdict = failures.length ? 'FAIL' : 'PASS';
+    // --- Sender icons -------------------------------------------------------
+    let shipsSenderIcons = false;
+    try {
+        shipsSenderIcons = fs.readFileSync(path.join(DIST, 'js', 'content.js'), 'utf8').includes('data-glt-sender');
+    } catch { /* treated as not shipped */ }
+    const degradations = [];
+    let proposal = null;
+    if (shipsSenderIcons && !senderEnabled) {
+        say('note: sender icons could not be switched on in the canary profile; S1 to W3 not judged this run');
+    } else if (shipsSenderIcons && !senderProbe) {
+        say('note: the sender icons probe returned nothing; S1 to W3 not judged this run');
+    } else if (shipsSenderIcons && senderProbe.s1.senders === 0 && senderProbe.s1.anyStructure === 0) {
+        // An empty inbox has no rows to judge. Calling that S1 FAIL would page
+        // someone on the day they reached inbox zero. W3 needs no rows.
+        say('note: the inbox shows no senders at all (empty, or not an inbox); S1 to W2 not judged this run');
+        const sp = senderProbe;
+        const w3 = ['W3', sp.w3.ok, `favicon providers answer with a real icon (${sp.w3.providers.map((p) => `${p.host} ${p.ok ? 'ok' : p.why}`).join(', ')})`, 'weak'];
+        checks.push(w3);
+        if (!sp.w3.ok) degradations.push(`W3: ${w3[2]}`);
+    } else if (shipsSenderIcons) {
+        const sp = senderProbe;
+        checks.push(
+            ['S1', sp.s1.ok, `inbox rows found by ARIA (${sp.s1.aria} rows; ${sp.s1.anyStructure} rows by structure, ${sp.s1.senders} sender attributes on the page)`],
+            ['S2', sp.s2.ok, `rows name the sender in an email attribute (${sp.s2.withEmail} of ${sp.s1.aria}; ${sp.s2.hovercardOnly} only via the hovercard fallback)`],
+            ['S3', sp.s3.ok, `each row's [role="link"] has a first child for the chip (${sp.s3.anchored} of ${sp.s1.aria})`],
+            ['S4', sp.s4.ok, `our chips are drawn and rows keep their height (${sp.s4.chips} chips, ${sp.s4.icons} with icons, ${sp.s4.inAnchor} in the ARIA anchor, row heights ${JSON.stringify(sp.s4.rowHeights)})`]
+        );
+        const weak = [
+            ['W1', sp.w1.ok, `the shipped row fallback ${JSON.stringify(sp.w1.selector)} matches ${sp.w1.matched} of ${sp.w1.of} rows (Gmail's shared row class today: ${JSON.stringify(sp.observed.rowClass)})`],
+            ['W2', sp.w2.ok, `the shipped subject fallback ${JSON.stringify(sp.w2.selector)} matches ${sp.w2.matched} of ${sp.w2.of} chip containers (today: ${JSON.stringify(sp.observed.subjectClass)})`],
+            ['W3', sp.w3.ok, `favicon providers answer with a real icon (${sp.w3.providers.map((p) => `${p.host} ${p.ok ? 'ok' : p.why}`).join(', ')})`],
+        ];
+        checks.push(...weak.map(([id, ok, why]) => [id, ok, why, 'weak']));
+        for (const [id, ok, why] of weak) if (!ok) degradations.push(`${id}: ${why}`);
+        if (sp.s2.hovercardOnly > 0) degradations.push(`S2: ${sp.s2.hovercardOnly} rows name their sender only through the hovercard fallback`);
+
+        // A fallback that has rotted while the primary path still works is
+        // the one case where the right new value is known exactly: it is
+        // whatever Gmail calls the elements the primary path found.
+        if (sp.s1.ok && sp.s3.ok && (!sp.w1.ok || !sp.w2.ok)) {
+            const next = {};
+            if (!sp.w1.ok && sp.observed.rowClass) next.SENDER_ROW_FALLBACK = `tr.${sp.observed.rowClass}`;
+            if (!sp.w2.ok && sp.observed.subjectClass) next.SENDER_SUBJECT_FALLBACK = `.${sp.observed.subjectClass}`;
+            if (Object.keys(next).length) {
+                proposal = { observedAt: new Date().toISOString(), gmailBuild: probe.gmailBuild, selectors: next };
+            }
+        }
+    }
+    const proposalPath = arg('--proposal-out', path.join(HERE, 'selector-proposal.json'));
+    if (proposal) fs.writeFileSync(proposalPath, JSON.stringify(proposal, null, 2) + '\n');
+    else if (fs.existsSync(proposalPath)) fs.rmSync(proposalPath);
+
+    const failures = checks.filter(([, ok, , kind]) => !ok && kind !== 'weak').map(([id, , why]) => `${id}: ${why}`);
+    const verdict = failures.length ? 'FAIL' : degradations.length ? 'DEGRADED' : 'PASS';
+    result.sender = senderProbe;
+    result.degradations = degradations;
     const { fp, changed } = record(result, verdict, failures, probe);
 
     if (JSON_ONLY) {
         console.log(JSON.stringify(fp, null, 2));
     } else {
         say('');
-        for (const [id, ok, why] of checks) say(`  ${ok ? 'ok  ' : 'FAIL'} ${id}  ${why}`);
+        for (const [id, ok, why, kind] of checks) say(`  ${ok ? 'ok  ' : kind === 'weak' ? 'WEAK' : 'FAIL'} ${id}  ${why}`);
         say('');
         say(
             `Gmail build ${probe.gmailBuild}, ${probe.labelRows} label rows, extension ` +
@@ -793,9 +1038,17 @@ async function runAgainst(chrome, src) {
                   ? 'fingerprint.json updated: something moved'
                   : 'fingerprint.json unchanged'
         );
-        say(verdict === 'PASS' ? 'PASS' : `FAIL\n  ${failures.join('\n  ')}`);
+        if (proposal) say(`proposal written: ${JSON.stringify(proposal.selectors)} (selector-proposal.json)`);
+        say(
+            verdict === 'PASS'
+                ? 'PASS'
+                : verdict === 'DEGRADED'
+                  ? `DEGRADED\n  ${degradations.join('\n  ')}`
+                  : `FAIL\n  ${failures.join('\n  ')}`
+        );
     }
     if (verdict === 'PASS') return { code: EXIT.PASS };
+    if (verdict === 'DEGRADED') return { code: EXIT.DEGRADED };
     // A run where the menu simply never appeared is the one flaky outcome this
     // canary has. Everything downstream of C2 fails with it, so a whole fresh
     // browser is a genuinely independent second opinion, and worth taking

@@ -1,8 +1,9 @@
 # The Gmail drift canary
 
 Gmail is a third-party page we do not control. This watches the handful of
-structural facts the label-menu feature depends on, and says so when one stops
-being true.
+structural facts the label-menu and sender-icons features depend on, and says
+so when one stops being true, including when a fallback is quietly doing the
+work.
 
 ## What it does not watch
 
@@ -14,6 +15,13 @@ byte-identical class strings and identical element counts. What varies is the
 Gmail build, which is global and occasional, and what a build can take away is
 structure.
 
+With two exceptions, both deliberate: the sender icons fallbacks
+`SENDER_ROW_FALLBACK` and `SENDER_SUBJECT_FALLBACK` are class names written
+into `src/utils/selectors.ts`, because they are what the feature falls back to
+when ARIA does not answer. They are never the primary path, so a rename cannot
+break the feature; W1 and W2 watch them so that a rename is noticed, and
+refreshed, before the day the fallback is needed.
+
 ## The contract
 
 | Check | What it asserts | Failure |
@@ -24,9 +32,45 @@ structure.
 | C4 | A clone of that item renders identically to it | Our item would look foreign |
 | OURS | Our own item is present and styled like its siblings | Only checked once a build ships it |
 | HOVER | Our own item lights up under the pointer | Only checked once a build ships it |
+| S1 | Inbox rows are `tr[role="row"]` with an id inside `[role="main"]` | Rows only by fallback |
+| S2 | Those rows carry the sender in an `email` attribute | Sender only by `data-hovercard-id` |
+| S3 | Each row's `[role="link"]` has a first child for the chip | Chip only by fallback placement |
+| S4 | Our chips are drawn on at least 90% of rows and no row changes height | Ours, not Gmail's |
+| W1 | `SENDER_ROW_FALLBACK` still matches the rows S1 found | The fallback would not hold (DEGRADED) |
+| W2 | `SENDER_SUBJECT_FALLBACK` still matches the containers S3 found | The fallback would not hold (DEGRADED) |
+| W3 | Both favicon providers answer with a real icon for a known domain | Website icons degrade to badges (DEGRADED) |
 
-Every one of these fails closed: no model, no item, and Gmail is exactly as it
-was.
+Every one of these fails closed: no model, no item, no row, no chip, and Gmail
+is exactly as it was.
+
+To judge S1 to W3 the canary switches sender icons on in its own throwaway
+profile (the extension ships with them off), with website icons on and the
+provider style for mailbox senders, so every chip is eligible for an icon.
+
+## Three verdicts that work, one that does not
+
+**PASS** (0), **SKIPPED** (3, not signed in: nothing learned), and **DEGRADED**
+(5): everything works, but only because a fallback held, or a shipped fallback
+has stopped matching and would not hold next time. **FAIL** (2) is the only one
+where something is broken on screen. **ERROR** (4) is the canary itself.
+
+## Refreshing a fallback
+
+When W1 or W2 fails while S1 to S3 hold, the canary knows exactly which
+elements the fallback should have matched, so it reads what Gmail calls them
+today and writes `selector-proposal.json`. `run-canary.sh` then runs
+`propose-selectors.mjs`, if `GLT_CANARY_AUTO_PR=1` is set in `alerts.env`,
+which applies the value to `src/utils/selectors.ts` in a throwaway git
+worktree, runs `test/senderIcons.test.ts` and `test/repoConsistency.test.ts`
+against it, and opens a pull request. It never merges, it opens one pull
+request per distinct value, and it may change only the two sender fallbacks,
+each only to a plain class selector. To rehearse it by hand:
+
+```
+NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs --no-record \
+    --selectors-file /tmp/stale-selectors.ts --proposal-out /tmp/proposal.json
+node scripts/canary/propose-selectors.mjs --proposal /tmp/proposal.json --dry-run
+```
 
 **How Gmail highlights** is recorded alongside HOVER but not asserted. Gmail
 adds a class from its own `jsaction` handler rather than using a `:hover` rule,
@@ -89,16 +133,37 @@ cycle, which is the real floor on how fast we could respond anyway.
 
 `run-canary.sh` keeps the consecutive-failure count and decides whether anyone
 is told. Escalation is on the **second** consecutive failure: a desktop
-notification, and a GitHub issue deduplicated by title so a persisting break
-opens one issue and not one a day.
+notification, a GitHub issue deduplicated by title so a persisting break opens
+one issue and not one a day, and a Google Chat message. Notifications repeat
+weekly while the break persists, and a recovery is announced in the thread of
+what broke. DEGRADED escalates the same way but opens no issue.
+
+## Google Chat alerts
+
+```
+scripts/canary/install-canary.sh --alerts      # create ~/.config/gmail-labels-as-tabs/alerts.env (mode 600)
+scripts/canary/install-canary.sh --test-alert  # send one test message
+```
+
+In the Google Chat space, open **Apps & integrations**, then **Webhooks**, add
+one, and paste its URL into `GCHAT_WEBHOOK_URL` in that file. The URL is a
+credential: it lives only there, `notify.mjs` never prints it, and only a
+`https://chat.googleapis.com/v1/spaces/.../messages` URL is accepted. Some
+Google Workspace administrators turn incoming webhooks off; the test alert is
+how to find out. Delivery is three attempts of ten seconds each. Each kind of
+break (`canary-fail`, `canary-error`, `canary-degraded`) has its own thread.
 
 ## The files
 
 | File | Committed | What it is |
 |---|---|---|
 | `gmail-drift-canary.mjs` | yes | The measurement. Reports; never escalates |
-| `run-canary.sh` | yes | The escalation. Streak counting, notify-send, `gh issue create` |
-| `install-canary.sh` | yes | Writes and enables the systemd user units |
+| `run-canary.sh` | yes | The escalation. Streak counting, notify-send, `gh issue create`, Google Chat |
+| `notify.mjs` | yes | Delivers one Google Chat alert. Decides nothing |
+| `propose-selectors.mjs` | yes | Turns a selector proposal into a pull request. Never merges |
+| `install-canary.sh` | yes | Writes and enables the systemd user units; creates the alert config |
+| `selector-proposal.json` | no | Written only while a sender fallback has rotted; removed when it no longer has |
+| `~/.config/gmail-labels-as-tabs/alerts.env` | never | The webhook and the auto-PR switch. Outside the repository on purpose |
 | `fingerprint.json` | yes | What Gmail looked like on the last run that changed anything |
 | `history.ndjson` | no | One line per run, including skips |
 | `state.json` | no | The streak counters |

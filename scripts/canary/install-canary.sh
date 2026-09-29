@@ -8,9 +8,12 @@
 # three of them, and `systemctl --user status` keeps a record of a failed run
 # that cron would only email into the void.
 #
-#   scripts/canary/install-canary.sh            install and enable
-#   scripts/canary/install-canary.sh --remove   stop, disable and delete
-#   scripts/canary/install-canary.sh --status    show timer and last run
+#   scripts/canary/install-canary.sh              install and enable
+#   scripts/canary/install-canary.sh --remove     stop, disable and delete
+#   scripts/canary/install-canary.sh --status     show timer and last run
+#   scripts/canary/install-canary.sh --alerts     create the Google Chat alert
+#                                                 config (mode 600) if missing
+#   scripts/canary/install-canary.sh --test-alert send one test message
 #
 # The source Chrome profile is detected once, at install time, and written
 # into the unit, so the timer does not depend on a browser being open when it
@@ -35,6 +38,37 @@ case "${1:-}" in
         echo
         systemctl --user status "$NAME.service" --no-pager -n 20 || true
         exit 0
+        ;;
+    --alerts)
+        # The webhook is a credential, so the file is created private and is
+        # never written with a value by this script: you paste it in.
+        CONF_DIR="$HOME/.config/gmail-labels-as-tabs"
+        CONF="$CONF_DIR/alerts.env"
+        mkdir -p "$CONF_DIR"
+        chmod 700 "$CONF_DIR"
+        if [ -f "$CONF" ]; then
+            echo "$CONF already exists; left as it is."
+        else
+            umask 077
+            cat > "$CONF" <<'CONF'
+# Alerts from the Gmail drift canary. Private to this machine; never commit it.
+#
+# Google Chat: in the space, open Apps & integrations, then Webhooks, add one,
+# and paste its URL here. It must start with https://chat.googleapis.com/v1/spaces/
+GCHAT_WEBHOOK_URL=
+
+# 1 lets the canary open a pull request when a sender icon fallback in
+# src/utils/selectors.ts stops matching Gmail. Never merged automatically.
+GLT_CANARY_AUTO_PR=1
+CONF
+            echo "Created $CONF (mode 600). Paste the webhook URL into it, then run:"
+            echo "  $HERE/install-canary.sh --test-alert"
+        fi
+        exit 0
+        ;;
+    --test-alert)
+        NODE_PATH="$(npm root -g 2>/dev/null || true)" node "$HERE/notify.mjs" --test
+        exit $?
         ;;
 esac
 
@@ -75,7 +109,7 @@ mkdir -p "$UNIT_DIR"
 
 cat > "$UNIT_DIR/$NAME.service" <<UNIT
 [Unit]
-Description=Gmail label-menu drift canary for Gmail Labels as Tabs
+Description=Gmail drift canary (label menu and sender icons) for Gmail Labels as Tabs
 Documentation=file://$HERE/README.md
 
 [Service]
@@ -84,14 +118,14 @@ WorkingDirectory=$(cd "$HERE/../.." && pwd)
 Environment=CANARY_SOURCE_PROFILE=$PROFILES
 Environment=PATH=$PATH
 ExecStart=$HERE/run-canary.sh
-# The canary reports through its own log, its state file and notify-send; a
-# non-zero exit here is a normal outcome, not a unit failure.
-SuccessExitStatus=0 2 3 4
+# The canary reports through its own log, its state file, notify-send and
+# Google Chat; a non-zero exit here is a normal outcome, not a unit failure.
+SuccessExitStatus=0 2 3 4 5
 UNIT
 
 cat > "$UNIT_DIR/$NAME.timer" <<UNIT
 [Unit]
-Description=Run the Gmail label-menu drift canary daily
+Description=Run the Gmail drift canary daily
 
 [Timer]
 OnCalendar=daily
