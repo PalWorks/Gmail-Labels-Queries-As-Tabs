@@ -118,39 +118,58 @@ Gmail labels and searches as tabs above your inbox: one click per view, live unr
 
 ### 1.4 Description (detailed, 16,000 characters max)
 
-7,740 characters, counting the bullet glyph as one. Plain text: the store renders no
-markdown, and the bullets below are literal `•` characters.
+8,243 characters, counting each emoji as one; the dashboard may count some emoji as
+two, which still leaves about half the 16,000 allowed. Plain text: the store renders no
+markdown, so the structure is made of characters. Each section opens with a heavy rule
+(`━`) above and below an emoji heading, each feature starts with its own emoji, and each
+question starts with 🔹.
+
+The emoji stay out of the sentences on purpose. Answer engines lift a sentence, and the
+answers under QUESTIONS PEOPLE ASK must still read as clean text when quoted without the
+line above them (section 7).
 
 ```
 Gmail Labels and Search Queries as Tabs puts your Gmail labels and saved searches in a tab bar across the top of Gmail, so every view you use all day is one click away instead of a scan down the sidebar.
 
 Add any label as a tab. Add any Gmail search as a tab too, so "invoices from last quarter" or "is:unread from:boss" becomes a permanent button rather than a query you retype. Gmail's own views work as well, such as #starred and #sent.
 
-WHAT YOU GET
+✅ Free and open source   ✅ Never reads your mail   ✅ No analytics   ✅ No account needed
 
-• Tabs for labels, saved searches and Gmail views, in a bar above your inbox
-• Add a label straight from Gmail: its own three-dot menu now offers "Show as Tabs"
-• Optional sender icons: a small chip in each inbox row showing which organisation the mail is from
-• Live unread counts on every tab, read from Gmail itself
-• Tab colors from an accessible palette, so the views that matter stand out
-• Drag to reorder, across as many rows as you need
-• Your tabs sync to every Chrome you sign into
-• Multi-account: each Gmail account keeps its own tabs, colors, order and rules
-• Light, Dark and System themes, where System follows Gmail's own theme and not your desktop
-• Cleanup rules with one-click starter templates: clear Promotions after 30 days, archive newsletters after 14, mark Social read after 7
-• Export and import your whole configuration as a JSON file
-• A one-minute guided tour, reopenable any time from the toolbar menu
-• Full keyboard navigation and screen reader labels throughout
+▶️ Watch the 90 second demo: https://youtu.be/PtjGAnSIG5o
 
-HOW IT WORKS
+━━━━━━━━━━━━━━━━━━━━
+✨ WHAT YOU GET
+━━━━━━━━━━━━━━━━━━━━
+
+📑 Tabs for labels, saved searches and Gmail views, in a bar above your inbox
+➕ Add a label straight from Gmail: its own three-dot menu now offers "Show as Tabs"
+🏷️ Optional sender icons: a small chip in each inbox row showing which organisation the mail is from
+🔢 Live unread counts on every tab, read from Gmail itself
+🎨 Tab colors from an accessible palette, so the views that matter stand out
+↕️ Drag to reorder, across as many rows as you need
+🔄 Your tabs sync to every Chrome you sign into
+👤 Multi-account: each Gmail account keeps its own tabs, colors, order and rules
+🌓 Light, Dark and System themes, where System follows Gmail's own theme and not your desktop
+🗑️ Cleanup rules with one-click starter templates: clear Promotions after 30 days, archive newsletters after 14, mark Social read after 7
+💾 Export and import your whole configuration as a JSON file
+🎓 A one-minute guided tour, reopenable any time from the toolbar menu
+⌨️ Full keyboard navigation and screen reader labels throughout
+
+━━━━━━━━━━━━━━━━━━━━
+⚙️ HOW IT WORKS
+━━━━━━━━━━━━━━━━━━━━
 
 The extension runs only on mail.google.com. It reads your label list and your unread counts from the Gmail page you already have open, draws the tab bar under Gmail's toolbar, and saves your setup in Chrome's own storage. There is no account to create, no sign-in, and no server holding your settings.
 
-CLEANUP THAT RUNS IN YOUR OWN ACCOUNT
+━━━━━━━━━━━━━━━━━━━━
+🧹 CLEANUP THAT RUNS IN YOUR OWN ACCOUNT
+━━━━━━━━━━━━━━━━━━━━
 
 Cleanup rules never run on our side. The extension writes a Google Apps Script that you paste into your own Google account and schedule yourself. You can read every line before you run it, and you can stop it whenever you like. Mail is moved to Trash, where Gmail keeps it for 30 days. Nothing is deleted permanently.
 
-PRIVACY
+━━━━━━━━━━━━━━━━━━━━
+🔒 PRIVACY
+━━━━━━━━━━━━━━━━━━━━
 
 No analytics. No telemetry. No tracking pixels. No remote configuration. Your tabs, labels and settings stay in your browser's own storage, synced by Chrome through your Google account the same way your bookmarks are.
 
@@ -160,67 +179,73 @@ Sender icons are off until you turn them on, and even then they draw a coloured 
 
 One page opens after you have already left: uninstalling opens a short feedback form at tally.so, so we can learn why. The link carries no address, no settings and no identifier, nothing is sent from the extension, and closing the tab answers nothing.
 
-Four permissions, one use each. Storage saves your tabs. Downloads writes the backup file when you press Export. Management lets the Uninstall button inside Settings remove the extension cleanly. Scripting starts the extension in a Gmail tab you already had open, so installing or updating it does not make you reload Gmail by hand. All four work only on mail.google.com.
+🛡️ Four permissions, one use each. Storage saves your tabs. Downloads writes the backup file when you press Export. Management lets the Uninstall button inside Settings remove the extension cleanly. Scripting starts the extension in a Gmail tab you already had open, so installing or updating it does not make you reload Gmail by hand. All four work only on mail.google.com.
 
-QUESTIONS PEOPLE ASK
+━━━━━━━━━━━━━━━━━━━━
+❓ QUESTIONS PEOPLE ASK
+━━━━━━━━━━━━━━━━━━━━
 
-Does it read my email?
+🔹 Does it read my email?
 No. It reads your label names and unread counts from the Gmail page in your browser. Message content is never read, stored or sent anywhere.
 
-Does it work with multiple Gmail accounts?
+🔹 Does it work with multiple Gmail accounts?
 Yes. Each account, identified by its address, keeps its own tabs, colors, order and rules, and switching accounts switches the bar.
 
-Do my tabs follow me to another computer?
+🔹 Do my tabs follow me to another computer?
 Yes. They sync through Chrome's own sync, the same mechanism as your bookmarks, so signing into Chrome elsewhere brings them with you.
 
-Can I add custom tabs to Gmail?
+🔹 Can I add custom tabs to Gmail?
 Yes, with this extension. Gmail on its own offers only a fixed set of five category tabs (Primary, Promotions, Social, Updates and Forums). The extension adds a bar above the inbox where any label or any search can be a tab, alongside the categories rather than instead of them.
 
-Can I pin a search, not just a label?
+🔹 Can I pin a search, not just a label?
 Yes. Any Gmail search works, for example is:unread from:boss or has:attachment older_than:30d, and becomes a tab you click like any other.
 
-How do I pin a Gmail search as a tab?
+🔹 How do I pin a Gmail search as a tab?
 Run the search in Gmail as usual, for example from:accounts@ has:attachment newer_than:30d, then press the + button at the end of the tab bar. The search becomes a tab with its unread count, and clicking it runs the search again live. To rename it or give it a colour, open the tab's menu and choose Edit Tab.
 
-Can I add a label without opening settings?
+🔹 Can I add a label without opening settings?
 Yes. Click the three dots beside any label in Gmail's sidebar and the menu ends with "Show as Tabs", or "Remove from Tabs" if it is already there. Sublabels work the same way.
 
-Does it work with Gmail dark mode?
+🔹 Does it work with Gmail dark mode?
 Yes. Light, Dark and System are all supported, and System follows Gmail's own theme, so a light Gmail on a dark desktop still gets a light tab bar.
 
-Does it slow Gmail down?
+🔹 Does it slow Gmail down?
 No. It draws one small bar on a page you have already loaded, and it fetches nothing of its own unless you turn on website icons for sender icons.
 
-Can it show who an email is from at a glance?
+🔹 Can it show who an email is from at a glance?
 Yes, if you turn on sender icons in Settings. Each inbox row gets a small chip naming the sender's organisation, such as mashreq.com, with a coloured letter or, if you allow it, the organisation's own icon. Mail from gmail.com and similar providers shows the sender's initial instead of the provider's logo.
 
-Is it free?
+🔹 Is it free?
 Yes. Free, no account, no upsell, and open source under the MIT license.
 
-Does it work with Google Workspace accounts?
+🔹 Does it work with Google Workspace accounts?
 Yes. Workspace Gmail runs on mail.google.com like personal Gmail, so the extension works the same way, unless your organisation's administrator blocks Chrome extensions. Each Workspace and personal account keeps its own tabs.
 
-Does it work in Edge, Brave or Firefox?
+🔹 Does it work in Edge, Brave or Firefox?
 It is built on Manifest V3 and published for Chrome. It is tested in Chrome, Microsoft Edge, Opera and Chromium, and other Chromium browsers that install from the Chrome Web Store, such as Brave, can run it. Firefox and Safari cannot.
 
-What happens to my tabs if I uninstall it?
+🔹 What happens to my tabs if I uninstall it?
 Chrome removes the extension's storage with it, so your tabs, colours and rules go too. Export them to a JSON file from Settings first if you might come back, and import the file after reinstalling.
 
-How do I get my tabs back if something goes wrong?
+🔹 How do I get my tabs back if something goes wrong?
 Export your configuration to a JSON file from Settings at any time, and import it back into a fresh profile or a new machine.
 
-WHO IT IS FOR
+━━━━━━━━━━━━━━━━━━━━
+👥 WHO IT IS FOR
+━━━━━━━━━━━━━━━━━━━━
 
 Anyone whose Gmail has more than a handful of labels: support and shared inboxes, freelancers juggling clients, anyone running several Gmail accounts in one browser, and people who live in saved searches.
 
-OPEN SOURCE
+━━━━━━━━━━━━━━━━━━━━
+💻 OPEN SOURCE
+━━━━━━━━━━━━━━━━━━━━
 
 The full source is public and auditable, with 965 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
-Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
-Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
-Source code: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
-Support: support@palworks.ai
+🌐 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
+🔒 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
+💻 Source code: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
+✉️ Support: support@palworks.ai
 ```
 
 **What the browser line rests on.** On 2026-09-29 the 1.8.0 build was loaded unpacked into
