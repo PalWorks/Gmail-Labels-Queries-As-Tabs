@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-30 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.1)
 
 ## 1. High-Level Overview
 
@@ -29,11 +29,10 @@ Gmail-Labels-As-Tabs/
 ├── tsconfig.json              # TypeScript compiler config (ES2022, strict)
 ├── build.js                   # esbuild bundler config (7 entry points)
 ├── jest.config.js             # Test config (ts-jest, jsdom) + coverage thresholds
-├── generate_icons.py          # Utility to generate icon sizes from source
 │
 ├── src/                       # ★ ALL EXTENSION SOURCE CODE
-│   ├── content.ts             # Orchestrator: injection lifecycle, listeners, wiring (416 lines)
-│   ├── background.ts          # Service worker (downloads, install hooks, action click)
+│   ├── content.ts             # Orchestrator: injection lifecycle, listeners, wiring, stand-down
+│   ├── background.ts          # Service worker: the settings write queue, downloads, install/update/enable adoption, tour
 │   ├── xhrInterceptor.ts      # MAIN world script (XHR monkey-patch for unread counts)
 │   ├── options.ts/.html/.css  # Options page: settings, rules, privacy, feedback
 │   ├── welcome.ts/.html/.css  # Onboarding page
@@ -54,12 +53,16 @@ Gmail-Labels-As-Tabs/
 │   │   ├── state.ts           # Encapsulated module state behind accessors
 │   │   ├── extensionContext.ts # ★ Is this content script still attached to the extension?
 │   │   ├── messages.ts        # Message names, in a leaf so they drag no code
+│   │   ├── labelMenu.ts       # "Show as Tabs" in Gmail's own label menu
+│   │   ├── health.ts          # Per-component integration health, for the options page
+│   │   ├── handover.ts        # A second copy of the content script arriving, the first standing down
 │   │   ├── onboarding/        # ★ The tour: one wizard, two hosts
 │   │   │   ├── wizardContent.ts   # Copy as data, so none of it can reach innerHTML
 │   │   │   ├── wizardView.ts      # Narration + a working miniature of the bar
 │   │   │   └── onboardingModal.ts # …as a modal over Gmail
 │   │   └── modals/            # One file per dialog (edit, delete, pin, import, …)
-│   │       └── contextNotice.ts # The one message a modal shows once orphaned
+│   │       ├── contextNotice.ts # The orphaned notice, and the notice for a failed save
+│   │       └── dialogA11y.ts  # Dialog role, focus trap, focus return, key isolation
 │   ├── utils/
 │   │   ├── storage.ts         # ★ chrome.storage wrapper (multi-account) + migrations
 │   │   ├── importExport.ts    # Export / import serialization and validation
@@ -68,11 +71,11 @@ Gmail-Labels-As-Tabs/
 │   │   ├── domain.ts          # Sender address to organisation domain
 │   │   └── selectors.ts       # Gmail DOM selectors, in one place
 │   ├── ui/
-│   │   └── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
-│   ├── popup.html/.css/.ts    # The toolbar icon's menu (1 KB bundle)
+│   │   ├── toolbar.css        # ★ In-Gmail design system (CSS custom properties)
+│   │   └── onboarding.css     # The tour, over Gmail and on the welcome page
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 44 suites: one per module, four repo-wide guards, three for the canary tooling
+├── test/                      # 47 suites: one per module, four repo-wide guards, three for the canary tooling
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -92,7 +95,7 @@ Gmail-Labels-As-Tabs/
 |---|---|
 | `src/content.ts` | Orchestrator: bootstraps the content script, owns the injection lifecycle and storage listeners, delegates everything else to modules |
 | `src/modules/` | Feature modules, one concern per file. Nothing here reaches into another module's state; shared state goes through `state.ts` |
-| `src/utils/` | Leaf utilities with no module dependencies: storage, import/export, rendering, colors, selectors |
+| `src/utils/` | Utilities that depend on no feature module (storage imports only `modules/extensionContext`): storage, import/export, rendering, colors, selectors |
 | `src/background.ts` | Service worker: file downloads, install and update hooks (including starting the content script in Gmail tabs that were already open), uninstall URL, and picking which surface the onboarding tour opens on |
 | `src/xhrInterceptor.ts` | MAIN world injection: intercepts Gmail's XHR responses to extract real-time unread label counts |
 | `src/ui/toolbar.css` | Visual layer for the in-Gmail surface: design system with light/dark theming via custom properties |
@@ -115,7 +118,7 @@ Gmail-Labels-As-Tabs/
 │  │  background.ts   │     │                            │  │
 │  │                 │     │  ┌─────────────────────┐   │  │
 │  │  • onInstall    │────▶│  │  ISOLATED WORLD      │   │  │
-│  │  • onClicked    │     │  │  content.ts           │   │  │
+│  │  • MUTATE queue │     │  │  content.ts           │   │  │
 │  │  • DOWNLOAD_FILE│◀───│  │                       │   │  │
 │  │  • UNINSTALL    │     │  │  • init()             │   │  │
 │  └─────────────────┘     │  │  • renderTabs()       │   │  │
@@ -140,9 +143,13 @@ Gmail-Labels-As-Tabs/
 
 1. **Chrome loads the extension** → reads `manifest.json`
 2. **Service worker** (`background.ts`) boots:
-   - Sets `onInstalled` listener → opens `welcome.html`, sets default labels, reloads Gmail tabs
+   - Sets `onInstalled`: on an install with no Gmail tab open it opens `welcome.html`;
+     otherwise, and on every update, it pings each open Gmail tab and injects the content
+     script where nothing answers (a reload only if injection fails). A worker started by
+     no install, update or browser start is an enable, and does the same once a session
    - Sets feedback URL for uninstall
-   - Listens for `action.onClicked` → sends `TOGGLE_SETTINGS` message to active tab
+   - The toolbar icon opens `popup.html`, whose Configure button sends `TOGGLE_SETTINGS`
+     to the active Gmail tab
 3. **User opens Gmail** → Chrome injects `content.ts` (ISOLATED world) + `toolbar.css`
 4. **`content.ts` → `init()`**:
    - **Immediately** injects `xhrInterceptor.js` into MAIN world (for XHR access)
@@ -182,7 +189,7 @@ Gmail-Labels-As-Tabs/
 
 ## 5. Core Modules & Relationships
 
-### `content.ts` — The Orchestrator (416 lines)
+### `content.ts` — The Orchestrator
 
 Since v1.2.0 this is a thin coordinator, not a monolith. It owns only what must be
 owned centrally:
@@ -256,14 +263,15 @@ Handles privileged Chrome APIs, and is the serialization point for settings:
   nothing answers, injects the content script and its stylesheets with
   `chrome.scripting`. A tab that cannot be injected into is reloaded instead, which is the
   fallback rather than the plan. See ADR-025
-- `chrome.action.onClicked` forwards to content script
+- `ADOPT_GMAIL_TABS`, from the welcome page, runs the same adoption on request
 
 It sets an **uninstall URL**, pointing at the Tally feedback form, because uninstall is
 the one moment the in-product feedback form cannot reach. The link carries no address,
 settings or identifier, and its host must appear in SECURITY.md, the in-extension privacy
 page and STORE_LISTING.md or `test/repoConsistency.test.ts` fails the build. See ADR-014.
 
-The message listener returns `true` only for the two messages it answers asynchronously.
+The message listener returns `true` only for the messages it answers asynchronously:
+`MUTATE_SETTINGS`, `OPEN_OPTIONS_PAGE`, `START_TOUR` and `ADOPT_GMAIL_TABS`.
 Returning `true` for anything else holds the sender's channel open forever, so a
 promise-form `sendMessage` never settles, which is how a stale worker can hang a caller.
 
@@ -274,9 +282,9 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 | What | Where | Format |
 |---|---|---|
 | Per-account settings | `chrome.storage.sync` | Key: `account_{email}`, Value: `Settings` object |
-| Default settings | [storage.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/utils/storage.ts#L31-L48) | Hardcoded `DEFAULT_SETTINGS` constant |
+| Default settings | [storage.ts](src/utils/storage.ts) | Hardcoded `DEFAULT_SETTINGS` constant |
 | Theme | Browser-wide in `chrome.storage.local` under `globalTheme` (default `light`); `Settings.theme` kept only for migration seeding | `'system' \| 'light' \| 'dark'` |
-| Uninstall feedback URL | [background.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/background.ts#L66) | Hardcoded Tally form URL |
+| Uninstall feedback URL | [background.ts](src/background.ts) | `UNINSTALL_FEEDBACK_URL`, the Tally form |
 | i18n | `_locales/en/` | Chrome i18n message format |
 
 > **No `.env` or secrets** are used by the extension itself. All config is user-controlled via `chrome.storage.sync`.
@@ -299,7 +307,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Package | Purpose | Why |
 |---|---|---|
-| `esbuild` | Build tool | Fast TypeScript bundling (4 entry points → `dist/js/`) |
+| `esbuild` | Build tool | Fast TypeScript bundling (7 entry points → `dist/js/`) |
 | `typescript` | Language | Strict-mode TypeScript compilation |
 | `jest` + `ts-jest` + `jest-environment-jsdom` | Testing | Unit tests with JSDOM for browser APIs |
 | `eslint` + `prettier` | Code quality | Linting and formatting |
@@ -319,7 +327,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 44 suites, 965 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback, sender icons and their domain rules, and the drift canary's alerting, escalation and selector refresh |
+| Unit suites | `test/*.test.ts`, one per module | 47 suites, 1082 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback, sender icons and their domain rules, and the drift canary's alerting, escalation and selector refresh |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |
@@ -356,15 +364,15 @@ options-page link *passed*, because they mocked the call that was failing. See A
 ## 9. Extension Points & Safe Modification Guide
 
 ### Adding a New Tab Type (e.g., "category" tabs)
-1. Extend `Tab.type` union in [storage.ts](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/utils/storage.ts#L12) to add new type
-2. Add navigation logic in `renderTabs()` click handler ([content.ts#L794-L801](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L794))
-3. Add active-tab matching in `updateActiveTab()` ([content.ts#L1412-L1441](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L1412))
-4. Add unread count logic in `updateUnreadCount()` ([content.ts#L1924](file:///home/palani/Documents/Gmail-Labels-As-Tabs/src/content.ts#L1924))
+1. Extend `Tab.type` union in [storage.ts](src/utils/storage.ts) to add new type
+2. Add navigation logic in `renderTabs()` click handler ([tabs.ts](src/modules/tabs.ts))
+3. Add active-tab matching in `updateActiveTab()` ([tabs.ts](src/modules/tabs.ts))
+4. Add unread count logic in `updateUnreadCount()` ([unread.ts](src/modules/unread.ts))
 
 ### Adding a New Theme
 1. Add CSS custom property overrides in `toolbar.css` under a new `body.force-{name}` selector
 2. Extend `Settings.theme` type in `storage.ts`
-3. Add button in `createSettingsModal()` theme selector
+3. Add button in `createSettingsModal()` theme selector ([settingsModal.ts](src/modules/modals/settingsModal.ts))
 4. Give the tab bar its background under that selector too. `.gmail-tabs-bar` is
    transparent by default on purpose: a surface with no theme paints nothing
    rather than guessing. See ADR-020
@@ -374,7 +382,7 @@ options-page link *passed*, because they mocked the call that was failing. See A
 ### Adding New Settings
 1. Add field to `Settings` interface in `storage.ts`
 2. Update `DEFAULT_SETTINGS`
-3. Add UI control in `createSettingsModal()` in `content.ts`
+3. Add UI control in `createSettingsModal()` in [settingsModal.ts](src/modules/modals/settingsModal.ts)
 
 ### Adding External API Integration
 1. Add permission to `manifest.json`
@@ -413,7 +421,7 @@ The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels
 | Issue | Impact |
 |---|---|
 | The marketing site is a separate repository | Build and deploy are independent, and the privacy policy it serves cannot be kept in step by this build. A CI step fetches the published policy instead |
-| Source files are not Prettier-clean | `npm run lint` passes and CI does not check formatting; `npm run format` would touch ~30 files in one unrelated diff |
+| Source files are not Prettier-clean | `npm run lint` passes and CI does not check formatting; `npm run format` would touch 39 files in one unrelated diff |
 
 ---
 
@@ -444,10 +452,13 @@ npm test
 ### Build Pipeline (build.js)
 
 ```
-src/content.ts     ──┐
-src/background.ts  ──┤ esbuild (bundle, minify, ES2020)
-src/xhrInterceptor.ts──┤──────────────────────────────▶  dist/js/*.js
-src/welcome.ts     ──┘
+src/content.ts        ──┐
+src/background.ts     ──┤
+src/xhrInterceptor.ts ──┤ esbuild (bundle, minify, ES2020)
+src/options.ts        ──┤──────────────────────────────▶  dist/js/*.js
+src/welcome.ts        ──┤
+src/popup.ts          ──┤
+src/themeBoot.ts      ──┘
                       
 copy-assets: manifest.json, CSS, HTML, icons, _locales  ▶  dist/
 ```
@@ -459,14 +470,14 @@ copy-assets: manifest.json, CSS, HTML, icons, _locales  ▶  dist/
 **What is it?** A Chrome MV3 extension that adds a customizable tab bar to Gmail for quick label/search navigation.
 
 **Three execution contexts:**
-1. **Service Worker** (`background.ts`) — Handles install, file downloads, and the toolbar icon click
-2. **Isolated World** (`content.ts`) — The 2100-line brain that renders tabs, manages settings modals, handles drag-and-drop, and coordinates everything
+1. **Service Worker** (`background.ts`) — Serialises every settings write, handles install, update and enable, file downloads, and the tour
+2. **Isolated World** (`content.ts`) — The orchestrator: it wires the modules in `src/modules/` that render tabs, run the modals, drag and drop, and draw sender icons
 3. **Main World** (`xhrInterceptor.ts`) — Silently patches Gmail's XHR to sniff unread counts from internal API responses, then fires a `CustomEvent` back to the content script
 
 **Data flow:** Settings live in `chrome.storage.sync` keyed per-email (`account_{email}`). The `storage.ts` module provides a typed CRUD API. Changes trigger real-time re-renders via `chrome.storage.onChanged` listener.
 
-**How tabs work:** Each tab is `{ id, title, type, value }`. Clicking a tab sets `window.location.hash` (e.g., `#label/Work`, `#search/from:boss`). The active tab is highlighted by matching the current hash.
+**How tabs work:** Each tab is `{ id, title, type, value, color? }`. Clicking a tab sets `window.location.hash` (e.g., `#label/Work`, `#search/from:boss`). The active tab is highlighted by matching the current hash.
 
 **Unread counts:** Three-strategy waterfall — Atom feed → XHR interception → DOM scraping. The XHR interceptor is the most novel: it monkey-patches `XMLHttpRequest` in Gmail's page context, parses Gmail's proprietary JSON, and ferries `[label, count]` tuples back via `CustomEvent`.
 
-**Where to start contributing:** Read `storage.ts` first (the data layer, 518 lines), then `content.ts`'s `init()` flow, which is short and delegates to `src/modules/`. Each module has a mirrored test file, so the test is usually the fastest way to understand one.
+**Where to start contributing:** Read `storage.ts` first (the data layer), then `content.ts`'s `init()` flow, which is short and delegates to `src/modules/`. Each module has a mirrored test file, so the test is usually the fastest way to understand one.

@@ -23,6 +23,7 @@ import {
     updateUnreadCount,
     clearUnreadCountCache,
     computeKnownLabelTokens,
+    resolveFeedLabel,
 } from '../src/modules/unread';
 import { Tab } from '../src/utils/storage';
 import { microtasks } from './helpers/async';
@@ -618,5 +619,118 @@ describe('computeKnownLabelTokens', () => {
     test('ignores search/system hash tabs that map to no label', () => {
         const tabs: Tab[] = [{ id: '1', title: 'Unread', type: 'hash', value: '#search/is:unread' }];
         expect(computeKnownLabelTokens(tabs)).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Audit fixes: live counts survive a redraw, hash labels decode, '%' in names
+// ---------------------------------------------------------------------------
+
+describe('live XHR counts and the feed cache', () => {
+    function makeTabEl(): HTMLElement {
+        const el = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = 'unread-count';
+        el.appendChild(span);
+        return el;
+    }
+
+    const inbox: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+
+    beforeEach(() => {
+        clearUnreadCountCache();
+        (global as any).fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            text: async () => '<feed><fullcount>9</fullcount></feed>',
+        });
+    });
+
+    test('a redraw inside the TTL shows the live count, not the older feed count', async () => {
+        await updateUnreadCount(inbox, makeTabEl());
+
+        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
+        handleUnreadUpdates([{ label: '^i', count: 3 }]);
+
+        const redrawn = makeTabEl();
+        await updateUnreadCount(inbox, redrawn);
+        expect(redrawn.querySelector('.unread-count')!.textContent).toBe('3');
+        expect((global as any).fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('a feed fetch that started before a live update does not overwrite it', async () => {
+        let resolveFeed!: (v: unknown) => void;
+        (global as any).fetch = jest.fn(
+            () =>
+                new Promise((resolve) => {
+                    resolveFeed = resolve;
+                })
+        );
+
+        const el = makeTabEl();
+        const pending = updateUnreadCount(inbox, el);
+        await microtasks();
+
+        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
+        handleUnreadUpdates([{ label: '^i', count: 3 }]);
+
+        resolveFeed({ ok: true, text: async () => '<feed><fullcount>9</fullcount></feed>' });
+        await pending;
+        expect(el.querySelector('.unread-count')!.textContent).toBe('3');
+
+        const redrawn = makeTabEl();
+        await updateUnreadCount(inbox, redrawn);
+        expect(redrawn.querySelector('.unread-count')!.textContent).toBe('3');
+    });
+});
+
+describe('pinned #label/ hash tabs fetch the right feed', () => {
+    beforeEach(() => {
+        clearUnreadCountCache();
+        (global as any).fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            text: async () => '<feed><fullcount>1</fullcount></feed>',
+        });
+    });
+
+    function makeTabEl(): HTMLElement {
+        const el = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = 'unread-count';
+        el.appendChild(span);
+        return el;
+    }
+
+    test.each([
+        ['#label/My+Label', 'feed/atom/My%20Label'],
+        ['#label/Parent%2FChild', 'feed/atom/Parent%2FChild'],
+    ])('%s is decoded once before it is encoded for the feed', async (value, expected) => {
+        const tab: Tab = { id: 't', title: 'x', type: 'hash', value };
+        await updateUnreadCount(tab, makeTabEl());
+        const url = (global as any).fetch.mock.calls[0][0] as string;
+        expect(url.endsWith(expected)).toBe(true);
+    });
+
+    test('resolveFeedLabel keeps a malformed escape rather than throw', () => {
+        expect(resolveFeedLabel({ id: 't', title: 'x', type: 'hash', value: '#label/100%' })).toBe('100%');
+    });
+});
+
+describe('normalizeLabel with a literal percent sign', () => {
+    test('does not throw and matches on the raw name', () => {
+        expect(() => normalizeLabel('100% Done')).not.toThrow();
+        expect(normalizeLabel('100% Done')).toBe('100% done');
+    });
+});
+
+describe('the sidebar fallback for a pinned #label/ view', () => {
+    test('finds the link for an encoded nested label rather than encoding it twice', () => {
+        document.body.innerHTML = `
+            <div role="navigation">
+                <a href="https://mail.google.com/mail/u/0/#label/Work%2FClients" title="Clients">
+                    <div class="bsU">6</div>
+                </a>
+            </div>`;
+        const count = getUnreadCountFromDOM({ id: 'p', title: 'Clients', type: 'hash', value: '#label/Work%2FClients' } as any);
+        expect(count).toBe('6');
     });
 });

@@ -114,7 +114,8 @@ distinguishes a signed-in one cheaply and reaching Gmail is the only honest
 test.
 
 It never touches the browser you are using. It copies the cookie and
-preference files out of a signed-in profile (about 1.2 MB, seven files), runs
+preference files out of a signed-in profile (about 1.2 MB, six files, never
+`Login Data`: the saved passwords are not needed, since the session rides on the cookies), runs
 headless Chrome on a private port against the copy, and deletes the copy
 afterwards whatever happens, including on failure and on Ctrl-C.
 
@@ -136,7 +137,16 @@ is told. Escalation is on the **second** consecutive failure: a desktop
 notification, a GitHub issue deduplicated by title so a persisting break opens
 one issue and not one a day, and a Google Chat message. Notifications repeat
 weekly while the break persists, and a recovery is announced in the thread of
-what broke. DEGRADED escalates the same way but opens no issue.
+what broke. DEGRADED escalates the same way but opens no issue. ERROR does open
+one, and a build that fails before the canary can run counts as an ERROR, in the
+same streak.
+
+A SKIPPED run breaks no streak, but seven in a row means the canary has learned
+nothing for a week, usually because the Gmail session expired. The seventh
+consecutive skip sends one desktop notification and one Google Chat message, in
+its own `canary-skipped` thread, and opens no issue; any run that is not a skip
+resets the count. Output embedded in a GitHub issue has the home directory
+replaced with `~`, so no issue publishes a local path.
 
 ## Google Chat alerts
 
@@ -151,7 +161,7 @@ credential: it lives only there, `notify.mjs` never prints it, and only a
 `https://chat.googleapis.com/v1/spaces/.../messages` URL is accepted. Some
 Google Workspace administrators turn incoming webhooks off; the test alert is
 how to find out. Delivery is three attempts of ten seconds each. Each kind of
-break (`canary-fail`, `canary-error`, `canary-degraded`) has its own thread.
+break (`canary-fail`, `canary-error`, `canary-degraded`, `canary-skipped`) has its own thread.
 
 ## The files
 

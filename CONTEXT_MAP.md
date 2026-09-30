@@ -42,7 +42,7 @@ Last updated: 2026-09-30 (v1.8.0)
 |---------|------|
 | Content-script entry, injection lifecycle, storage listeners | [src/content.ts](src/content.ts) |
 | MAIN-world XHR interception for unread counts | [src/xhrInterceptor.ts](src/xhrInterceptor.ts) |
-| Service worker (install, welcome page, uninstall URL) | [src/background.ts](src/background.ts) |
+| Service worker: the single settings writer, install, update and re-enable adoption of open Gmail tabs, welcome page, downloads, options page, tour, uninstall URL | [src/background.ts](src/background.ts) |
 | Options page logic (account selector, theme, rules, import/export) | [src/options.ts](src/options.ts) |
 | Onboarding page logic | [src/welcome.ts](src/welcome.ts) |
 | Onboarding copy and the miniature's data | [src/modules/onboarding/wizardContent.ts](src/modules/onboarding/wizardContent.ts) |
@@ -56,8 +56,9 @@ Last updated: 2026-09-30 (v1.8.0)
 | Gmail DOM selectors, including the two sender icon fallbacks the drift canary refreshes | [src/utils/selectors.ts](src/utils/selectors.ts) |
 | Shared module state + accessors | [src/modules/state.ts](src/modules/state.ts) |
 | Detecting that this content script was orphaned by an extension update | [src/modules/extensionContext.ts](src/modules/extensionContext.ts) |
-| The "reload Gmail" notice every modal shows once orphaned | [src/modules/modals/contextNotice.ts](src/modules/modals/contextNotice.ts) |
-| How a Gmail tab open before an install or an update gets a working script, without being reloaded | [src/modules/handover.ts](src/modules/handover.ts) |
+| The "reload Gmail" notice every modal shows once orphaned, and the notice for a save that failed (settings full, or any other write error) | [src/modules/modals/contextNotice.ts](src/modules/modals/contextNotice.ts) |
+| Shared modal dialog accessibility: role, focus trap, focus return, key isolation | [src/modules/modals/dialogA11y.ts](src/modules/modals/dialogA11y.ts) |
+| How the copy of the content script already in a tab stands down when a newer copy arrives (the injection itself is `adoptOpenGmailTabs` in background.ts) | [src/modules/handover.ts](src/modules/handover.ts) |
 | Tab bar rendering, dropdowns, keyboard/aria | [src/modules/tabs.ts](src/modules/tabs.ts) |
 | Unread count waterfall (feed, XHR, DOM) | [src/modules/unread.ts](src/modules/unread.ts) |
 | Apps Script generation from rules | [src/modules/rules.ts](src/modules/rules.ts) |
@@ -84,6 +85,8 @@ Last updated: 2026-09-30 (v1.8.0)
 | Modal: uninstall confirmation | [src/modules/modals/uninstallModal.ts](src/modules/modals/uninstallModal.ts) |
 | In-Gmail toolbar + modal styles | [src/ui/toolbar.css](src/ui/toolbar.css) |
 | Options page styles | [src/options.css](src/options.css) |
+| Toolbar popup styles | [src/popup.css](src/popup.css) |
+| The tour's styles, over Gmail and on the welcome page | [src/ui/onboarding.css](src/ui/onboarding.css) |
 | Onboarding page styles | [src/welcome.css](src/welcome.css) |
 
 ## Build and CI map

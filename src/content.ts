@@ -34,11 +34,18 @@ import { showOnboarding, SHOW_ONBOARDING_ACTION } from './modules/onboarding/onb
 import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modules/theme';
 import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
-import { showPinModal, showEditModal, showDeleteModal, toggleSettingsModal, setRenderCallback } from './modules/modals';
+import {
+    showPinModal,
+    showEditModal,
+    showDeleteModal,
+    toggleSettingsModal,
+    setRenderCallback,
+    reportSettingsWriteFailure,
+} from './modules/modals';
 import { installLabelMenu, uninstallLabelMenu } from './modules/labelMenu';
 import { installSenderIcons, refreshSenderIcons, uninstallSenderIcons, SenderIconPrefs } from './modules/senderIcons';
 import { claimPage, removeOurPageFurniture } from './modules/handover';
-import { PING_ACTION } from './modules/messages';
+import { PING_ACTION, TOGGLE_SETTINGS_ACTION } from './modules/messages';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -57,6 +64,29 @@ let initPromise: Promise<void> | null = null;
 // handed over must not keep re-injecting a bar the live copy does not own.
 let standingDown = false;
 
+// What this copy registered on objects it shares with any other copy in the
+// page: the extension's own chrome.* events, and the page's document and
+// window. Two live copies of the same version share one chrome.runtime, so a
+// copy that stands down must take its listeners with it, or both answer every
+// message and both re-render on every storage change.
+const disposers: Array<() => void> = [];
+
+function listen<T extends EventTarget>(target: T, type: string, handler: EventListener): void {
+    target.addEventListener(type, handler);
+    disposers.push(() => target.removeEventListener(type, handler));
+}
+
+// Account detection runs until Gmail names the account, on a slow link too.
+let accountPoller: ReturnType<typeof setInterval> | null = null;
+let accountPollerSlowdown: ReturnType<typeof setTimeout> | null = null;
+
+// Set when this copy consumed the first-run tour flag, so that a copy which
+// stands down before or after opening the tour can pass it on.
+let tourIsMine = false;
+
+/** Fired by a copy that stands down holding the first-run tour, for the next copy to show it. */
+const TOUR_HANDOVER_EVENT = 'gmailTabs:tourHandover';
+
 // ---------------------------------------------------------------------------
 // Module Wiring (resolve circular deps via callbacks)
 // ---------------------------------------------------------------------------
@@ -70,7 +100,9 @@ setModalCallbacks({
 });
 
 // Listen for re-render events from dragdrop smart-drop handler
-document.addEventListener('gmailTabs:rerender', () => renderTabs());
+listen(document, 'gmailTabs:rerender', () => {
+    if (!standingDown) renderTabs();
+});
 
 // ---------------------------------------------------------------------------
 // Observer
@@ -174,10 +206,14 @@ function extractEmailFromDOM(): string | null {
     console.log('Gmail Tabs: Document Title:', title);
     const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
 
-    const titleMatch = title.match(emailRegex);
-    if (titleMatch) {
-        console.log('Gmail Tabs: Found email in title:', titleMatch[1]);
-        return titleMatch[1];
+    // The account is the last address in the title: Gmail titles a thread
+    // "Subject - me@example.com - Gmail", and a subject can hold an address of
+    // its own, so the first match could name a stranger's account.
+    const titleMatches = title.match(new RegExp(emailRegex.source, 'g'));
+    if (titleMatches) {
+        const account = titleMatches[titleMatches.length - 1];
+        console.log('Gmail Tabs: Found email in title:', account);
+        return account;
     }
 
     const accountElement = document.querySelector(
@@ -216,7 +252,11 @@ async function finalizeInit(email: string): Promise<void> {
         // changes a setting.
         await ensureAccountRegistered(email);
 
-        setAppSettings(await getSettings(email));
+        const settings = await getSettings(email);
+        // A newer copy may have taken the page over while this one waited on
+        // storage; it builds everything below itself.
+        if (standingDown) return;
+        setAppSettings(settings);
         console.log('Gmail Tabs: Settings loaded for', email, getAppSettings());
 
         // Theme before the first paint, not after. Until `force-light` or
@@ -225,18 +265,19 @@ async function finalizeInit(email: string): Promise<void> {
         // light Gmail saw the bar flash dark for a frame, which is the exact
         // mismatch that whole mechanism exists to avoid.
         currentGlobalTheme = await getGlobalTheme();
+        if (standingDown) return;
         applyTheme(currentGlobalTheme);
 
         renderTabs();
         broadcastKnownLabels();
 
         // Listen for OS theme changes to auto-update 'system' mode
-        listenForSystemThemeChanges(() => currentGlobalTheme);
+        disposers.push(listenForSystemThemeChanges(() => currentGlobalTheme));
 
         // Gmail paints its own background late and the user can switch Gmail's
         // theme without reloading, so keep 'system' mode following Gmail itself
         // rather than the OS.
-        watchGmailTheme(() => currentGlobalTheme);
+        disposers.push(watchGmailTheme(() => currentGlobalTheme));
 
         // Only now: the item reads "Show as Tabs" or "Remove from Tabs"
         // depending on the tab list, so installing it before settings are
@@ -267,21 +308,38 @@ async function initializeFromDOM(): Promise<void> {
         // its own failure. Without this, a storage error during the polling
         // path lost the tab bar in silence while the immediate path above
         // reported the identical failure.
-        const accountPoller = setInterval(() => {
+        const poll = (): void => {
+            if (standingDown) return stopAccountPolling();
             email = extractEmailFromDOM();
             if (!email) return;
             console.log('Gmail Tabs: Account detected via polling:', email);
-            clearInterval(accountPoller);
+            stopAccountPolling();
             if (getUserEmail()) return;
             setUserEmail(email);
             initPromise = initPromise || finalizeInit(email);
             initPromise.catch((err) => {
                 console.error('Gmail Tabs: account initialization failed after polling', err);
             });
-        }, 1000);
+        };
+        accountPoller = setInterval(poll, 1000);
 
-        setTimeout(() => clearInterval(accountPoller), 60000);
+        // A minute of polling every second, then every five seconds for as
+        // long as it takes. Stopping outright used to leave a Gmail that took
+        // over a minute to name the account (a slow link, a login
+        // interstitial) with an empty bar until the tab was reloaded.
+        accountPollerSlowdown = setTimeout(() => {
+            accountPollerSlowdown = null;
+            if (accountPoller) clearInterval(accountPoller);
+            accountPoller = standingDown ? null : setInterval(poll, 5000);
+        }, 60000);
     }
+}
+
+function stopAccountPolling(): void {
+    if (accountPoller) clearInterval(accountPoller);
+    if (accountPollerSlowdown) clearTimeout(accountPollerSlowdown);
+    accountPoller = null;
+    accountPollerSlowdown = null;
 }
 
 /**
@@ -315,7 +373,10 @@ function installLabelMenuItem(): void {
             broadcastKnownLabels();
         },
         onError: (error) => {
+            // Visible, because production builds drop the console: a full
+            // sync item used to make "Show as Tabs" do nothing, silently.
             console.error('Gmail Tabs: the label menu action failed', error);
+            reportSettingsWriteFailure(error);
         },
     });
 }
@@ -394,14 +455,40 @@ function standDown(): void {
         clearTimeout(injectionRetryTimer);
         injectionRetryTimer = null;
     }
+    stopAccountPolling();
+    while (disposers.length) {
+        try {
+            disposers.pop()!();
+        } catch {
+            // An orphan's chrome.* removeListener can throw; the page-side
+            // listeners around it still come off.
+        }
+    }
     uninstallLabelMenu();
     uninstallSenderIcons();
+    // The tour this copy opened is about to be cleared with the rest of the
+    // furniture. The flag that asked for it is already spent, so hand it on
+    // rather than lose the first-run tour.
+    if (tourIsMine && document.querySelector('.glt-ob-scrim')) {
+        document.dispatchEvent(new CustomEvent(TOUR_HANDOVER_EVENT));
+    }
     removeOurPageFurniture();
     console.log('Gmail Tabs: a newer copy has taken this tab over; standing down');
 }
 
 async function init(): Promise<void> {
     console.log('Gmail Tabs: Initializing...');
+
+    // Before the claim below, so that a copy handing the page over while its
+    // tour is open can pass the tour to this one. Deferred a turn because the
+    // claim clears the page right after the old copy answers.
+    listen(document, TOUR_HANDOVER_EVENT, () => {
+        setTimeout(() => {
+            if (standingDown) return;
+            tourIsMine = true;
+            showOnboarding();
+        }, 0);
+    });
 
     // First, before anything is built: this page may already hold a copy of
     // this script, orphaned by the update that injected this one.
@@ -419,10 +506,11 @@ async function init(): Promise<void> {
     attemptInjection();
     startObserver();
 
-    window.addEventListener('popstate', handleUrlChange);
+    listen(window, 'popstate', handleUrlChange);
 
     // Storage change listener
-    chrome.storage.onChanged.addListener((changes, area) => {
+    const onStorageChanged = (changes: { [key: string]: chrome.storage.StorageChange }, area: string): void => {
+        if (standingDown) return;
         // Global theme lives in storage.local so a change in any account's tab
         // propagates to every Gmail tab in the window.
         if (area === 'local' && changes[GLOBAL_THEME_STORAGE_KEY]) {
@@ -455,12 +543,22 @@ async function init(): Promise<void> {
                 }
             }
         }
-    });
+    };
+    chrome.storage.onChanged.addListener(onStorageChanged);
+    disposers.push(() => chrome.storage.onChanged.removeListener(onStorageChanged));
 
     // Message listener
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-        if (message.action === 'TOGGLE_SETTINGS') {
+    const onMessage = (
+        message: { action?: string },
+        _sender: chrome.runtime.MessageSender,
+        sendResponse: (response?: unknown) => void
+    ): boolean => {
+        if (standingDown) return false;
+        if (message.action === TOGGLE_SETTINGS_ACTION) {
             toggleSettingsModal();
+            // Answered, so a promise-form sender settles instead of reporting
+            // a closed port as a failure to reach this tab.
+            sendResponse({ ok: true });
             return false;
         }
         if (message.action === SHOW_ONBOARDING_ACTION) {
@@ -475,18 +573,17 @@ async function init(): Promise<void> {
             sendResponse({ ok: true });
             return false;
         }
-        if (message.action === 'GET_ACCOUNT_INFO') {
-            sendResponse({ account: getUserEmail() });
-            return false;
-        }
         // Returning true for a message we do not answer holds the sender's
         // channel open forever, so a promise-form sendMessage never settles.
         return false;
-    });
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    disposers.push(() => chrome.runtime.onMessage.removeListener(onMessage));
 
     // Unread updates from pageWorld.js
-    document.addEventListener('gmailTabs:unreadUpdate', (e: any) => {
-        const updates = e.detail;
+    listen(document, 'gmailTabs:unreadUpdate', (e: Event) => {
+        if (standingDown) return;
+        const updates = (e as CustomEvent).detail;
         if (updates && Array.isArray(updates)) {
             handleUnreadUpdates(updates);
         }
@@ -499,7 +596,15 @@ async function init(): Promise<void> {
         .then((pending) => {
             // The flag is cleared as it is read, so the tour opens in one tab
             // rather than in every Gmail tab the user happens to have open.
-            if (pending) showOnboarding();
+            if (!pending) return;
+            if (standingDown) {
+                // Taken over while the read was in flight: the flag is spent,
+                // so the tour goes to the copy that now owns the page.
+                document.dispatchEvent(new CustomEvent(TOUR_HANDOVER_EVENT));
+                return;
+            }
+            tourIsMine = true;
+            showOnboarding();
         })
         .catch((err) => {
             console.warn('Gmail Tabs: could not check for a pending tour', err);

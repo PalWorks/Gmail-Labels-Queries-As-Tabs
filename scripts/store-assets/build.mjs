@@ -9,7 +9,8 @@
  * header before the shot is taken, so no real subject, sender or address ever
  * reaches an asset. The tab bar itself stays sharp, and it is seeded with demo
  * labels so even the tab names are not the user's own. The account's real
- * settings are backed up and restored afterwards.
+ * settings are backed up and restored afterwards, and the demo account and the
+ * theme it writes are removed and restored even when a capture fails.
  *
  * Usage:
  *   1. Start Chrome with remote debugging and sign in to Gmail:
@@ -129,129 +130,150 @@ async function setTheme(theme) {
     });
 }
 
-// ---------------------------------------------------------------------------
-// 1. Options page captures, against a demo account
-// ---------------------------------------------------------------------------
-
-await withPage(async (p) => {
+// Everything below writes to the profile's real storage: a demo account in
+// chrome.storage.sync, which syncs to every machine signed in to that Chrome
+// profile, and the theme in chrome.storage.local. Save the theme first and
+// undo both in a finally, so a capture that throws never leaves either behind.
+const savedTheme = await withPage(async (p) => {
     await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
-    await p.evaluate(([k, v]) => new Promise((r) => chrome.storage.sync.set({ [k]: v }, r)), [DEMO_KEY, DEMO_SETTINGS]);
+    return p.evaluate(() => new Promise((r) => chrome.storage.local.get('globalTheme', (d) => r(d.globalTheme ?? null))));
 });
 
-async function shootOptions({ hash, file, theme, action }) {
-    await setTheme(theme);
+try {
+    // ---------------------------------------------------------------------------
+    // 1. Options page captures, against a demo account
+    // ---------------------------------------------------------------------------
+
     await withPage(async (p) => {
-        await p.goto(ext(`options.html${hash}`), { waitUntil: 'domcontentloaded' });
-        await p.waitForTimeout(2000);
-        await p.evaluate((demo) => {
-            const sel = document.getElementById('account-select');
-            if (sel && [...sel.options].some((o) => o.value === demo)) {
-                sel.value = demo;
-                sel.dispatchEvent(new Event('change'));
-            }
-        }, DEMO_KEY.replace('account_', ''));
-        await p.waitForTimeout(1200);
-        if (action) await action(p);
-        await p.screenshot({ path: `${RAW}/${file}` });
-        console.log('captured', file);
-    });
-}
-
-await shootOptions({ hash: '#settings', file: 'options-settings-light.png', theme: 'light' });
-await shootOptions({ hash: '#rules', file: 'options-rules-light.png', theme: 'light' });
-await shootOptions({ hash: '#privacy', file: 'options-privacy-light.png', theme: 'light' });
-await shootOptions({ hash: '#contact', file: 'options-feedback-light.png', theme: 'light' });
-await shootOptions({ hash: '#settings', file: 'options-settings-dark.png', theme: 'dark' });
-await shootOptions({
-    hash: '#settings',
-    file: 'options-colorpicker-light.png',
-    theme: 'light',
-    action: async (p) => {
-        const triggers = await p.$$('.tab-color-trigger');
-        if (!triggers[1]) throw new Error('no colour trigger on the options page; the demo tabs did not render');
-
-        // Centre the row first. The popover opens beside its trigger, and the
-        // trigger sits low enough in the tab list that an unscrolled page puts
-        // the palette below the fold, where the crop cannot reach it. The
-        // screenshot then shows everything except the thing it is about,
-        // which is how the previous asset shipped without a palette in it.
-        await triggers[1].evaluate((el) => el.scrollIntoView({ block: 'center' }));
-        await p.waitForTimeout(350);
-        await triggers[1].click();
-        await p.waitForTimeout(700);
-
-        const visible = await p.evaluate(() => {
-            const el = document.querySelector('.color-popover');
-            if (!el) return 'the palette did not open';
-            const r = el.getBoundingClientRect();
-            if (r.bottom > window.innerHeight - 40) return 'the palette opened below the fold';
-            if (r.top < 120) return 'the palette opened above the capture area';
-            return 'ok';
-        });
-        if (visible !== 'ok') throw new Error(`colour capture: ${visible}`);
-    },
-});
-
-// ---------------------------------------------------------------------------
-// 2. Gmail captures, with private content blurred and the account restored
-// ---------------------------------------------------------------------------
-
-if (GMAIL_ACCOUNT) {
-    const realKey = `account_${GMAIL_ACCOUNT}`;
-    const backup = await withPage(async (p) => {
         await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
-        const existing = await p.evaluate((k) => new Promise((r) => chrome.storage.sync.get(k, (d) => r(d[k] || null))), realKey);
-        await p.evaluate(
-            ([k, tabs]) => new Promise((r) => chrome.storage.sync.set({ [k]: { tabs, rules: [], theme: 'light', showUnreadCount: true } }, r)),
-            [realKey, DEMO_TABS]
-        );
-        return existing;
+        await p.evaluate(([k, v]) => new Promise((r) => chrome.storage.sync.set({ [k]: v }, r)), [DEMO_KEY, DEMO_SETTINGS]);
     });
 
-    try {
-        for (const theme of ['light', 'dark']) {
-            await setTheme(theme);
+    async function shootOptions({ hash, file, theme, action }) {
+        await setTheme(theme);
+        await withPage(async (p) => {
+            await p.goto(ext(`options.html${hash}`), { waitUntil: 'domcontentloaded' });
+            await p.waitForTimeout(2000);
+            await p.evaluate((demo) => {
+                const sel = document.getElementById('account-select');
+                if (sel && [...sel.options].some((o) => o.value === demo)) {
+                    sel.value = demo;
+                    sel.dispatchEvent(new Event('change'));
+                }
+            }, DEMO_KEY.replace('account_', ''));
+            await p.waitForTimeout(1200);
+            if (action) await action(p);
+            await p.screenshot({ path: `${RAW}/${file}` });
+            console.log('captured', file);
+        });
+    }
+
+    await shootOptions({ hash: '#settings', file: 'options-settings-light.png', theme: 'light' });
+    await shootOptions({ hash: '#rules', file: 'options-rules-light.png', theme: 'light' });
+    await shootOptions({ hash: '#privacy', file: 'options-privacy-light.png', theme: 'light' });
+    await shootOptions({ hash: '#contact', file: 'options-feedback-light.png', theme: 'light' });
+    await shootOptions({ hash: '#settings', file: 'options-settings-dark.png', theme: 'dark' });
+    await shootOptions({
+        hash: '#settings',
+        file: 'options-colorpicker-light.png',
+        theme: 'light',
+        action: async (p) => {
+            const triggers = await p.$$('.tab-color-trigger');
+            if (!triggers[1]) throw new Error('no colour trigger on the options page; the demo tabs did not render');
+
+            // Centre the row first. The popover opens beside its trigger, and the
+            // trigger sits low enough in the tab list that an unscrolled page puts
+            // the palette below the fold, where the crop cannot reach it. The
+            // screenshot then shows everything except the thing it is about,
+            // which is how the previous asset shipped without a palette in it.
+            await triggers[1].evaluate((el) => el.scrollIntoView({ block: 'center' }));
+            await p.waitForTimeout(350);
+            await triggers[1].click();
+            await p.waitForTimeout(700);
+
+            const visible = await p.evaluate(() => {
+                const el = document.querySelector('.color-popover');
+                if (!el) return 'the palette did not open';
+                const r = el.getBoundingClientRect();
+                if (r.bottom > window.innerHeight - 40) return 'the palette opened below the fold';
+                if (r.top < 120) return 'the palette opened above the capture area';
+                return 'ok';
+            });
+            if (visible !== 'ok') throw new Error(`colour capture: ${visible}`);
+        },
+    });
+
+    // ---------------------------------------------------------------------------
+    // 2. Gmail captures, with private content blurred and the account restored
+    // ---------------------------------------------------------------------------
+
+    if (GMAIL_ACCOUNT) {
+        const realKey = `account_${GMAIL_ACCOUNT}`;
+        const backup = await withPage(async (p) => {
+            await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
+            const existing = await p.evaluate((k) => new Promise((r) => chrome.storage.sync.get(k, (d) => r(d[k] || null))), realKey);
+            await p.evaluate(
+                ([k, tabs]) => new Promise((r) => chrome.storage.sync.set({ [k]: { tabs, rules: [], theme: 'light', showUnreadCount: true } }, r)),
+                [realKey, DEMO_TABS]
+            );
+            return existing;
+        });
+
+        try {
+            for (const theme of ['light', 'dark']) {
+                await setTheme(theme);
+                await withPage(async (p) => {
+                    await p.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 90000 });
+                    await p.waitForTimeout(13000);
+                    await p.addStyleTag({ content: BLUR_PRIVATE });
+                    await p.waitForTimeout(800);
+                    await p.screenshot({ path: `${RAW}/gmail-${theme}.png` });
+                    console.log('captured', `gmail-${theme}.png`);
+                });
+            }
+
+            // The tour, over the real Gmail it is designed to sit on. Shot from
+            // the product rather than mocked, for the same reason as every other
+            // asset here: a mocked tour would drift the moment a slide changed.
+            await setTheme('light');
             await withPage(async (p) => {
                 await p.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 90000 });
                 await p.waitForTimeout(13000);
+                await showTourIn(p);
+                // The panel animates in. Give it time to settle, or the shot
+                // catches a half-drawn miniature.
+                await p.waitForTimeout(3500);
                 await p.addStyleTag({ content: BLUR_PRIVATE });
                 await p.waitForTimeout(800);
-                await p.screenshot({ path: `${RAW}/gmail-${theme}.png` });
-                console.log('captured', `gmail-${theme}.png`);
+                const open = await p.evaluate(() => !!document.getElementById('gmail-labels-onboarding'));
+                if (!open) throw new Error('the tour did not open in the Gmail tab; nothing to capture');
+                await p.screenshot({ path: `${RAW}/gmail-tour.png` });
+                console.log('captured', 'gmail-tour.png');
             });
+        } finally {
+            // Always put the account back, even if a capture threw.
+            await withPage(async (p) => {
+                await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
+                await p.evaluate(
+                    ([k, v]) => new Promise((r) => (v ? chrome.storage.sync.set({ [k]: v }, r) : chrome.storage.sync.remove([k], r))),
+                    [realKey, backup]
+                );
+            });
+            console.log('restored', realKey, backup ? '(previous settings)' : '(was absent, removed)');
         }
-
-        // The tour, over the real Gmail it is designed to sit on. Shot from
-        // the product rather than mocked, for the same reason as every other
-        // asset here: a mocked tour would drift the moment a slide changed.
-        await setTheme('light');
-        await withPage(async (p) => {
-            await p.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 90000 });
-            await p.waitForTimeout(13000);
-            await showTourIn(p);
-            // The panel animates in. Give it time to settle, or the shot
-            // catches a half-drawn miniature.
-            await p.waitForTimeout(3500);
-            await p.addStyleTag({ content: BLUR_PRIVATE });
-            await p.waitForTimeout(800);
-            const open = await p.evaluate(() => !!document.getElementById('gmail-labels-onboarding'));
-            if (!open) throw new Error('the tour did not open in the Gmail tab; nothing to capture');
-            await p.screenshot({ path: `${RAW}/gmail-tour.png` });
-            console.log('captured', 'gmail-tour.png');
-        });
-    } finally {
-        // Always put the account back, even if a capture threw.
-        await withPage(async (p) => {
-            await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
-            await p.evaluate(
-                ([k, v]) => new Promise((r) => (v ? chrome.storage.sync.set({ [k]: v }, r) : chrome.storage.sync.remove([k], r))),
-                [realKey, backup]
-            );
-        });
-        console.log('restored', realKey, backup ? '(previous settings)' : '(was absent, removed)');
+    } else {
+        console.log('No Gmail account passed: skipping the in-Gmail captures, reusing whatever is in store-assets/raw.');
     }
-} else {
-    console.log('No Gmail account passed: skipping the in-Gmail captures, reusing whatever is in store-assets/raw.');
+} finally {
+    await withPage(async (p) => {
+        await p.goto(ext('options.html'), { waitUntil: 'domcontentloaded' });
+        await p.evaluate((k) => new Promise((r) => chrome.storage.sync.remove([k], r)), DEMO_KEY);
+        await p.evaluate(
+            (t) => new Promise((r) => (t === null ? chrome.storage.local.remove(['globalTheme'], r) : chrome.storage.local.set({ globalTheme: t }, r))),
+            savedTheme
+        );
+    });
+    console.log('removed', DEMO_KEY, 'and restored globalTheme', savedTheme === null ? '(was absent, removed)' : `(${savedTheme})`);
 }
 
 // ---------------------------------------------------------------------------

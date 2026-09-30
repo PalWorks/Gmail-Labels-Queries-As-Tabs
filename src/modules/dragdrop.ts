@@ -7,6 +7,7 @@
 
 import { updateTabOrder, getSettings } from '../utils/storage';
 import { getAppSettings, getUserEmail, setAppSettings, setAppTabs } from './state';
+import { reportSettingsWriteFailure } from './modals/contextNotice';
 
 // ---------------------------------------------------------------------------
 // Tab Bar Drag State
@@ -34,7 +35,14 @@ export function handleDragStart(this: HTMLElement, e: DragEvent): void {
     document.addEventListener('drop', handleSmartDrop);
 }
 
+/**
+ * Only a drag we started is a reorder. Text, a link or a file dragged in from
+ * elsewhere has no source tab, and accepting it (preventDefault here is what
+ * tells the browser a drop is allowed) made the drop handler dereference a
+ * null source and throw.
+ */
 export function handleDragOver(this: HTMLElement, e: DragEvent): boolean {
+    if (!dragSrcEl) return true;
     if (e.preventDefault) {
         e.preventDefault();
     }
@@ -72,6 +80,13 @@ export function handleDragLeave(this: HTMLElement, e: DragEvent): void {
  */
 export function createHandleDrop(renderTabs: () => void) {
     return async function handleDrop(this: HTMLElement, e: DragEvent): Promise<boolean> {
+        const source = dragSrcEl;
+        if (!source) return true;
+
+        // Ours: stop the browser from also treating the drop as navigation.
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
         if (e.stopPropagation) {
             e.stopPropagation();
         }
@@ -79,8 +94,8 @@ export function createHandleDrop(renderTabs: () => void) {
         const dropPosition = this.classList.contains('drop-before') ? 'before' : 'after';
         this.classList.remove('drag-over', 'drop-before', 'drop-after');
 
-        if (dragSrcEl !== this) {
-            const oldIndex = parseInt(dragSrcEl!.dataset.index || '0');
+        if (source !== this) {
+            const oldIndex = parseInt(source.dataset.index || '0');
             let newIndex = parseInt(this.dataset.index || '0');
 
             if (dropPosition === 'after') {
@@ -97,23 +112,42 @@ export function createHandleDrop(renderTabs: () => void) {
 
                 tabs.splice(newIndex, 0, movedTab);
 
+                const previous = getAppSettings()!.tabs;
                 setAppTabs(tabs);
+                // The re-render removes the dragged element, so its dragend
+                // may never fire. Finish the drag here instead.
+                endTabDrag();
                 renderTabs();
 
-                await updateTabOrder(getUserEmail()!, tabs);
+                try {
+                    await updateTabOrder(getUserEmail()!, tabs);
+                } catch (error) {
+                    // Put the bar back as it is stored, so what is on screen
+                    // is not an order that will vanish on the next reload.
+                    setAppTabs(previous);
+                    renderTabs();
+                    reportSettingsWriteFailure(error);
+                }
+                return false;
             }
         }
+        endTabDrag();
         return false;
     };
 }
 
-export function handleDragEnd(this: HTMLElement, _e: DragEvent): void {
+/** The dragend clean-up, callable from a drop that re-renders the bar. */
+function endTabDrag(): void {
     dragSrcEl = null;
     document.querySelectorAll('.gmail-tab').forEach((item) => {
         item.classList.remove('drag-over', 'dragging', 'drop-before', 'drop-after');
     });
     document.removeEventListener('dragover', handleSmartDragOver);
     document.removeEventListener('drop', handleSmartDrop);
+}
+
+export function handleDragEnd(this: HTMLElement, _e: DragEvent): void {
+    endTabDrag();
 }
 
 // ---------------------------------------------------------------------------
@@ -230,9 +264,7 @@ function handleSmartDrop(e: DragEvent): void {
             // We need to call renderTabs but we don't have a direct reference here.
             // The smart drop handler needs to trigger a re-render.
             // We'll dispatch a custom event that content.ts listens for.
-            updateTabOrder(getUserEmail()!, tabs).catch((err) =>
-                console.error('Gmail Tabs: Failed to persist tab reorder', err)
-            );
+            updateTabOrder(getUserEmail()!, tabs).catch(reportSettingsWriteFailure);
             document.dispatchEvent(new CustomEvent('gmailTabs:rerender'));
         }
     }
@@ -261,7 +293,8 @@ export interface ModalDragHandlers {
 export function createModalDragHandlers(
     list: HTMLUListElement,
     refreshList: () => void,
-    renderTabs: () => void
+    renderTabs: () => void,
+    onError: (error: unknown) => void = reportSettingsWriteFailure
 ): ModalDragHandlers {
     let modalDragSrcEl: HTMLElement | null = null;
 
@@ -275,6 +308,8 @@ export function createModalDragHandlers(
     };
 
     const handleModalDragOver = function (this: HTMLElement, e: DragEvent) {
+        // Not our drag: do not offer to accept it.
+        if (!modalDragSrcEl) return true;
         if (e.preventDefault) {
             e.preventDefault();
         }
@@ -306,15 +341,24 @@ export function createModalDragHandlers(
     };
 
     const handleModalDrop = async function (this: HTMLElement, e: DragEvent) {
+        const source = modalDragSrcEl;
+        if (!source) return true;
+
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
         if (e.stopPropagation) {
             e.stopPropagation();
         }
 
         const dropPosition = this.classList.contains('drop-above') ? 'above' : 'below';
         this.classList.remove('drag-over', 'drop-above', 'drop-below');
+        // refreshList() rebuilds the list and removes the dragged row, so
+        // its dragend may never fire.
+        modalDragSrcEl = null;
 
-        if (modalDragSrcEl !== this) {
-            const oldIndex = parseInt(modalDragSrcEl!.dataset.index || '0');
+        if (source !== this) {
+            const oldIndex = parseInt(source.dataset.index || '0');
             let newIndex = parseInt(this.dataset.index || '0');
 
             if (dropPosition === 'below') {
@@ -322,20 +366,26 @@ export function createModalDragHandlers(
             }
 
             if (getUserEmail()) {
-                const settings = await getSettings(getUserEmail()!);
-                const newTabs = [...settings.tabs];
-                const [movedTab] = newTabs.splice(oldIndex, 1);
+                try {
+                    const settings = await getSettings(getUserEmail()!);
+                    const newTabs = [...settings.tabs];
+                    const [movedTab] = newTabs.splice(oldIndex, 1);
 
-                if (oldIndex < newIndex) {
-                    newIndex--;
+                    if (oldIndex < newIndex) {
+                        newIndex--;
+                    }
+
+                    newTabs.splice(newIndex, 0, movedTab);
+
+                    await updateTabOrder(getUserEmail()!, newTabs);
+                    refreshList();
+                    setAppSettings(await getSettings(getUserEmail()!));
+                    renderTabs();
+                } catch (error) {
+                    // A drop handler's promise goes nowhere, so this is the
+                    // only place the failure can be reported.
+                    onError(error);
                 }
-
-                newTabs.splice(newIndex, 0, movedTab);
-
-                await updateTabOrder(getUserEmail()!, newTabs);
-                refreshList();
-                setAppSettings(await getSettings(getUserEmail()!));
-                renderTabs();
             }
         }
         return false;

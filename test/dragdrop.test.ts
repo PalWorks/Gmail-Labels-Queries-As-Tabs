@@ -55,6 +55,7 @@ jest.mock('../src/modules/state', () => {
         state: s,
         getAppSettings: () => s.currentSettings,
         setAppSettings: (v: any) => { s.currentSettings = v; },
+        setAppTabs: (tabs: any) => { s.currentSettings = { ...s.currentSettings, tabs }; },
         getUserEmail: () => s.currentUserEmail,
         setUserEmail: (v: any) => { s.currentUserEmail = v; },
     };
@@ -126,6 +127,14 @@ describe('handleDragStart', () => {
 });
 
 describe('handleDragOver', () => {
+    // Only a drag we started is accepted, so each case starts one.
+    beforeEach(() => {
+        handleDragStart.call(createTabElement(0), createDragEvent('dragstart'));
+    });
+    afterEach(() => {
+        handleDragEnd.call(createTabElement(0), createDragEvent('dragend'));
+    });
+
     test('prevents default and sets dropEffect to move', () => {
         const tab = createTabElement(1);
         Object.defineProperty(tab, 'getBoundingClientRect', {
@@ -274,6 +283,7 @@ describe('createModalDragHandlers', () => {
     test('handleModalDragOver adds drop-above for top half', () => {
         const list = document.createElement('ul');
         const handlers = createModalDragHandlers(list, jest.fn(), jest.fn());
+        handlers.handleModalDragStart.call(document.createElement('li'), createDragEvent('dragstart'));
         const item = document.createElement('li');
         Object.defineProperty(item, 'getBoundingClientRect', {
             value: () => ({ left: 0, width: 200, top: 0, height: 40 }),
@@ -289,6 +299,7 @@ describe('createModalDragHandlers', () => {
     test('handleModalDragOver adds drop-below for bottom half', () => {
         const list = document.createElement('ul');
         const handlers = createModalDragHandlers(list, jest.fn(), jest.fn());
+        handlers.handleModalDragStart.call(document.createElement('li'), createDragEvent('dragstart'));
         const item = document.createElement('li');
         Object.defineProperty(item, 'getBoundingClientRect', {
             value: () => ({ left: 0, width: 200, top: 0, height: 40 }),
@@ -341,5 +352,85 @@ describe('createModalDragHandlers', () => {
         expect(li1.classList.contains('drag-over')).toBe(false);
         expect(li2.classList.contains('drop-above')).toBe(false);
         expect(li2.classList.contains('drop-below')).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Drops that are not ours, and drops that fail
+// ---------------------------------------------------------------------------
+
+describe('foreign drops and failed reorders', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const storage = require('../src/utils/storage');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const state = require('../src/modules/state');
+    const original = state.state.currentSettings.tabs;
+
+    beforeEach(() => {
+        state.state.currentSettings = { ...state.state.currentSettings, tabs: original };
+    });
+
+    test('text or a file dragged onto a tab is not accepted and does not throw', async () => {
+        const target = createTabElement(1);
+        const over = createDragEvent('dragover');
+        handleDragOver.call(target, over);
+        expect(over.preventDefault).not.toHaveBeenCalled();
+
+        const renderTabs = jest.fn();
+        const drop = createHandleDrop(renderTabs);
+        await expect(drop.call(target, createDragEvent('drop'))).resolves.toBe(true);
+        expect(renderTabs).not.toHaveBeenCalled();
+        expect(storage.updateTabOrder).not.toHaveBeenCalled();
+    });
+
+    test('a foreign drop on the settings list is not accepted and does not throw', async () => {
+        const handlers = createModalDragHandlers(document.createElement('ul'), jest.fn(), jest.fn());
+        const item = document.createElement('li');
+        const over = createDragEvent('dragover');
+        handlers.handleModalDragOver.call(item, over);
+        expect(over.preventDefault).not.toHaveBeenCalled();
+        await expect(handlers.handleModalDrop.call(item, createDragEvent('drop'))).resolves.toBe(true);
+    });
+
+    test('our own drop is claimed and finishes the drag even if dragend never fires', async () => {
+        const source = createTabElement(0);
+        const target = createTabElement(2);
+        target.classList.add('drop-after');
+        handleDragStart.call(source, createDragEvent('dragstart'));
+
+        const drop = createDragEvent('drop');
+        await createHandleDrop(jest.fn()).call(target, drop);
+        expect(drop.preventDefault).toHaveBeenCalled();
+
+        // The dragged element was re-rendered away; the next foreign drag
+        // must not be mistaken for the old one.
+        const over = createDragEvent('dragover');
+        handleDragOver.call(createTabElement(1), over);
+        expect(over.preventDefault).not.toHaveBeenCalled();
+    });
+
+    test('a failed reorder is caught, shown, and the bar goes back to the stored order', async () => {
+        storage.updateTabOrder.mockRejectedValueOnce(new Error('QUOTA_BYTES quota exceeded'));
+        const source = createTabElement(0);
+        const target = createTabElement(2);
+        target.classList.add('drop-after');
+        handleDragStart.call(source, createDragEvent('dragstart'));
+
+        const renderTabs = jest.fn();
+        await expect(createHandleDrop(renderTabs).call(target, createDragEvent('drop'))).resolves.toBe(false);
+
+        expect(state.state.currentSettings.tabs).toEqual(original);
+        expect(renderTabs).toHaveBeenCalledTimes(2);
+        expect(document.getElementById('gmail-tabs-write-failure')?.textContent).toContain('Settings are full');
+    });
+
+    test('a failed reorder in the settings list reaches the caller\'s error handler', async () => {
+        storage.updateTabOrder.mockRejectedValueOnce(new Error('boom'));
+        const onError = jest.fn();
+        const handlers = createModalDragHandlers(document.createElement('ul'), jest.fn(), jest.fn(), onError);
+        handlers.handleModalDragStart.call(Object.assign(document.createElement('li'), {}), createDragEvent('dragstart'));
+
+        await handlers.handleModalDrop.call(document.createElement('li'), createDragEvent('drop'));
+        expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }));
     });
 });

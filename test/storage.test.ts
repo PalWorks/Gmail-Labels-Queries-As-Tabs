@@ -52,8 +52,8 @@ function makeArea(store: Record<string, any>) {
             Object.assign(store, items);
             callback();
         }),
-        remove: jest.fn((key: string, callback?: () => void) => {
-            delete store[key];
+        remove: jest.fn((key: string | string[], callback?: () => void) => {
+            (Array.isArray(key) ? key : [key]).forEach((k) => delete store[k]);
             if (callback) callback();
         }),
     };
@@ -404,6 +404,56 @@ describe('migrateLegacySettingsIfNeeded', () => {
         expect(settings.tabs[0].title).toBe('Work Label');
         expect(settings.tabs[0].type).toBe('label');
         expect(settings.tabs[0].value).toBe('Work');
+    });
+
+    test('removes the legacy keys once migrated, so a later account does not inherit them', async () => {
+        mockStorage['tabs'] = [{ id: 'old1', title: 'OldTab', type: 'label', value: 'OldTab' }];
+        mockStorage['showUnreadCount'] = false;
+        mockStorage['theme'] = 'dark';
+
+        await migrateLegacySettingsIfNeeded('first@gmail.com');
+        expect(mockStorage['tabs']).toBeUndefined();
+        expect(mockStorage['showUnreadCount']).toBeUndefined();
+        // The theme migration consumes this one, so it is left for it.
+        expect(mockStorage['theme']).toBe('dark');
+
+        await migrateLegacySettingsIfNeeded('second@gmail.com');
+        expect(mockStorage['account_second@gmail.com']).toBeUndefined();
+        expect((await getSettings('first@gmail.com')).tabs[0].title).toBe('OldTab');
+    });
+
+    test('resolves rather than hanging when storage reports an error', async () => {
+        const area = (global as any).chrome.storage.sync;
+        const realGet = area.get;
+        area.get = jest.fn((_keys: any, cb: any) => {
+            (global as any).chrome.runtime.lastError = { message: 'boom' };
+            cb(undefined);
+            (global as any).chrome.runtime.lastError = null;
+        });
+        try {
+            await expect(migrateLegacySettingsIfNeeded('user@gmail.com')).resolves.toBeUndefined();
+            await expect(migrateThemeToGlobalIfNeeded('user@gmail.com')).resolves.toBeUndefined();
+        } finally {
+            area.get = realGet;
+        }
+    });
+
+    test('resolves when the legacy read errors after the account check passed', async () => {
+        const area = (global as any).chrome.storage.sync;
+        const realGet = area.get;
+        let calls = 0;
+        area.get = jest.fn((keys: any, cb: any) => {
+            calls++;
+            if (calls === 1) return realGet(keys, cb);
+            (global as any).chrome.runtime.lastError = { message: 'boom' };
+            cb(undefined);
+            (global as any).chrome.runtime.lastError = null;
+        });
+        try {
+            await expect(migrateLegacySettingsIfNeeded('user@gmail.com')).resolves.toBeUndefined();
+        } finally {
+            area.get = realGet;
+        }
     });
 
     test('does nothing when no legacy data exists', async () => {

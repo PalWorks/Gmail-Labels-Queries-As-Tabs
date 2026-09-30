@@ -3,7 +3,7 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.8.0
+**Version this listing describes:** 1.8.1
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
 **Last updated:** 2026-09-30
@@ -240,7 +240,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 💻 OPEN SOURCE
 ━━━━━━━━━━━━━━━━━━━━
 
-The full source is public and auditable, with 965 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with 1082 automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 🌐 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 🔒 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
@@ -502,10 +502,11 @@ that is shot, the release notes carry the feature and the stills do not.
 
 ---
 
-## 5. Release notes for 1.8.0
+## 5. Release notes for 1.8.1
 
 Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0
-through 1.7.4 were each built and never submitted, and their notes follow below.
+through 1.8.0 were each built and never submitted. 1.8.1 is 1.8.0 plus the fixes from the
+pre-submission audit of 2026-09-30, and the older notes follow below.
 
 ```
 New: sender icons, off until you turn them on in Settings. Each row in your inbox gets a
@@ -527,6 +528,14 @@ you, under Gmail integration. Nothing is sent anywhere.
 
 Fixed: a Gmail tab you already had open gets the tab bar without a reload when you install
 or update, and only the tab you are looking at is highlighted.
+
+Fixed: the Promotions, Social and Updates cleanup templates now act on Gmail's own
+categories. Archive and mark-as-read rules keep making progress on large mailboxes, and a
+script you generate always uses the numbers you just typed. Regenerate your script to get
+these fixes.
+
+Fixed: a full settings store, a slow connection and switching the extension off and on
+again no longer leave the tab bar silently stuck.
 ```
 
 **This release adds no permission beyond 1.7.4's `scripting`** (see the justification
@@ -718,7 +727,7 @@ actually type still resolves to the same entity. The repository directory is sti
 `Gmail-Labels-Queries-As-Tabs`, which is a URL rather than a name and is not worth
 breaking inbound links over.
 
-**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 965
+**2. Checkable numbers.** Models reproduce specifics far more readily than adjectives: 1082
 automated tests, four permissions, no request the user did not ask for, 30 days in Trash, five starter
 templates, 1,280 by 800 screenshots. Every number in the listing is true and verifiable
 from the public repository, which is the point: a number that survives checking gets
@@ -736,7 +745,7 @@ had both, and had done for months.
 
 | Surface | State |
 |---|---|
-| Store listing | Ready for 1.8.0. Paste sections 1 to 5 |
+| Store listing | Ready for 1.8.1. Paste sections 1 to 5 |
 | Extension README | Done. Heading carries the full product name |
 | Website homepage | Done. Design A, with the extension's own tour under "Take the tour" (vendored by the website's `sync-wizard.mjs`) and the demo video under "Watch it" |
 | Website FAQ | Done. 15 questions for 1.6.2, two more that appear when `LIVE_VERSION` reaches 1.7.0 and 1.8.0, feeding `FAQPage` |
@@ -766,7 +775,7 @@ modules, so the site, its structured data and its `llms.txt` cannot disagree. Re
 | `llms.txt` and `llms-full.txt` | the website repository's `prerender.mjs` | The facts, the live features, features not yet in the store marked as such, the FAQ, the video chapters, and every page as plain text |
 | `sitemap.xml` | The same script | Every page, the video, and its poster |
 
-When 1.8.0 is live, bump `LIVE_VERSION` in the website's `content/site.ts` to `1.8.0` and
+When 1.8.1 is live, bump `LIVE_VERSION` in the website's `content/site.ts` to `1.8.1` and
 redeploy. That one change moves sender icons, the label menu item and their FAQ answers
 from "coming" to "available" on every surface at once.
 
@@ -797,14 +806,19 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-### For 1.8.0, verified on 2026-09-30
+### For 1.8.1, verified on 2026-09-30
 
-- [x] `manifest.json` and `package.json` both read 1.8.0 (CI checks parity), 965 tests pass
-- [x] The website's privacy policy covers 1.8.0: sender icons, both icon hosts, `scripting`,
-      the contact form and the homepage video. Deployed and read back from the live
-      `/privacy/` page on 2026-09-30
-- [x] `node scripts/cws-upload.mjs` (dry run) reads the store: 1.6.2 live at 100%, nothing
-      in review, and accepts the 1.8.0 zip as higher
+- [x] `manifest.json` and `package.json` both read 1.8.1 (CI checks parity), 1082 tests pass,
+      and the GitHub CI run on `main` passes
+- [x] The website's privacy policy covers 1.8.1: sender icons, both icon hosts, `scripting`,
+      the feedback relay (hashed network counter, Resend), the contact form and the
+      homepage video. Deployed and read back from the live `/privacy/` page
+- [x] The feedback relay is redeployed with the hashed counter and the Resend timeout, and a
+      real message was delivered through it
+- [x] Checked in a live, signed-in Gmail in Chrome 154: the extension reloaded twice with
+      Gmail left open (the open tab was taken over each time, one bar, no errors), normal,
+      slow 3G and offline loads, and the settings dialog's focus and Escape
+- [x] 1.8.0 was uploaded as a draft on 2026-09-30 and never submitted; 1.8.1 replaces it
 - [ ] Dashboard, Store listing tab: paste 1.3 and 1.4, and put `https://youtu.be/PtjGAnSIG5o`
       in "YouTube video"
 - [ ] Dashboard, Privacy tab: paste 2.1 and 2.2 (single purpose, storage, host and
@@ -815,7 +829,7 @@ something, a single reading is worth nothing.
 - [ ] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
       for review from the dashboard or with `node scripts/cws-upload.mjs --submit`, only
       after the two items above
-- [ ] After approval: bump `LIVE_VERSION` to 1.8.0 in the website's `content/site.ts`,
+- [ ] After approval: bump `LIVE_VERSION` to 1.8.1 in the website's `content/site.ts`,
       deploy the site, and update `cws-store-state` records
 - [ ] Optional: a seventh screenshot showing sender icons in an inbox of demo data; none of
       the six stills shows them

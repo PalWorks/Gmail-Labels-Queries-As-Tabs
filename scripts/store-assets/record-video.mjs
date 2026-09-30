@@ -230,12 +230,27 @@ const proc = spawn('/usr/bin/google-chrome', [
     '--enable-unsafe-extension-debugging', '--force-device-scale-factor=1', 'about:blank',
 ], { stdio: 'ignore' });
 
-async function cleanup() {
-    try { proc.kill('SIGTERM'); } catch { /* gone */ }
-    await new Promise((r) => setTimeout(r, 1500));
-    try { proc.kill('SIGKILL'); } catch { /* gone */ }
-    // The copy holds the account's cookies: it never outlives the run.
-    fs.rmSync(WORK, { recursive: true, force: true });
+let cleaned = null;
+function cleanup() {
+    // Once only: a Ctrl-C during the finally must not start a second pass.
+    cleaned ??= (async () => {
+        try { proc.kill('SIGTERM'); } catch { /* gone */ }
+        await new Promise((r) => setTimeout(r, 1500));
+        try { proc.kill('SIGKILL'); } catch { /* gone */ }
+        // The copy holds the account's cookies: it never outlives the run.
+        fs.rmSync(WORK, { recursive: true, force: true });
+    })();
+    return cleaned;
+}
+
+// A finally does not run when the process is killed by a signal, and Ctrl-C
+// is the usual way a long recording is abandoned. Without these the profile
+// clone, cookies and all, would be left in the temporary directory.
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+    process.once(signal, () => {
+        console.error(`\n${signal}: deleting the profile copy`);
+        cleanup().finally(() => process.exit(code));
+    });
 }
 
 let browser = null;

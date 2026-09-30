@@ -78,7 +78,9 @@ interface ComponentHealth {
     // sender icons: degraded, a fallback held
     | 'fallback-rows' | 'fallback-anchor' | 'fallback-sender' | 'favicon-unreachable'
     // sender icons: unavailable
-    | 'no-sender' | 'no-anchor',
+    | 'no-sender' | 'no-anchor'
+    // any component: its own settings write failed (usually a full sync item)
+    | 'write-failed',
   at: number   // epoch ms
 }
 
@@ -117,10 +119,13 @@ See [src/utils/colors.ts](src/utils/colors.ts).
 ```ts
 type RuleAction = 'trash' | 'archive' | 'markRead' | 'moveToLabel';
 
+// A rule belongs to a label tab, or (since 1.8.1) to a Gmail category tab: a hash tab
+// whose value is #category/promotions, social, updates or forums. A category rule
+// searches category:<name> and skips the per-thread label check.
 interface Rule {
   tabId: string;              // links to Tab.id
   action: RuleAction;
-  daysOld: number;            // apply to messages older than this many days
+  daysOld: number;            // a whole number of days, 1 to 3650 (clamped in the UI and on import)
   enabled: boolean;
   targetLabel?: string;       // required only when action is 'moveToLabel'
 }
@@ -189,6 +194,7 @@ type SettingsOp =
   | { kind: 'addRule'; rule: Rule }
   | { kind: 'upsertRule'; rule: Rule }
   | { kind: 'updateRule'; tabId: string; updates: Partial<Rule> }
+  | { kind: 'patchRule'; tabId: string; updates: Partial<Rule>; defaults: Rule }  // only the changed fields; creates from defaults if absent
   | { kind: 'removeRule'; tabId: string }
   | { kind: 'applyTemplate'; tab: Tab; rule: Rule };
 ```
@@ -228,7 +234,9 @@ nothing is stored, so it is an answer rather than a guess. See ADR-020.
 Implemented in [src/utils/storage.ts](src/utils/storage.ts):
 
 - `migrateLegacySettingsIfNeeded(accountId)`: promotes very old top-level `tabs` / `labels`
-  keys into an `account_<email>` record on first detection.
+  keys into an `account_<email>` record on first detection, then removes the top-level
+  `tabs`, `labels` and `showUnreadCount` keys so no later account inherits them (`theme` is
+  left for the theme migration). A failed read resolves rather than hanging start-up.
 - `migrateThemeToGlobalIfNeeded(accountId)`: seeds `globalTheme` once. Priority order is
   an existing global value (no-op), then a legacy sync `theme` key (consumed and removed),
   then the account's own `Settings.theme`, else the `light` default.
@@ -239,12 +247,21 @@ Implemented in [src/utils/storage.ts](src/utils/storage.ts):
 theme into a portable JSON structure and restores them. Imported strings are user data and
 must be validated and HTML-escaped on render. See [SECURITY.md](SECURITY.md).
 
+Import rebuilds every tab and rule from its known fields only, gives duplicate tab ids new
+ids, drops exact duplicate tabs and rules for tabs the file does not contain, treats a file
+with no rules as no rules, clamps `daysOld` to 1 to 3650, caps text fields at 500
+characters and files at 256 KB (`MAX_IMPORT_BYTES`), and matches the account address in
+any case.
+
 ## Storage limits
 
 `chrome.storage.sync` caps at roughly 100 KB total, about 8 KB per item, 512 items, and 120
 write operations per minute. One account is one item, so the 8 KB per-item ceiling is the
-binding one: tabs and rules are small text records and realistic configurations stay well
-under it, but keep new per-account fields compact.
+binding one. Tabs and rules are small text records, but the ceiling is reachable: about 60
+plain tabs, or about 30 tabs that each carry a rule. Past it every write fails with
+`QUOTA_BYTES_PER_ITEM`; `describeWriteFailure()` in storage.ts turns that into a sentence,
+and every surface shows it (in Gmail through `reportSettingsWriteFailure`). Keep new
+per-account fields compact.
 
 The write-operations ceiling is why rule fields that accept free text coalesce their writes,
 and why `applyOp` returns its input unchanged for a no-op so nothing is written at all.

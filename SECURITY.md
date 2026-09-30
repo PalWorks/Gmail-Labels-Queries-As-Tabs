@@ -15,8 +15,12 @@ One outbound call exists, and only when the user asks for it: pressing **Send Fe
 the Support & Feedback page posts the message, an optional reply address, and (if the box
 stays ticked) the extension version, browser build and counts of tabs, rules and accounts.
 Never label names, tab titles, contacts or mail. It goes to the relay in [worker/](worker/),
-which holds the mail provider's API key precisely so the extension does not have to, and
-which stores nothing.
+which holds the mail provider's API key precisely so the extension does not have to. The
+relay runs on Cloudflare and hands the message to the email service Resend, which delivers
+it to `support@palworks.ai`. It stores no message. To limit abuse it keeps a count of
+messages per network for up to a day, under an HMAC of the IP address keyed by a secret,
+never the address itself, and since 1.8.1 it no longer adds the sender's country to the
+email.
 
 One further outbound request exists, and only if you ask for it twice over: **website
 icons for sender icons** (v1.8.0). Sender icons are off by default; turned on, they draw a
@@ -37,7 +41,8 @@ settings and no identifier, so the form host learns only that somebody uninstall
 only you decide whether to answer it. See ADR-014.
 
 v1.7.1 added a record of whether the "Show as Tabs" item is working, in
-`chrome.storage.local` under `integrationHealth`. It is worth being explicit about what it
+`chrome.storage.local`, since 1.8.0 one key per component (`integrationHealth.labelMenu`,
+`integrationHealth.senderIcons`). It is worth being explicit about what it
 is not: it is written only when the verdict changes, it is read only by the options page,
 it holds a status, a reason and a timestamp, and **it is never transmitted**. The options
 page can copy a short diagnostic to the clipboard if you want to send one; where it goes
@@ -60,7 +65,7 @@ amended by ADR-012, ADR-014 and ADR-027.
 | _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
-| `scripting` | Start this extension's own content script in a Gmail tab that was already open when the extension was installed or updated. One file, this extension's own, into `mail.google.com` only. See ADR-025 |
+| `scripting` | Start this extension's own content script in a Gmail tab that was already open when the extension was installed or updated, or re-enabled. Its own script and its two stylesheets, into `mail.google.com` only. See ADR-025 |
 | `host_permissions: https://mail.google.com/*` | Inject the tab bar and read unread state in Gmail |
 
 No `<all_urls>` and no broad host access. `scripting` is scoped by the host permission

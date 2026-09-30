@@ -65,6 +65,24 @@ function parseGmailJson(text: string): any {
     }
 }
 
+/**
+ * The one hook this script keeps on the page, shared by every copy of it.
+ *
+ * This file is injected again each time the content script arrives, which on
+ * a Gmail tab left open across updates is once per update. Wrapping the XHR
+ * prototype each time stacked the wrappers, so every response was parsed and
+ * reported once per copy. The first copy wraps; each later one only swaps in
+ * its own parser, so the newest code handles every response, once.
+ */
+interface InterceptorHook {
+    process: (responseText: string) => void;
+}
+const HOOK_KEY = '__gmailTabsXhrHook';
+const pageWindow = window as unknown as Record<string, InterceptorHook | undefined>;
+const alreadyWrapped = !!pageWindow[HOOK_KEY];
+const hook: InterceptorHook = pageWindow[HOOK_KEY] ?? { process: () => {} };
+pageWindow[HOOK_KEY] = hook;
+
 // Main interception logic
 function interceptXHR() {
     const XHR = XMLHttpRequest.prototype;
@@ -91,7 +109,7 @@ function interceptXHR() {
                 try {
                     const responseText = xhr.responseText;
                     if (responseText) {
-                        processResponse(responseText);
+                        hook.process(responseText);
                     }
                 } catch (e) {
                     console.error('Gmail Tabs: Error processing XHR response', e);
@@ -201,6 +219,7 @@ function isKnownLabel(labelId: string): boolean {
     return knownLabels.has(normalizeToken(labelId));
 }
 
-// Start interception
-interceptXHR();
+// Start interception, or take over the interception already in place.
+hook.process = processResponse;
+if (!alreadyWrapped) interceptXHR();
 console.log('Gmail Tabs: pageWorld.js loaded and intercepting XHR');

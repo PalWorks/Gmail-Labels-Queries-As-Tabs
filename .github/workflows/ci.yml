@@ -47,6 +47,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # esbuild strips types without checking them, and ts-jest checks only
+      # what the tests import, so neither catches a type error on its own.
+      - name: Typecheck the extension
+        run: npx tsc --noEmit
+
       # The relay is the only server-side code in the repo and has its own
       # tsconfig, so the extension's typecheck does not cover it.
       - name: Typecheck the feedback worker
@@ -58,14 +63,27 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      # Every bundle, not only content.js: the background, options, popup and
+      # welcome pages ship to users too. An empty glob would pass vacuously,
+      # so no bundles at all is a failure.
       - name: Verify no console.log in production bundle
         run: |
-          count=$(grep -c 'console.log' dist/js/content.js 2>/dev/null || true)
-          if [ "$count" -gt "0" ]; then
-            echo "::error::Found $count console.log statements in production bundle"
+          shopt -s nullglob
+          bundles=(dist/js/*.js)
+          if [ "${#bundles[@]}" -eq 0 ]; then
+            echo "::error::No bundles in dist/js/; the build produced nothing to check"
             exit 1
           fi
-          echo "Zero console.log in production bundle"
+          status=0
+          for f in "${bundles[@]}"; do
+            count=$(grep -c 'console.log' "$f" || true)
+            if [ "$count" -gt "0" ]; then
+              echo "::error::Found $count console.log statements in $f"
+              status=1
+            fi
+          done
+          [ "$status" -eq 0 ] && echo "Zero console.log in ${#bundles[@]} production bundles"
+          exit $status
 
       # ------------------------------------------------------------------
       # Phase 5: CI/CD Hardening
@@ -121,12 +139,18 @@ jobs:
             "dist/js/options.js"
             "dist/js/welcome.js"
             "dist/js/xhrInterceptor.js"
+            "dist/js/popup.js"
+            "dist/js/themeBoot.js"
             "dist/css/toolbar.css"
+            "dist/css/onboarding.css"
             "dist/css/options.css"
             "dist/css/welcome.css"
+            "dist/css/popup.css"
             "dist/manifest.json"
             "dist/options.html"
             "dist/welcome.html"
+            "dist/popup.html"
+            "dist/_locales/en/messages.json"
           )
           missing=0
           for f in "${required_files[@]}"; do
@@ -202,20 +226,25 @@ jobs:
           # named two of four permissions, and adding the fifth would have been
           # one more thing to remember. Now adding a permission fails this step
           # until the published policy names it.
+          #
+          # One term per line, so a term of several words ("Microsoft
+          # Clarity") is matched whole rather than as two separate words.
           # t0.gstatic.com and www.google.com: website icons for sender icons (ADR-027).
-          required="tally.so gmail-tabs-feedback.sunmooncal.workers.dev mail.google.com t0.gstatic.com www.google.com"
-          required="$required $(node -p "require('./manifest.json').permissions.join(' ')")"
           # Microsoft Clarity runs on the site itself and must be disclosed too.
-          required="$required Microsoft Clarity"
+          required="$(printf '%s\n' tally.so gmail-tabs-feedback.sunmooncal.workers.dev mail.google.com t0.gstatic.com www.google.com)
+          $(node -p "require('./manifest.json').permissions.join('\\n')")
+          Microsoft Clarity"
           status=0
-          for term in $required; do
+          while IFS= read -r term; do
+            term="$(echo "$term" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            [ -z "$term" ] && continue
             if grep -qF "$term" /tmp/policy.html; then
               echo "  ok       $term"
             else
               echo "::error::The published privacy policy never mentions '$term'"
               status=1
             fi
-          done
+          done <<< "$required"
 
           # A key must never be substituted into a static bundle.
           if grep -qE 'AIza[0-9A-Za-z_-]{30,}' /tmp/site.js; then

@@ -60,6 +60,8 @@ jest.mock('../../src/utils/importExport', () => ({
     generateExportFilename: jest.fn().mockReturnValue('GmailTabs_test.json'),
     validateImportData: jest.fn(),
     triggerDownload: jest.fn().mockResolvedValue({ success: true, downloadId: 42 }),
+    sameAccount: (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase(),
+    MAX_IMPORT_BYTES: 256 * 1024,
 }));
 
 // Mock barrel getRenderCallback
@@ -138,6 +140,40 @@ describe('showImportModal', () => {
         importBtn.click();
 
         expect(alertSpy).toHaveBeenCalledWith('Please select a file or paste configuration JSON.');
+        alertSpy.mockRestore();
+    });
+
+    it('accepts a backup whose address differs from the account only in case', async () => {
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { saveSettings } = require('../../src/utils/storage');
+
+        showImportModal();
+        (document.querySelector('#import-json') as HTMLTextAreaElement).value = JSON.stringify({
+            email: 'Test@Gmail.com',
+            tabs: [],
+            rules: [],
+        });
+        (document.querySelector('#import-confirm-btn') as HTMLElement).click();
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(alertSpy).not.toHaveBeenCalledWith(expect.stringContaining('Import rejected'));
+        expect(saveSettings).toHaveBeenCalled();
+        alertSpy.mockRestore();
+        confirmSpy.mockRestore();
+    });
+
+    it('refuses a file too large to be a backup before reading it', () => {
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        showImportModal();
+        const input = document.querySelector('#import-file') as HTMLInputElement;
+        const big = new File(['x'.repeat(300 * 1024)], 'huge.json', { type: 'application/json' });
+        Object.defineProperty(input, 'files', { value: [big] });
+
+        input.dispatchEvent(new Event('change'));
+
+        expect(alertSpy).toHaveBeenCalledWith('That file is too large to be a configuration backup.');
         alertSpy.mockRestore();
     });
 });

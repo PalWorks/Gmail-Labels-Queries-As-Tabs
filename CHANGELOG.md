@@ -4,6 +4,79 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [1.8.1] - 2026-09-30
+
+> 1.8.0 was uploaded to the Chrome Web Store as a draft and never submitted. This is 1.8.0
+> plus every fix from the pre-submission audit of the same day: six reviews (lifecycle,
+> storage, Gmail DOM, extension pages and rules, tooling and cross-repo consistency, dead
+> code and docs), each finding verified before it was fixed and tested.
+
+### Fixed
+
+- **Cleanup rules.**
+  - The Promotions, Social and Updates starter templates made label tabs and searched
+    `label:"Promotions"`, which matches nothing unless you made such a label. They now make
+    `#category/...` tabs whose rules search `category:promotions` (and so on), and the rule
+    list accepts category tabs. Tabs made from the old templates are left alone.
+  - Archive and Mark read rules searched mail they had already handled, so on a large
+    mailbox they re-processed the same newest 200 threads every run and never reached the
+    older ones. Archive now adds `in:inbox` and Mark read adds `is:unread`.
+  - Every batch call goes to Gmail in chunks of 100 threads, its limit, and a run stops
+    starting new work after five minutes, inside Apps Script's six, still writing its
+    summary and log.
+  - Generate script built the script from edits not yet saved, so a threshold typed a
+    moment before could be missing from it. It now saves pending edits first.
+  - Two rule edits in quick succession could overwrite each other. A rule edit now sends
+    only what changed (`patchRule`), and the days field is a whole number from 1 to 3650.
+- **Two copies of the content script in one tab.** A Gmail tab still loading at install
+  got the manifest's copy and the worker's. The copy that stands down now removes its
+  message, storage and theme listeners and stops its account polling, so Configure in the
+  popup no longer opens and closes the settings in one click, and a first-run tour it had
+  opened is handed to the copy that stays. The page-world interceptor wraps XHR once,
+  however many times it is injected, so a tab left open across updates no longer parses
+  every Gmail response once per update.
+- **Slow and interrupted connections.**
+  - Account detection stopped after a minute; it now carries on every five seconds.
+  - A live unread count from Gmail could be reverted to the older feed count by the next
+    redraw.
+  - A stalled website icon request kept running after its timeout, so the four-at-a-time
+    limit did not hold on the network.
+  - After its settling ladder, the bar could return to "theme unresolved" and stay
+    transparent.
+- **Re-enabling the extension** left every open Gmail tab with a dead bar until reloaded.
+  The worker now reaches those tabs once per session.
+- **A full settings store** (Chrome sync allows about 8 KB per account) made adding a tab
+  fail silently in Gmail. Every failed save now shows a notice saying what happened.
+- **Import** keeps only known fields, renumbers duplicate tab ids, drops rules for tabs the
+  backup does not have, caps text and file size, and matches the account address in any
+  case. The backup taken before uninstalling now includes rules and the theme, and the
+  uninstall stops if that backup did not download.
+- **Pinned `#label/` views** asked the unread feed for a doubly encoded label, and lost
+  their highlight inside a thread. A label with `%` in its name broke the sidebar
+  fallback for every tab.
+- **Dropping text, a link or a file on a tab** threw an error. Tabs now accept only their
+  own drags.
+- **Finishing the welcome tour reloaded Gmail**, losing an open draft. It now asks the
+  worker to reach the tab, and reloads only if that fails.
+- **Accessibility.** Every dialog has dialog semantics, keeps focus inside, returns it on
+  close, and keeps its key presses away from Gmail's shortcuts. The theme buttons say
+  which one is on.
+
+### Changed
+
+- **The feedback relay** names a network in its rate-limit counter by a keyed hash rather
+  than its IP address, no longer adds the sender's country to the email, gives up on the
+  email service after eight seconds, and has a burst limit and a daily cap. The privacy
+  pages, in the extension and on the website, now say what the relay does, including
+  Cloudflare and Resend, and that diagnostics are included unless unticked.
+- **Tooling.** The upload script refuses a dirty tree or a stale zip; the YouTube uploader
+  and the website's live contact check are dry runs unless told otherwise; the drift
+  canary alerts after seven skipped runs and counts build failures; the store-asset
+  generator removes its demo account afterwards; CI type-checks and checks every bundle and
+  every shipped file.
+- Removed: `generate_icons.py`, which overwrote the real icons with plain squares, and two
+  unused mockup images.
+
 ## [1.8.0] - 2026-09-30
 
 > 1.7.4 was built, tagged and never submitted. This carries it, and everything since 1.6.2.

@@ -9,6 +9,8 @@ import { TabColor } from '../../utils/colors';
 import { createColorSwatchRow } from '../colorPicker';
 import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
+import { guardModalAction } from './contextNotice';
+import { makeDialog } from './dialogA11y';
 
 export function showEditModal(tab: Tab): void {
     const modal = document.createElement('div');
@@ -83,25 +85,31 @@ export function showEditModal(tab: Tab): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    const releaseDialog = makeDialog(content, h3, { onEscape: close, initialFocus: nameInput });
     modal.querySelector('.close-btn')?.addEventListener('click', close);
     modal.addEventListener('click', (e) => {
         if (e.target === modal) close();
     });
 
-    modal.querySelector('#edit-save-btn')?.addEventListener('click', async () => {
-        const title = (modal.querySelector('#edit-display-name') as HTMLInputElement).value;
+    saveBtn.addEventListener('click', () => {
+        const title = nameInput.value;
+        if (!title || !getUserEmail()) return;
 
-        if (title && getUserEmail()) {
-            await updateTab(getUserEmail()!, tab.id, {
-                title: title.trim(),
-                color: selectedColor,
-            });
+        guardModalAction(
+            async () => {
+                await updateTab(getUserEmail()!, tab.id, {
+                    title: title.trim(),
+                    color: selectedColor,
+                });
 
-            close();
-            setAppSettings(await getSettings(getUserEmail()!));
-            getRenderCallback()();
-        }
+                close();
+                setAppSettings(await getSettings(getUserEmail()!));
+                getRenderCallback()();
+            },
+            { content, close, trigger: saveBtn }
+        );
     });
 }

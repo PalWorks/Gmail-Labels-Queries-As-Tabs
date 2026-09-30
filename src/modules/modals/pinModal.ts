@@ -8,6 +8,8 @@
 import { addTab, getSettings } from '../../utils/storage';
 import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
+import { guardModalAction } from './contextNotice';
+import { makeDialog } from './dialogA11y';
 
 export function showPinModal(): void {
     const currentHash = window.location.hash;
@@ -86,21 +88,29 @@ export function showPinModal(): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    const releaseDialog = makeDialog(content, h3, { onEscape: close, initialFocus: titleInput });
     modal.querySelector('.close-btn')?.addEventListener('click', close);
     modal.addEventListener('click', (e) => {
         if (e.target === modal) close();
     });
 
-    modal.querySelector('#pin-save-btn')?.addEventListener('click', async () => {
-        const title = (modal.querySelector('#pin-title') as HTMLInputElement).value;
+    saveBtn.addEventListener('click', () => {
+        const title = titleInput.value;
+        if (!title || !getUserEmail()) return;
 
-        if (title && getUserEmail()) {
-            await addTab(getUserEmail()!, title, currentHash, 'hash');
-            close();
-            setAppSettings(await getSettings(getUserEmail()!));
-            getRenderCallback()();
-        }
+        // The modal closes only once the tab is saved, so a failed write
+        // leaves the title the user typed on screen, ready to retry.
+        guardModalAction(
+            async () => {
+                await addTab(getUserEmail()!, title, currentHash, 'hash');
+                close();
+                setAppSettings(await getSettings(getUserEmail()!));
+                getRenderCallback()();
+            },
+            { content, close, trigger: saveBtn }
+        );
     });
 }

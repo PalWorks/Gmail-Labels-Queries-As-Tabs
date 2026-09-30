@@ -48,6 +48,7 @@ jest.mock('../../src/utils/storage', () => ({
         showUnreadCount: true,
     }),
     getAllAccounts: jest.fn().mockResolvedValue(['test@gmail.com']),
+    getGlobalTheme: jest.fn().mockResolvedValue('dark'),
 }));
 
 // Mock importExport
@@ -126,6 +127,38 @@ describe('showUninstallModal', () => {
 
         expect(triggerDownload).toHaveBeenCalled();
         expect(mockSendMessage).toHaveBeenCalledWith({ action: 'UNINSTALL_SELF' });
+    });
+
+    it('backs up rules and the theme, not just the tabs', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { buildExportPayload } = require('../../src/utils/importExport');
+
+        showUninstallModal();
+        (document.querySelector('#uninstall-yes-btn') as HTMLElement).click();
+        await flush();
+
+        expect(buildExportPayload).toHaveBeenCalledWith(
+            'test@gmail.com',
+            [{ id: '1', title: 'Inbox', type: 'hash', value: '#inbox' }],
+            [],
+            'dark'
+        );
+    });
+
+    it('does not uninstall when the backup did not download', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { triggerDownload } = require('../../src/utils/importExport');
+        triggerDownload.mockResolvedValueOnce({ success: false, error: 'Download blocked' });
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+
+        showUninstallModal();
+        (document.querySelector('#uninstall-yes-btn') as HTMLElement).click();
+        await flush();
+
+        expect(mockSendMessage).not.toHaveBeenCalledWith({ action: 'UNINSTALL_SELF' });
+        expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('has not been uninstalled'));
+        expect(document.querySelector('.gmail-tabs-modal')).not.toBeNull();
+        alertSpy.mockRestore();
     });
 
     // -----------------------------------------------------------------------

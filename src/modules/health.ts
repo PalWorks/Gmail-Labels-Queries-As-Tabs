@@ -39,7 +39,7 @@
  * is not lost on upgrade; nothing writes it any more.
  */
 
-import { ignoreChromeError, isExtensionContextAlive } from './extensionContext';
+import { isExtensionContextAlive } from './extensionContext';
 
 /** Parts of the extension that depend on Gmail's own markup. */
 export type IntegrationComponent = 'labelMenu' | 'senderIcons';
@@ -114,6 +114,24 @@ export function isHealthKey(key: string): boolean {
 const lastWritten = new Map<IntegrationComponent, { status: HealthStatus; reason?: HealthReason }>();
 
 /**
+ * A verdict whose write has been sent but not yet confirmed. It suppresses a
+ * repeat the same way `lastWritten` does, so a burst of redraws while the
+ * write is in flight still costs one write, but it only becomes `lastWritten`
+ * once storage says the write landed. Recording it any earlier meant a failed
+ * write was remembered as a success, and the verdict was then never written
+ * again for the life of the content script.
+ */
+const inFlight = new Map<IntegrationComponent, { status: HealthStatus; reason?: HealthReason }>();
+
+function sameVerdict(
+    entry: { status: HealthStatus; reason?: HealthReason } | undefined,
+    status: HealthStatus,
+    reason: HealthReason | undefined
+): boolean {
+    return !!entry && entry.status === status && entry.reason === reason;
+}
+
+/**
  * Record the outcome of an attempt to augment Gmail's UI.
  *
  * Fire and forget by design: this is diagnostic information, and a surface
@@ -125,8 +143,8 @@ export function recordIntegrationHealth(
     status: HealthStatus,
     reason?: HealthReason
 ): void {
-    const previous = lastWritten.get(component);
-    if (previous && previous.status === status && previous.reason === reason) {
+    const pending = inFlight.get(component);
+    if (pending ? sameVerdict(pending, status, reason) : sameVerdict(lastWritten.get(component), status, reason)) {
         return;
     }
 
@@ -134,15 +152,36 @@ export function recordIntegrationHealth(
 
     const entry: ComponentHealth = { status, at: Date.now() };
     if (reason) entry.reason = reason;
+    const verdict = { status, reason };
+
+    const settle = (ok: boolean): void => {
+        // A newer verdict may have been sent since; it owns the slot now.
+        if (inFlight.get(component) !== verdict) return;
+        inFlight.delete(component);
+        if (ok) lastWritten.set(component, verdict);
+    };
 
     try {
         // One key, one set, no read first: see "One key per component".
-        ignoreChromeError(chrome.storage.local.set({ [healthKeyFor(component)]: entry }));
-        lastWritten.set(component, { status, reason });
+        const result: unknown = chrome.storage.local.set({ [healthKeyFor(component)]: entry });
+        inFlight.set(component, verdict);
+        if (typeof (result as Promise<unknown> | undefined)?.then === 'function') {
+            (result as Promise<unknown>).then(
+                () => settle(true),
+                () => settle(false)
+            );
+        } else {
+            // A callback-only storage API (older Chrome, some test stubs)
+            // returns nothing to wait on and reports failure by throwing,
+            // which the catch below handles.
+            settle(true);
+        }
     } catch {
         // Orphaned context, or storage unavailable. Health information is the
         // first thing that should be dropped when something is wrong, not the
-        // thing that makes it worse.
+        // thing that makes it worse. Nothing is recorded, so the next call
+        // tries again.
+        inFlight.delete(component);
     }
 }
 
@@ -178,6 +217,7 @@ export async function readIntegrationHealth(): Promise<IntegrationHealth> {
 /** Reset the write-suppression cache. Tests use this; nothing else should. */
 export function resetHealthCache(): void {
     lastWritten.clear();
+    inFlight.clear();
 }
 
 /** One line per component, in plain words, for the options page row. */
@@ -213,6 +253,8 @@ export function describeComponentHealth(health: ComponentHealth | undefined): st
             return 'Unavailable: Gmail is not exposing sender addresses in the list';
         case 'no-anchor':
             return 'Unavailable: there is no place in the row to show the icon';
+        case 'write-failed':
+            return 'Could not save: settings storage may be full';
         default:
             return 'Unavailable';
     }

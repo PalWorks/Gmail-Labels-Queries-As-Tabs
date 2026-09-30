@@ -41,7 +41,7 @@ describe('generateAppsScript', () => {
         expect(script).toContain("label: 'newsletters'");
         expect(script).toContain('daysOld: 14');
         expect(script).toContain("action: 'trash'");
-        expect(script).toContain('moveToTrash');
+        expect(script).toContain('moveThreadsToTrash');
         expect(script).toContain('autoCleanup');
     });
 
@@ -75,8 +75,8 @@ describe('generateAppsScript', () => {
         expect(script).toContain("action: 'moveToLabel'");
         expect(script).toContain("targetLabel: 'Archive-Newsletters'");
         expect(script).toContain('getUserLabelByName');
-        expect(script).toContain('addLabel');
-        expect(script).toContain('removeLabel');
+        expect(script).toContain('addToThreads');
+        expect(script).toContain('removeFromThreads');
     });
 
     // ---------------------------------------------------------------------------

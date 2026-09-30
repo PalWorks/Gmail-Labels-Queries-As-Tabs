@@ -17,6 +17,7 @@ const mockChrome = {
         },
     },
     runtime: {
+        id: 'test-extension-id',
         sendMessage: jest.fn(),
         lastError: null as chrome.runtime.LastError | null,
     },
@@ -127,5 +128,22 @@ describe('showDeleteModal', () => {
 
         expect(removeTab).toHaveBeenCalledWith('test@gmail.com', 'tab-1');
         expect(mockRenderTabs).toHaveBeenCalled();
+    });
+
+    it('a dead context on confirm shows the reload notice instead of doing nothing', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { removeTab } = require('../../src/utils/storage');
+        removeTab.mockRejectedValueOnce(new Error('Extension context invalidated.'));
+
+        showDeleteModal(sampleTab);
+        const dialog = document.querySelector('.gmail-tabs-modal .modal-content') as HTMLElement;
+        expect(dialog.getAttribute('role')).toBe('dialog');
+        // Cancel takes focus: Enter on a destructive dialog must not remove.
+        expect(document.activeElement?.textContent).toBe('Cancel');
+        (document.querySelector('#delete-confirm-btn') as HTMLElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(document.querySelector('#modal-reload-page')).not.toBeNull();
+        expect(mockRenderTabs).not.toHaveBeenCalled();
     });
 });

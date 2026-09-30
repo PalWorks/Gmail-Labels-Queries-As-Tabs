@@ -2,8 +2,10 @@
  * ruleTemplates.ts
  *
  * One-click "starter preset" automation templates. Each template describes a
- * common cleanup rule; applying it creates the matching label tab (if missing)
- * AND its enabled rule in a single atomic save.
+ * common cleanup rule; applying it creates the matching tab (if missing) AND
+ * its enabled rule in a single atomic save. A template targets either a user
+ * label (a label tab) or one of Gmail's inbox categories (a `#category/...`
+ * hash tab, which the rule searches as `category:<name>`).
  *
  * This whole feature is gated behind RULE_TEMPLATES_ENABLED. Flip it to `false`
  * and the options page renders no template UI; no other code needs to change.
@@ -13,7 +15,7 @@
 
 import { getSettings, mutateSettings, Rule, RuleAction, Tab } from '../utils/storage';
 import { TabColor } from '../utils/colors';
-import { tabToGmailLabel } from './rules';
+import { GmailCategory, tabToGmailCategory, tabToGmailLabel } from './rules';
 
 // ---------------------------------------------------------------------------
 // Feature flag
@@ -34,8 +36,18 @@ export interface RuleTemplate {
     icon: string;
     /** One-line explanation. */
     description: string;
-    /** Gmail label the tab targets (and the rule's `label:` query). */
+    /**
+     * The created tab's title. For a label template it is also the Gmail
+     * label the tab targets and the rule's `label:` search.
+     */
     labelName: string;
+    /**
+     * Set for a template aimed at one of Gmail's inbox categories. Promotions,
+     * Social and Updates are categories, not labels: `label:"Promotions"`
+     * finds nothing for almost everyone, so these templates create a
+     * `#category/<name>` tab whose rule searches `category:<name>`.
+     */
+    category?: GmailCategory;
     action: RuleAction;
     daysOld: number;
     /** Optional palette token applied to the created tab. */
@@ -54,6 +66,7 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
         icon: '🗑',
         description: 'Trash promotional mail older than 30 days.',
         labelName: 'Promotions',
+        category: 'promotions',
         action: 'trash',
         daysOld: 30,
         color: 'orange',
@@ -74,6 +87,7 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
         icon: '✉️',
         description: 'Mark social notifications read after 7 days.',
         labelName: 'Social',
+        category: 'social',
         action: 'markRead',
         daysOld: 7,
         color: 'teal',
@@ -94,6 +108,7 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
         icon: '🔔',
         description: 'Trash automated update emails after 60 days.',
         labelName: 'Updates',
+        category: 'updates',
         action: 'trash',
         daysOld: 60,
         color: 'purple',
@@ -110,9 +125,25 @@ export interface ApplyTemplateResult {
     createdRule: boolean;
 }
 
+/** The tab value a template's tab carries. */
+export function templateTabValue(template: RuleTemplate): string {
+    return template.category ? `#category/${template.category}` : template.labelName;
+}
+
+/** What the options page shows as the template's search scope. */
+export function describeTemplateScope(template: RuleTemplate): string {
+    return template.category ? `category:${template.category}` : `label:${template.labelName}`;
+}
+
 /**
- * Apply a template to an account: ensure a label tab for `template.labelName`
- * exists, then upsert an enabled rule on it.
+ * Apply a template to an account: ensure a tab for it exists (a label tab for
+ * `template.labelName`, or a `#category/...` tab for `template.category`),
+ * then upsert an enabled rule on it.
+ *
+ * Someone who applied one of the category templates in an earlier version has
+ * a label tab named Promotions, Social or Updates. That tab is left alone rather than migrated:
+ * it may be a real label they use, and the category tab this creates sits
+ * beside it.
  *
  * The whole change goes through a single `applyTemplate` op, so a tab is never
  * created without its rule, and a concurrent edit from a Gmail tab cannot be
@@ -123,13 +154,15 @@ export async function applyRuleTemplate(accountId: string, template: RuleTemplat
 
     // Resolving which tab maps to a Gmail label needs the label grammar, which
     // lives in rules.ts. Do it here and hand the reducer a concrete tab.
-    const existing = settings.tabs.find((t) => tabToGmailLabel(t) === template.labelName);
+    const existing = settings.tabs.find((t) =>
+        template.category ? tabToGmailCategory(t) === template.category : tabToGmailLabel(t) === template.labelName
+    );
 
     const tab: Tab = existing ?? {
         id: crypto.randomUUID(),
         title: template.labelName,
-        type: 'label',
-        value: template.labelName,
+        type: template.category ? 'hash' : 'label',
+        value: templateTabValue(template),
         color: template.color,
     };
 

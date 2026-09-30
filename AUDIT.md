@@ -18,6 +18,20 @@
 > (AGENTS, CONTEXT_MAP, DOMAIN, DATA_MODEL, DECISIONS, TESTING, SECURITY, PLAYBOOK, CONTRIBUTING,
 > CHANGELOG).
 
+> **Refresh note (2026-09-30, v1.8.1):** the pre-submission master audit. Six reviews found
+> about 60 code findings and 40 documentation corrections, none critical; every one was reproduced, fixed and tested, and the fixes are
+> listed in CHANGELOG.md under 1.8.1 and recorded in ADR-029. The headline ones: two live
+> copies of the content script left each other's listeners running; archive and mark-read
+> rules never got past the newest 200 threads; three templates targeted labels that do not
+> exist; a full sync item failed silently; the feedback relay stored the raw IP. Verified in
+> a live, signed-in Gmail under normal, slow 3G and offline conditions and across two
+> extension reloads with Gmail left open. 47 suites.
+>
+> **How to read this file.** The refresh notes above are current. Sections 1 to 11 below are
+> the **v1.2.1 snapshot** this file began as, kept as a record: file lists, line counts, the
+> CI steps and module shapes there describe 1.2.1, not today. For the codebase as it is, read
+> [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTEXT_MAP.md](CONTEXT_MAP.md).
+
 > **Refresh note (2026-09-29, v1.8.0):** sender icons, rebuilt from the "Gmail Sender Icons"
 > extension without its InboxSDK (ADR-027). `src/modules/senderIcons.ts` finds inbox rows by
 > ARIA with a fallback behind every step, draws a lettered badge before any request, and
@@ -183,7 +197,7 @@ gmail-labels-as-tabs/
 ├── package.json             # NPM scripts + dev dependencies
 ├── tsconfig.json            # TypeScript compiler configuration
 ├── jest.config.js           # Jest test runner configuration
-└── generate_icons.py        # Utility script for icon generation
+└── generate_icons.py        # (removed in 1.8.1: it overwrote the real icons)
 ```
 
 ### Folder Responsibilities

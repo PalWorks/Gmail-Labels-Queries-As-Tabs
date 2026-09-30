@@ -1,6 +1,10 @@
 # Gmail Labels as Tabs: Implementation Roadmap
 
-> **Based on:** [AUDIT.md](file:///home/palani/Documents/Gmail-Labels-As-Tabs/AUDIT.md)
+> **Historical.** This is the plan for 1.2.0, written on 2026-03-02 and completed long ago. It
+> is kept as a record and describes nothing current; see [ARCHITECTURE.md](ARCHITECTURE.md)
+> and [CHANGELOG.md](CHANGELOG.md).
+
+> **Based on:** [AUDIT.md](AUDIT.md)
 > **Target Version:** 1.2.0
 > **Created:** 2026-03-02
 

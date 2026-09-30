@@ -194,7 +194,9 @@ function cloneProfile(src, dst) {
         'Cookies',
         'Preferences',
         'Secure Preferences',
-        'Login Data',
+        // Not 'Login Data': that is the saved passwords. The session rides on
+        // the cookies alone, and the canary never types into a login form, so
+        // copying the passwords would only put them somewhere else on disk.
         'Web Data',
         'Network Persistent State',
     ];

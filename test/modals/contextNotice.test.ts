@@ -6,7 +6,12 @@ export {};
  * idempotence live in one place and are asserted in one place.
  */
 
-import { renderContextInvalidatedNotice, RELOAD_BUTTON_ID } from '../../src/modules/modals/contextNotice';
+import {
+    renderContextInvalidatedNotice,
+    reportSettingsWriteFailure,
+    RELOAD_BUTTON_ID,
+    WRITE_FAILURE_NOTICE_ID,
+} from '../../src/modules/modals/contextNotice';
 
 function makeContent(): HTMLElement {
     document.body.innerHTML = '<div class="gmail-tabs-modal"><div class="modal-content">original</div></div>';
@@ -69,5 +74,45 @@ describe('renderContextInvalidatedNotice', () => {
         renderContextInvalidatedNotice(content, jest.fn());
 
         expect(content.querySelector(`#${RELOAD_BUTTON_ID}`)?.className).toContain('primary-btn');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// reportSettingsWriteFailure
+// ---------------------------------------------------------------------------
+
+describe('reportSettingsWriteFailure', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    test('a full sync quota says what is full and what to remove', () => {
+        reportSettingsWriteFailure(new Error('QUOTA_BYTES quota exceeded'));
+        const notice = document.getElementById(WRITE_FAILURE_NOTICE_ID)!;
+        expect(notice.getAttribute('role')).toBe('alert');
+        expect(notice.textContent).toContain(
+            'Settings are full: Chrome sync allows about 8 KB per account. Remove some tabs or rules.'
+        );
+    });
+
+    test('any other failure says to retry, and the notice dismisses', () => {
+        reportSettingsWriteFailure(new Error('boom'));
+        const notice = document.getElementById(WRITE_FAILURE_NOTICE_ID)!;
+        expect(notice.textContent).toContain('Could not save that change. Try again, or reload Gmail.');
+        (notice.querySelector('button') as HTMLElement).click();
+        expect(document.getElementById(WRITE_FAILURE_NOTICE_ID)).toBeNull();
+    });
+
+    test('a second failure replaces the first rather than stacking', () => {
+        reportSettingsWriteFailure(new Error('one'));
+        reportSettingsWriteFailure(new Error('two'));
+        expect(document.querySelectorAll(`#${WRITE_FAILURE_NOTICE_ID}`)).toHaveLength(1);
+    });
+
+    test('a dead context gets the reload notice, once', () => {
+        reportSettingsWriteFailure(new Error('Extension context invalidated.'));
+        reportSettingsWriteFailure(new Error('Extension context invalidated.'));
+        expect(document.querySelectorAll(`#${RELOAD_BUTTON_ID}`)).toHaveLength(1);
+        expect(document.getElementById(WRITE_FAILURE_NOTICE_ID)).toBeNull();
     });
 });

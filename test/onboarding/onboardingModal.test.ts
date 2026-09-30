@@ -167,3 +167,23 @@ describe('when the extension context has been invalidated', () => {
         error.mockRestore();
     });
 });
+
+describe('the tour as a dialog', () => {
+    test('keystrokes stay out of Gmail and focus returns on close', () => {
+        const opener = document.createElement('button');
+        document.body.appendChild(opener);
+        opener.focus();
+        const gmail = jest.fn();
+        document.addEventListener('keypress', gmail);
+
+        showOnboarding();
+        const panel = document.querySelector('.glt-ob') as HTMLElement;
+        panel.dispatchEvent(new KeyboardEvent('keypress', { key: 'c', bubbles: true }));
+        expect(gmail).not.toHaveBeenCalled();
+
+        panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(document.querySelector('.glt-ob')).toBeNull();
+        expect(document.activeElement).toBe(opener);
+        document.removeEventListener('keypress', gmail);
+    });
+});

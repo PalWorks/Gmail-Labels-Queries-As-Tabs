@@ -9,9 +9,8 @@
 export { showPinModal } from './pinModal';
 export { showEditModal } from './editModal';
 export { showDeleteModal } from './deleteModal';
-export { exportSettings, showImportModal } from './importModal';
-export { showUninstallModal } from './uninstallModal';
 export { toggleSettingsModal } from './settingsModal';
+export { reportSettingsWriteFailure } from './contextNotice';
 
 // Shared render callback injected by content.ts
 let _renderTabs: () => void;

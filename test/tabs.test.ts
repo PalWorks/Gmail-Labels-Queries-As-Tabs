@@ -562,3 +562,56 @@ describe('accessibility', () => {
         expect(save.getAttribute('aria-label')).toBeTruthy();
     });
 });
+
+// ---------------------------------------------------------------------------
+// updateActiveTab and pinned #label/ hash tabs (ADR-026)
+// ---------------------------------------------------------------------------
+
+describe('updateActiveTab with pinned #label/ hash tabs', () => {
+    const pinned: Tab[] = [
+        { id: 'tab-1', title: 'Inbox', value: '#inbox', type: 'hash' },
+        { id: 'tab-2', title: 'Work', value: '#label/Work', type: 'hash' },
+        { id: 'tab-3', title: 'Clients', value: '#label/Work%2FClients', type: 'hash' },
+    ];
+
+    function setupPinnedBar(): HTMLElement {
+        const bar = createTabsBar();
+        document.body.appendChild(bar);
+        mockState.currentSettings = { tabs: pinned, showUnreadCount: false, theme: 'system', rules: [] };
+        renderTabs();
+        return bar;
+    }
+
+    function activeTitles(bar: HTMLElement): string[] {
+        return Array.from(bar.querySelectorAll<HTMLElement>('.gmail-tab.active')).map(
+            (t) => t.querySelector('.tab-name')?.textContent?.trim() ?? ''
+        );
+    }
+
+    test('an open thread keeps a pinned label view lit', () => {
+        const bar = setupPinnedBar();
+        window.location.hash = '#label/Work/FMfcgzQbgClcJBgGqJVCRrRqQpgLDLPG';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Work']);
+    });
+
+    test('only the longest pinned match is lit', () => {
+        const bar = setupPinnedBar();
+        window.location.hash = '#label/Work%2FClients/FMfcgzQbgClcJBgGqJVCRrRqQpgLDLPG';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Clients']);
+    });
+
+    test('a non-label hash tab still matches exactly', () => {
+        const bar = setupPinnedBar();
+        window.location.hash = '#inbox';
+
+        updateActiveTab();
+
+        expect(activeTitles(bar)).toEqual(['Inbox']);
+    });
+});

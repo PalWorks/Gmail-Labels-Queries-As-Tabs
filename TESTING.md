@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-30 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.1)
 
 ## Philosophy
 
@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 44 suites, 965 tests as of v1.8.0.
+- 47 suites, 1082 tests as of v1.8.1.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
@@ -52,6 +52,13 @@ thresholds; add tests with new behavior.
   manager, tab colors, rule templates, in-product feedback, the color-contrast palette,
   sender icons (every fallback layer, website icons only on opt-in, slow and blocked
   networks) and the sender domain rules.
+- Since 1.8.1: [rulesRuntime](test/rulesRuntime.test.ts) runs the generated Apps Script
+  against a fake `GmailApp` that refuses batches over 100 threads, so rule progress, batching
+  and the time guard are tested as behaviour rather than as text;
+  [xhrInterceptorHook](test/xhrInterceptorHook.test.ts) loads the real page-world script
+  several times into one page and counts what one response produces;
+  [dialogA11y](test/modals/dialogA11y.test.ts) holds the shared dialog focus trap; and the
+  content script suite runs two copies in one page, including a tour handed between them.
 - Three suites run the drift canary's tooling as real processes:
   [canaryNotify](test/canaryNotify.test.ts) posts Google Chat alerts to a local server,
   [canaryRun](test/canaryRun.test.ts) runs `run-canary.sh` in a sandbox with a fake canary

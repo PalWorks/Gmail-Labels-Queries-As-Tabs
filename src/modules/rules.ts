@@ -18,8 +18,23 @@ import { Tab, Rule } from '../utils/storage';
 export interface EnrichedRule extends Rule {
   tabTitle: string;
   tabValue: string;
+  /** The user label the rule searches, or '' for a category rule. */
   gmailLabel: string;
+  /** The Gmail category the rule searches, for a `#category/...` tab. */
+  gmailCategory?: GmailCategory;
 }
+
+/**
+ * Gmail's inbox categories. They are not user labels: Gmail searches them as
+ * `category:promotions`, GmailApp does not return them from `getLabels()`,
+ * and a `label:"Promotions"` search finds nothing unless the user happens to
+ * have made a label of that name. Their views live at `#category/<name>`.
+ */
+export const GMAIL_CATEGORIES = ['promotions', 'social', 'updates', 'forums'] as const;
+export type GmailCategory = (typeof GMAIL_CATEGORIES)[number];
+
+/** What a rule's search is scoped to: a user label, or a Gmail category. */
+export type RuleTarget = { kind: 'label'; label: string } | { kind: 'category'; category: GmailCategory };
 
 /**
  * Upper bound on threads a single rule touches in one run of the generated
@@ -27,6 +42,21 @@ export interface EnrichedRule extends Rule {
  * rule that matches far more than intended should stop somewhere reviewable.
  */
 export const MAX_THREADS_PER_RUN = 200;
+
+/**
+ * GmailApp's batch methods (moveThreadsToTrash, moveThreadsToArchive,
+ * markThreadsRead, GmailLabel.addToThreads and removeFromThreads) reject an
+ * array of more than 100 threads, so a full run of MAX_THREADS_PER_RUN is
+ * handed to them in pieces.
+ */
+export const GMAIL_BATCH_LIMIT = 100;
+
+/**
+ * Apps Script stops a run at six minutes. The script stops starting new rules
+ * and new batches after this much, which leaves room to write the summary and
+ * the Sheet log before the limit arrives.
+ */
+export const TIME_BUDGET_MS = 5 * 60 * 1000;
 
 /**
  * Resolves the Gmail label name a tab targets, or null if the tab does not map
@@ -48,6 +78,31 @@ export function tabToGmailLabel(tab: Tab): string | null {
   return null;
 }
 
+/**
+ * Resolves the Gmail category a tab shows, or null. Only `#category/<name>`
+ * hash tabs for one of GMAIL_CATEGORIES qualify; `#category/primary` does
+ * not, because Primary is what is left over rather than something Gmail can
+ * search for.
+ */
+export function tabToGmailCategory(tab: Tab): GmailCategory | null {
+  if (tab.type !== 'hash' || !tab.value.startsWith('#category/')) return null;
+  const name = tab.value.slice('#category/'.length).trim().toLowerCase();
+  return (GMAIL_CATEGORIES as readonly string[]).includes(name) ? (name as GmailCategory) : null;
+}
+
+/**
+ * What a rule on this tab would search, or null if a rule cannot run on it.
+ * This is the one place that decides which tabs can carry a rule: the options
+ * page lists exactly these tabs, and the generator skips everything else.
+ */
+export function tabToRuleTarget(tab: Tab): RuleTarget | null {
+  const label = tabToGmailLabel(tab);
+  if (label) return { kind: 'label', label };
+  const category = tabToGmailCategory(tab);
+  if (category) return { kind: 'category', category };
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Script Generation
 // ---------------------------------------------------------------------------
@@ -64,15 +119,19 @@ export function tabToGmailLabel(tab: Tab): string | null {
 export function generateAppsScript(tabs: Tab[], rules: Rule[], accountId: string, sheetUrl?: string): string {
   const enabledRules = rules.filter((r) => r.enabled);
 
-  // Enrich rules with tab metadata. Rules whose tab does not resolve to a
-  // Gmail label are skipped — they cannot produce a valid `label:` query.
+  // Enrich rules with tab metadata. Rules whose tab resolves to neither a
+  // Gmail label nor a Gmail category are skipped: they cannot produce a
+  // search that is scoped to anything.
   const enriched: EnrichedRule[] = enabledRules
-    .map((rule) => {
+    .map((rule): EnrichedRule | null => {
       const tab = tabs.find((t) => t.id === rule.tabId);
       if (!tab) return null;
-      const gmailLabel = tabToGmailLabel(tab);
-      if (!gmailLabel) return null;
-      return { ...rule, tabTitle: tab.title, tabValue: tab.value, gmailLabel };
+      const target = tabToRuleTarget(tab);
+      if (!target) return null;
+      const base = { ...rule, tabTitle: tab.title, tabValue: tab.value };
+      return target.kind === 'label'
+        ? { ...base, gmailLabel: target.label }
+        : { ...base, gmailLabel: '', gmailCategory: target.category };
     })
     .filter((r): r is EnrichedRule => r !== null);
 
@@ -97,7 +156,7 @@ export function generateAppsScript(tabs: Tab[], rules: Rule[], accountId: string
  * This script automatically manages emails based on your configured rules.
  * Set up a daily time-driven trigger to run autoCleanup().
  *
- * IMPORTANT: This script uses moveToTrash() — emails are recoverable
+ * IMPORTANT: This script uses moveThreadsToTrash(): emails are recoverable
  * from Trash for 30 days. Nothing is permanently deleted.
  */
 
@@ -112,18 +171,54 @@ var RULES = [
 // number you can review and undo rather than running to completion.
 var MAX_THREADS_PER_RUN = ${MAX_THREADS_PER_RUN};
 
+// GmailApp's batch methods accept at most ${GMAIL_BATCH_LIMIT} threads per call.
+var BATCH_SIZE = ${GMAIL_BATCH_LIMIT};
+
+// Apps Script stops a run at six minutes. After this long no new rule or batch
+// is started, so the summary and the Sheet log are still written, and the
+// rest is picked up on the next run.
+var TIME_BUDGET_MS = ${TIME_BUDGET_MS};
+var RUN_STARTED_AT = 0;
+
+function outOfTime() {
+  return Date.now() - RUN_STARTED_AT > TIME_BUDGET_MS;
+}
+
 /**
  * Builds the search for a rule.
  *
  * The label MUST be quoted. Gmail splits an unquoted label: operator at the
  * first space, so a label named "Old Stuff" would search for label:Old AND
- * Stuff and match threads that were never in the label — which, for a trash
+ * Stuff and match threads that were never in the label, which, for a trash
  * rule, deletes the wrong mail. Gmail has no escape for a quote inside a
  * quoted term, so any quote in the name is dropped here; threadHasLabel below
  * is what actually guarantees we only act on the right threads.
+ *
+ * A category rule searches category:<name>, which is how Gmail finds its
+ * Promotions, Social, Updates and Forums tabs; they are not labels.
+ *
+ * Archive and Mark Read exclude threads they have already handled. Without
+ * that, archived and read threads still match, the newest
+ * MAX_THREADS_PER_RUN of them fill every run, and the rule never reaches
+ * anything older. A category Move to Label excludes threads already in the
+ * target, for the same reason: it has no source label to remove.
  */
 function buildQuery(rule) {
-  return 'label:"' + String(rule.label).replace(/"/g, '') + '" older_than:' + rule.daysOld + 'd';
+  var scope = rule.category
+    ? 'category:' + rule.category
+    : 'label:"' + String(rule.label).replace(/"/g, '') + '"';
+  var query = scope + ' older_than:' + rule.daysOld + 'd';
+  if (rule.action === 'archive') query += ' in:inbox';
+  if (rule.action === 'markRead') query += ' is:unread';
+  if (rule.action === 'moveToLabel' && rule.category && rule.targetLabel) {
+    query += ' -label:"' + String(rule.targetLabel).replace(/"/g, '') + '"';
+  }
+  return query;
+}
+
+/** What the log calls a rule. */
+function ruleName(rule) {
+  return rule.category ? 'category:' + rule.category : rule.label;
 }
 
 /** Exact, case-sensitive check that a thread really carries the label. */
@@ -135,8 +230,22 @@ function threadHasLabel(thread, labelName) {
   return false;
 }
 
+/**
+ * Hands threads to fn at most BATCH_SIZE at a time, stopping between batches
+ * once the time budget is spent. Returns how many threads were handed over.
+ */
+function inBatches(threads, fn) {
+  for (var i = 0; i < threads.length; i += BATCH_SIZE) {
+    if (outOfTime()) return i;
+    fn(threads.slice(i, i + BATCH_SIZE));
+  }
+  return threads.length;
+}
+
 // ── Main Function ──────────────────────────────────────────────────
 function autoCleanup() {
+  RUN_STARTED_AT = Date.now();
+
   var currentUser = Session.getActiveUser().getEmail();
   if (currentUser !== EXPECTED_USER) {
     Logger.log('SAFETY: Script generated for ' + EXPECTED_USER + ' but running as ' + currentUser + '. Aborting.');
@@ -145,46 +254,13 @@ function autoCleanup() {
 
   var results = [];
 
-  RULES.forEach(function(rule) {
-    try {
-      var query = buildQuery(rule);
-      var matched = GmailApp.search(query, 0, MAX_THREADS_PER_RUN);
-
-      // Defence in depth before a destructive action: Gmail search is a
-      // fuzzy query language, not an exact-match lookup, so confirm every
-      // thread genuinely carries this label before touching it.
-      var threads = matched.filter(function(t) { return threadHasLabel(t, rule.label); });
-
-      if (matched.length !== threads.length) {
-        Logger.log('NOTE: ' + (matched.length - threads.length) + ' thread(s) matched the search for "' + rule.label + '" but do not carry that label. Skipped.');
-      }
-      if (matched.length === MAX_THREADS_PER_RUN) {
-        Logger.log('NOTE: hit the ' + MAX_THREADS_PER_RUN + '-thread cap for "' + rule.label + '". The rest will be picked up on the next run.');
-      }
-
-      if (threads.length === 0) return;
-
-      ${buildActionSwitch()}
-
-      results.push({
-        label: rule.label,
-        action: rule.action,
-        count: threads.length,
-        date: new Date().toLocaleString()
-      });
-
-      Logger.log('Processed ' + threads.length + ' threads from "' + rule.label + '" (' + rule.action + ')');
-    } catch (e) {
-      Logger.log('ERROR processing rule for "' + rule.label + '": ' + e.message);
-      results.push({
-        label: rule.label,
-        action: rule.action,
-        count: 0,
-        date: new Date().toLocaleString(),
-        error: e.message
-      });
+  for (var r = 0; r < RULES.length; r++) {
+    if (outOfTime()) {
+      Logger.log('NOTE: stopped after ' + Math.round(TIME_BUDGET_MS / 60000) + ' minutes. ' + (RULES.length - r) + ' rule(s) continue on the next run.');
+      break;
     }
-  });
+    runRule(RULES[r], results);
+  }
 
   if (results.length > 0) {
     Logger.log('\\n── Summary ──');
@@ -197,6 +273,57 @@ function autoCleanup() {
     });
   }
 ${sheetCallStr}
+}
+
+function runRule(rule, results) {
+  var name = ruleName(rule);
+  try {
+    var query = buildQuery(rule);
+    var matched = GmailApp.search(query, 0, MAX_THREADS_PER_RUN);
+
+    // Defence in depth before a destructive action: Gmail search is a
+    // fuzzy query language, not an exact-match lookup, so confirm every
+    // thread genuinely carries this label before touching it. A category
+    // is not a label GmailApp can read back, so a category rule relies on
+    // the search alone.
+    var threads = rule.category
+      ? matched
+      : matched.filter(function(t) { return threadHasLabel(t, rule.label); });
+
+    if (matched.length !== threads.length) {
+      Logger.log('NOTE: ' + (matched.length - threads.length) + ' thread(s) matched the search for "' + name + '" but do not carry that label. Skipped.');
+    }
+    if (matched.length === MAX_THREADS_PER_RUN) {
+      Logger.log('NOTE: hit the ' + MAX_THREADS_PER_RUN + '-thread cap for "' + name + '". The rest will be picked up on the next run.');
+    }
+
+    if (threads.length === 0) return;
+
+    var done = 0;
+    ${buildActionSwitch()}
+
+    if (done < threads.length) {
+      Logger.log('NOTE: out of time partway through "' + name + '". ' + (threads.length - done) + ' thread(s) continue on the next run.');
+    }
+
+    results.push({
+      label: name,
+      action: rule.action,
+      count: done,
+      date: new Date().toLocaleString()
+    });
+
+    Logger.log('Processed ' + done + ' threads from "' + name + '" (' + rule.action + ')');
+  } catch (e) {
+    Logger.log('ERROR processing rule for "' + name + '": ' + e.message);
+    results.push({
+      label: name,
+      action: rule.action,
+      count: 0,
+      date: new Date().toLocaleString(),
+      error: e.message
+    });
+  }
 }
 ${sheetSection}
 /**
@@ -226,8 +353,13 @@ ${sheetSection}
  * Builds a single rule config line for the RULES array.
  */
 function buildRuleConfigLine(rule: EnrichedRule): string {
-  const label = escapeForScript(rule.gmailLabel);
-  const parts = [`label: '${label}'`, `daysOld: ${rule.daysOld}`, `action: '${rule.action}'`];
+  // A category comes from a fixed list, but it is escaped all the same: the
+  // cost is nothing, and it keeps "every string is escaped" a rule without
+  // exceptions to reason about.
+  const scope = rule.gmailCategory
+    ? `category: '${escapeForScript(rule.gmailCategory)}'`
+    : `label: '${escapeForScript(rule.gmailLabel)}'`;
+  const parts = [scope, `daysOld: ${rule.daysOld}`, `action: '${rule.action}'`];
 
   if (rule.action === 'moveToLabel' && rule.targetLabel) {
     parts.push(`targetLabel: '${escapeForScript(rule.targetLabel)}'`);
@@ -246,29 +378,29 @@ function buildRuleConfigLine(rule: EnrichedRule): string {
  */
 function buildActionSwitch(): string {
   return `switch (rule.action) {
-        case 'trash':
-          threads.forEach(function(t) { t.moveToTrash(); });
-          break;
-        case 'archive':
-          GmailApp.moveThreadsToArchive(threads);
-          break;
-        case 'markRead':
-          GmailApp.markThreadsRead(threads);
-          break;
-        case 'moveToLabel':
-          if (rule.targetLabel) {
-            var targetLbl = GmailApp.getUserLabelByName(rule.targetLabel);
-            if (!targetLbl) {
-              targetLbl = GmailApp.createLabel(rule.targetLabel);
-            }
-            var sourceLbl = GmailApp.getUserLabelByName(rule.label);
-            threads.forEach(function(t) {
-              t.addLabel(targetLbl);
-              if (sourceLbl) t.removeLabel(sourceLbl);
-            });
+      case 'trash':
+        done = inBatches(threads, function(batch) { GmailApp.moveThreadsToTrash(batch); });
+        break;
+      case 'archive':
+        done = inBatches(threads, function(batch) { GmailApp.moveThreadsToArchive(batch); });
+        break;
+      case 'markRead':
+        done = inBatches(threads, function(batch) { GmailApp.markThreadsRead(batch); });
+        break;
+      case 'moveToLabel':
+        if (rule.targetLabel) {
+          var targetLbl = GmailApp.getUserLabelByName(rule.targetLabel);
+          if (!targetLbl) {
+            targetLbl = GmailApp.createLabel(rule.targetLabel);
           }
-          break;
-      }`;
+          var sourceLbl = rule.category ? null : GmailApp.getUserLabelByName(rule.label);
+          done = inBatches(threads, function(batch) {
+            targetLbl.addToThreads(batch);
+            if (sourceLbl) sourceLbl.removeFromThreads(batch);
+          });
+        }
+        break;
+    }`;
 }
 
 /**

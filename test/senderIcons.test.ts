@@ -20,6 +20,7 @@ import {
     resetSenderIconsForTests,
     scanNow,
     setImageProbe,
+    probeImageElement,
     chipSpecFor,
     pickSender,
     findAnchor,
@@ -556,6 +557,35 @@ describe('website icons', () => {
         expect(document.querySelector('[data-glt-sender] img')).toBeNull();
     });
 
+    test('cancelling aborts the requests in flight and keeps their slots until they settle', async () => {
+        const calls: Array<{ url: string; signal?: AbortSignal; resolve: (r: ProbeResult) => void }> = [];
+        setImageProbe((url, signal) => new Promise((resolve) => calls.push({ url, signal, resolve })));
+        prefs.favicons = true;
+        mount(
+            Array.from({ length: 10 }, (_, i) =>
+                rowHtml({ id: `r${i}`, people: [{ email: `a@org${i}.com`, name: `Org ${i}` }] })
+            ).join('')
+        );
+        install();
+        scanNow();
+        expect(calls).toHaveLength(4);
+
+        prefs.favicons = false;
+        refreshSenderIcons();
+        expect(calls.every((c) => c.signal?.aborted)).toBe(true);
+
+        // Straight back on, before the four have let go: the limit still holds.
+        prefs.favicons = true;
+        refreshSenderIcons();
+        scanNow();
+        expect(calls).toHaveLength(4);
+
+        calls.slice(0, 4).forEach((c) => c.resolve('error'));
+        await flush();
+        expect(calls.length).toBeGreaterThan(4);
+        expect(calls.length).toBeLessThanOrEqual(8);
+    });
+
     test('an icon that arrives after the page was handed over is dropped', async () => {
         const calls = deferredProbe();
         prefs.favicons = true;
@@ -670,5 +700,53 @@ describe('the observer', () => {
             chips()[0]?.remove();
         }
         expect(inserted).toBe(30);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The real image probe
+// ---------------------------------------------------------------------------
+
+describe('probeImageElement', () => {
+    const RealImage = (global as any).Image;
+    let made: any[];
+
+    beforeEach(() => {
+        made = [];
+        (global as any).Image = class {
+            onload: (() => void) | null = null;
+            onerror: (() => void) | null = null;
+            src = '';
+            naturalWidth = 0;
+            referrerPolicy = '';
+            decoding = '';
+            constructor() {
+                made.push(this);
+            }
+        };
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        (global as any).Image = RealImage;
+        jest.useRealTimers();
+    });
+
+    test('a timeout ends the request, not just the wait for it', async () => {
+        const result = probeImageElement('https://t0.gstatic.com/x');
+        expect(made[0].src).toBe('https://t0.gstatic.com/x');
+        jest.advanceTimersByTime(8_000);
+        await expect(result).resolves.toBe('error');
+        expect(made[0].src).toBe('');
+        expect(made[0].onload).toBeNull();
+        expect(made[0].onerror).toBeNull();
+    });
+
+    test('an abort ends the request at once', async () => {
+        const abort = new AbortController();
+        const result = probeImageElement('https://t0.gstatic.com/x', abort.signal);
+        abort.abort();
+        await expect(result).resolves.toBe('error');
+        expect(made[0].src).toBe('');
     });
 });

@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-30 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.1)
 
 ## Local setup
 
@@ -73,8 +73,10 @@ Confirm `manifest.json` and `package.json` carry the same version.
    node scripts/cws-upload.mjs              # dry run: checks the zip and the store, sends nothing
    node scripts/cws-upload.mjs --confirm    # uploads the zip as a draft
    ```
-   It uses the Chrome Web Store API v2 with the credentials in `~/.secrets` and refuses
-   while another version is in review. The listing text, privacy tab, data usage answers
+   It uses the Chrome Web Store API v2 with the credentials in `~/.secrets`. It refuses
+   while another version is in review, when the tree has uncommitted changes, when the zip
+   is older than the last commit (run `npm run package` again), and when `--confirm` and
+   `--submit` are given together. The listing text, privacy tab, data usage answers
    and the YouTube video link are dashboard-only, so fix them there next. Then submit, in
    the dashboard or with `node scripts/cws-upload.mjs --submit`. Uploading never submits.
 8. Tag the release in git and push the tag.
@@ -106,7 +108,7 @@ almost always in the code or the document it points at.
 | `repoConsistency` path | Fix the link, or the file moved and the doc did not follow |
 | `repoConsistency` CONTEXT_MAP | Add the new module to the source map |
 | `repoConsistency` dead CSS | Delete the rule |
-| `repoConsistency` undisclosed host | The service worker names an outbound host that SECURITY.md, the privacy page or STORE_LISTING does not. Disclose it, or remove the host |
+| `repoConsistency` undisclosed host | The service worker or `senderIcons.ts` names an outbound host that SECURITY.md, the privacy page or STORE_LISTING does not. Disclose it, or remove the host |
 | `repoConsistency` test count | Live documents disagree on the total. Set them all to what `npm test` prints |
 | `repoConsistency` retired site link | Something links to the Pages site deleted in v1.5.0. Use `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
 | `repoConsistency` `website/` exists | The duplicate marketing site came back. It belongs in the other repository |

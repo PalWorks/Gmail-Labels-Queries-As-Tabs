@@ -3,7 +3,7 @@
 Thanks for contributing to **Gmail Labels and Search Queries as Tabs**. This guide covers
 the workflow, standards, and checks.
 
-Last updated: 2026-09-22 (v1.6.2)
+Last updated: 2026-09-30 (v1.8.1)
 
 ## Prerequisites
 

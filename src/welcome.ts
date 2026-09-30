@@ -19,6 +19,7 @@ import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { catchChromeError } from './modules/extensionContext';
 import { createWizard } from './modules/onboarding/wizardView';
 import { writeMirroredTheme } from './modules/themeMirror';
+import { ADOPT_GMAIL_TABS_ACTION } from './modules/messages';
 
 const GMAIL_URL = 'https://mail.google.com/';
 
@@ -78,20 +79,52 @@ function applyThemeToPage(theme: Theme): void {
 }
 
 /**
+ * Ask the worker to give every open Gmail tab a working content script.
+ *
+ * Resolves true only when the worker says it did. It pings each tab first and
+ * injects only where nothing answers, so a tab already running the script,
+ * and anything the user has open in it such as a half-written compose, is
+ * left exactly as it is. Never rejects: a false here is the caller's cue to
+ * fall back.
+ */
+async function adoptGmailTabs(): Promise<boolean> {
+    try {
+        const response = (await chrome.runtime.sendMessage({ action: ADOPT_GMAIL_TABS_ACTION })) as
+            | { ok?: boolean }
+            | undefined;
+        return response?.ok === true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Focus an existing Gmail tab, or open one.
  *
- * The existing tab is reloaded because it may predate this install and so be
- * running no content script: without that, the user would arrive at a Gmail
- * with no tab bar, immediately after a tour promising one.
+ * An existing tab may predate this install and so be running no content
+ * script: without one, the user would arrive at a Gmail with no tab bar,
+ * immediately after a tour promising one. The worker adopts it in place
+ * rather than this page reloading it, because installing no longer reloads
+ * anyone's Gmail (ADR-025) and a reload throws away an open compose. The
+ * reload survives only as the fallback for a worker that cannot be reached.
  */
 function openGmail(): void {
     chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
         const report = (e: unknown): void => console.error('Welcome: could not open Gmail', e);
 
         if (tabs && tabs.length > 0 && tabs[0].id !== undefined) {
-            const id = tabs[0].id;
+            const tab = tabs[0];
+            const id = tab.id as number;
             catchChromeError(chrome.tabs.update(id, { active: true }), report);
-            catchChromeError(chrome.tabs.reload(id), report);
+            // The tab can sit in another window, and activating it there
+            // shows the user nothing.
+            if (tab.windowId !== undefined) {
+                catchChromeError(chrome.windows.update(tab.windowId, { focused: true }), report);
+            }
+            // Reports its own failure through `report`; adoptGmailTabs never rejects.
+            void adoptGmailTabs().then((adopted) => {
+                if (!adopted) catchChromeError(chrome.tabs.reload(id), report);
+            });
             return;
         }
 

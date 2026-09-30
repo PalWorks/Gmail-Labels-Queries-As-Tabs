@@ -12,9 +12,12 @@ import {
     generateExportFilename,
     validateImportData,
     triggerDownload,
+    sameAccount,
+    MAX_IMPORT_BYTES,
 } from '../../utils/importExport';
 import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
+import { makeDialog } from './dialogA11y';
 
 export async function exportSettings(): Promise<void> {
     console.log('Gmail Tabs: Exporting settings...');
@@ -38,7 +41,7 @@ export async function exportSettings(): Promise<void> {
         }
     } catch (err) {
         console.error('Gmail Tabs: Unexpected error during export', err);
-        alert('Unexpected error during export. Please check console.');
+        alert('Unexpected error during export. Please try again.');
     }
 }
 
@@ -81,8 +84,13 @@ export function showImportModal(): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    const releaseDialog = makeDialog(modal.querySelector('.modal-content') as HTMLElement, modal.querySelector('h3'), {
+        onEscape: close,
+        initialFocus: modal.querySelector<HTMLElement>('#import-file-btn'),
+    });
     modal.querySelectorAll('.close-btn, .close-btn-action').forEach((btn) => {
         btn.addEventListener('click', close);
     });
@@ -98,6 +106,11 @@ export function showImportModal(): void {
 
     fileInput.addEventListener('change', (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
+        if (file && file.size > MAX_IMPORT_BYTES) {
+            alert('That file is too large to be a configuration backup.');
+            fileInput.value = '';
+            return;
+        }
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -122,7 +135,7 @@ export function showImportModal(): void {
             const data = JSON.parse(jsonStr);
             validateImportData(data);
 
-            if (data.email && getUserEmail() && data.email !== getUserEmail()) {
+            if (data.email && getUserEmail() && !sameAccount(String(data.email), getUserEmail()!)) {
                 alert(
                     `Error: This configuration belongs to "${data.email}" but you are connected as "${getUserEmail()}". Import rejected.`
                 );

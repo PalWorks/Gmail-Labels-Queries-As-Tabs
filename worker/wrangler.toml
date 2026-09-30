@@ -10,12 +10,24 @@ preview_urls = false
 
 # Secrets (set with `wrangler secret put <NAME>`, never committed):
 #   RESEND_API_KEY   sending-only Resend key
+#   IP_HASH_SECRET   random; keys the HMAC that names a network in its counter.
+#                    Required: without it every POST /feedback answers 500.
 [vars]
 FEEDBACK_FROM = "GmailLabelsAsTabs.Support@palworks.ai"
 FEEDBACK_TO = "support@palworks.ai"
 
-# Per-IP rate-limit counters only; no message content is ever stored.
+# Rate-limit counters only, named by an HMAC of the IP and never the IP, every
+# key expiring within 26 hours. No message content is ever stored.
 # Created with: wrangler kv namespace create FEEDBACK_RATE_LIMIT
 [[kv_namespaces]]
 binding = "FEEDBACK_RATE_LIMIT"
 id = "447448e1c37644eaa73fdbed6a78ce69"
+
+# Burst limit per network, per data centre, approximate by design. `period`
+# may only be 10 or 60. The KV counters above are the real ceiling and the
+# fallback if this binding is missing or fails. The namespace id is distinct
+# from the website contact worker's (2001) on the same account.
+[[ratelimits]]
+name = "BURST"
+namespace_id = "2002"
+simple = { limit = 3, period = 60 }

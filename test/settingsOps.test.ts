@@ -21,6 +21,10 @@ import {
     addTab,
     updateTabOrder,
     removeTab,
+    patchRule,
+    describeWriteFailure,
+    QUOTA_WRITE_FAILURE_MESSAGE,
+    GENERIC_WRITE_FAILURE_MESSAGE,
 } from '../src/utils/storage';
 import { installAsyncChrome } from './helpers/storageMock';
 
@@ -490,5 +494,97 @@ describe('mutateSettings input guards', () => {
         await expect(mutateSettings('', { kind: 'addTab', tab: tab('a') })).rejects.toThrow(/account id/i);
         const { getAllAccounts } = await import('../src/utils/storage');
         expect(await getAllAccounts()).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// patchRule: only the changed fields cross the queue
+// ---------------------------------------------------------------------------
+
+describe('patchRule', () => {
+    const defaults: Rule = { tabId: 'a', action: 'trash', daysOld: 30, enabled: false };
+
+    test('creates the rule from its defaults when the tab has none', () => {
+        const current = baseSettings([tab('a')]);
+        const next = applyOp(current, { kind: 'patchRule', tabId: 'a', updates: { daysOld: 7 }, defaults });
+        expect(next.rules).toEqual([{ tabId: 'a', action: 'trash', daysOld: 7, enabled: false }]);
+    });
+
+    test('merges into the rule storage holds, keeping every field it was not given', () => {
+        const current = baseSettings(
+            [tab('a')],
+            [{ tabId: 'a', action: 'moveToLabel', daysOld: 30, enabled: true, targetLabel: 'Old' }]
+        );
+        const next = applyOp(current, { kind: 'patchRule', tabId: 'a', updates: { daysOld: 5 }, defaults });
+        expect(next.rules[0]).toEqual({ tabId: 'a', action: 'moveToLabel', daysOld: 5, enabled: true, targetLabel: 'Old' });
+    });
+
+    test('returns the same reference when nothing changes, and is idempotent', () => {
+        const current = baseSettings([tab('a')], [{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true }]);
+        const op = { kind: 'patchRule', tabId: 'a', updates: { daysOld: 30 }, defaults } as const;
+        expect(applyOp(current, op)).toBe(current);
+
+        const once = applyOp(current, { ...op, updates: { daysOld: 9 } });
+        const twice = applyOp(once, { ...op, updates: { daysOld: 9 } });
+        expect(twice).toBe(once);
+    });
+
+    test('cannot move a rule to another tab', () => {
+        const current = baseSettings([tab('a')], [{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true }]);
+        const next = applyOp(current, {
+            kind: 'patchRule',
+            tabId: 'a',
+            updates: { tabId: 'b' } as Partial<Rule>,
+            defaults,
+        });
+        expect(next.rules[0].tabId).toBe('a');
+    });
+
+    test('two queued edits to different fields of one rule both land', async () => {
+        // The lost update this op replaces: each debounced write read the
+        // rule, then sent the whole rule back, so flushing two of them
+        // together wrote one field back as it was.
+        installAsyncChrome({ latencyTurns: 2 });
+        await mutateLocally(ACCOUNT, { kind: 'addTab', tab: tab('a') });
+        await mutateLocally(ACCOUNT, {
+            kind: 'upsertRule',
+            rule: { tabId: 'a', action: 'moveToLabel', daysOld: 30, enabled: true, targetLabel: '' },
+        });
+
+        // The service worker's queue, which is what serializes the options
+        // page's writes in the extension. Serialization alone did not save
+        // the old code: both writes carried a whole rule read before either
+        // landed.
+        const queue = createMutationQueue();
+        await Promise.all([
+            queue(ACCOUNT, { kind: 'patchRule', tabId: 'a', updates: { daysOld: 14 }, defaults }),
+            queue(ACCOUNT, { kind: 'patchRule', tabId: 'a', updates: { targetLabel: 'Archive/Old' }, defaults }),
+        ]);
+
+        const rule = (await getSettings(ACCOUNT)).rules.find((r) => r.tabId === 'a');
+        expect(rule).toMatchObject({ daysOld: 14, targetLabel: 'Archive/Old', action: 'moveToLabel' });
+    });
+});
+
+test('patchRule sends only the delta through mutateSettings', async () => {
+    installAsyncChrome();
+    await mutateLocally(ACCOUNT, { kind: 'addTab', tab: tab('a') });
+    const next = await patchRule(ACCOUNT, 'a', { enabled: true }, { tabId: 'x', action: 'trash', daysOld: 30, enabled: false });
+    // The defaults are pinned to the tab being edited, whatever the caller passed.
+    expect(next.rules).toEqual([{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true }]);
+});
+
+describe('describeWriteFailure', () => {
+    test('a quota error says the settings are full and what to do about it', () => {
+        expect(describeWriteFailure(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'))).toBe(QUOTA_WRITE_FAILURE_MESSAGE);
+        expect(describeWriteFailure('QUOTA_BYTES quota exceeded')).toBe(QUOTA_WRITE_FAILURE_MESSAGE);
+        expect(QUOTA_WRITE_FAILURE_MESSAGE).toBe(
+            'Settings are full: Chrome sync allows about 8 KB per account. Remove some tabs or rules.'
+        );
+    });
+
+    test('anything else gets the generic sentence', () => {
+        expect(describeWriteFailure(new Error('Extension context invalidated'))).toBe(GENERIC_WRITE_FAILURE_MESSAGE);
+        expect(describeWriteFailure(undefined)).toBe(GENERIC_WRITE_FAILURE_MESSAGE);
     });
 });

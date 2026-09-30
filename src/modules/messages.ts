@@ -34,3 +34,12 @@ export const TOGGLE_SETTINGS_ACTION = 'TOGGLE_SETTINGS';
  * gone, so the send rejects, which reads as "not there" and is exactly right.
  */
 export const PING_ACTION = 'PING';
+
+/**
+ * Welcome page → worker: give every open Gmail tab a working content script.
+ *
+ * The worker pings each tab first and injects only where nothing answers, so
+ * a tab that is already running the script is left exactly as it is. This is
+ * what lets the welcome page hand over to Gmail without reloading it.
+ */
+export const ADOPT_GMAIL_TABS_ACTION = 'ADOPT_GMAIL_TABS';

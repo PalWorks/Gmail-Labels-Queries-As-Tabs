@@ -20,6 +20,7 @@ import {
 import { catchChromeError } from './modules/extensionContext';
 import {
     START_TOUR_ACTION,
+    ADOPT_GMAIL_TABS_ACTION,
     SHOW_ONBOARDING_ACTION,
     OPEN_OPTIONS_PAGE_ACTION,
     PING_ACTION,
@@ -276,6 +277,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.action === ADOPT_GMAIL_TABS_ACTION) {
+        adoptOpenGmailTabs()
+            .then((adopted) => sendResponse({ ok: true, adopted }))
+            .catch((e: unknown) => {
+                console.warn('Background: could not reach the open Gmail tabs:', e);
+                sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+            });
+        return true;
+    }
+
     if (message.action === 'UNINSTALL_SELF') {
         console.log('Background: Received UNINSTALL_SELF request');
         if (chrome.management && chrome.management.uninstallSelf) {
@@ -287,6 +298,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
             console.error('Background: chrome.management.uninstallSelf is not available. Check permissions.');
         }
+        // Answered, so the page that asked does not report a closed port as a
+        // failed request. Chrome's own confirmation dialog is the real outcome.
+        sendResponse({ ok: true });
         return false;
     }
 
@@ -336,8 +350,13 @@ async function installOnboarding(): Promise<void> {
     }
 
     // Set before the scripts arrive, not after: each one reads this flag as
-    // it boots, and a flag written afterwards would be read by nobody.
-    await setPendingOnboarding(true);
+    // it boots, and a flag written afterwards would be read by nobody. A
+    // failed write costs the tour, not the tab bar, so adoption goes ahead.
+    try {
+        await setPendingOnboarding(true);
+    } catch (e) {
+        console.warn('Background: could not flag the first-run tour:', e);
+    }
 
     await adoptOpenGmailTabs(tabs);
 
@@ -349,8 +368,38 @@ async function installOnboarding(): Promise<void> {
     }
 }
 
+// Set when this worker was started by an event that already accounts for the
+// open Gmail tabs: an install or update adopts them itself, and at browser
+// startup Chrome loads them fresh with the manifest's content script.
+let startedByLifecycleEvent = false;
+chrome.runtime.onStartup.addListener(() => {
+    startedByLifecycleEvent = true;
+});
+
+// Re-enabled after being disabled. Disabling orphans the script in every open
+// Gmail tab, and enabling fires neither onInstalled nor onStartup, so those
+// tabs kept a dead bar until reloaded by hand. Session storage is cleared on
+// disable, reload, update and browser restart, and survives the worker being
+// put to sleep, so an empty one on a start no lifecycle event explains is an
+// enable. Deferred a second so that onInstalled or onStartup, dispatched
+// after this top-level code, can say so first. Adoption pings every tab
+// before injecting, so a tab that already has a live script is left alone.
+const ADOPTED_THIS_SESSION_KEY = 'adoptedThisSession';
+setTimeout(() => {
+    chrome.storage.session
+        .get(ADOPTED_THIS_SESSION_KEY)
+        .then(async (items) => {
+            if (items[ADOPTED_THIS_SESSION_KEY]) return;
+            await chrome.storage.session.set({ [ADOPTED_THIS_SESSION_KEY]: true });
+            if (startedByLifecycleEvent) return;
+            await adoptOpenGmailTabs();
+        })
+        .catch((e: unknown) => console.warn('Background: could not check the open Gmail tabs after enable:', e));
+}, 1000);
+
 // Install and update hook: reach the Gmail tabs Chrome will not reach itself.
 chrome.runtime.onInstalled.addListener((details) => {
+    startedByLifecycleEvent = true;
     if (details.reason === 'install') {
         // The tour runs over Gmail when there is a Gmail tab to run it over,
         // because only there can the theme chooser retint the real bar. The

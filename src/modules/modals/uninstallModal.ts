@@ -5,11 +5,12 @@
  * settings before uninstalling the extension.
  */
 
-import { getSettings, getAllAccounts } from '../../utils/storage';
+import { getSettings, getAllAccounts, getGlobalTheme } from '../../utils/storage';
 import { buildExportPayload, generateExportFilename, triggerDownload } from '../../utils/importExport';
 import { getUserEmail } from '../state';
 import { isExtensionContextAlive, isContextInvalidatedError, catchChromeError } from '../extensionContext';
 import { renderContextInvalidatedNotice } from './contextNotice';
+import { makeDialog } from './dialogA11y';
 
 export function showUninstallModal(): void {
     const modal = document.createElement('div');
@@ -45,8 +46,13 @@ export function showUninstallModal(): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    const releaseDialog = makeDialog(modal.querySelector('.modal-content') as HTMLElement, modal.querySelector('h3'), {
+        onEscape: close,
+        initialFocus: modal.querySelector<HTMLElement>('#uninstall-no-btn'),
+    });
     modal.querySelectorAll('.close-btn-action').forEach((btn) => {
         btn.addEventListener('click', close);
     });
@@ -92,13 +98,25 @@ export function showUninstallModal(): void {
         if (content) renderContextInvalidatedNotice(content, close);
     }
 
+    // The backup is the reason to press Yes, so an uninstall without one is
+    // not what was asked for. If any account's file did not download, stop
+    // and say so: the user can retry, or choose No knowing what it means.
     modal.querySelector('#uninstall-yes-btn')?.addEventListener('click', () => {
         void (async () => {
+            let failure: string | null = null;
             try {
-                await exportAllAccounts();
+                failure = await exportAllAccounts();
             } catch (e) {
                 console.error('Export failed', e);
-                alert('Export failed. Proceeding to uninstall...');
+                failure = e instanceof Error ? e.message : String(e);
+            }
+            if (failure !== null) {
+                alert(
+                    'The backup could not be downloaded, so the extension has not been uninstalled. ' +
+                        (failure ? `(${failure}) ` : '') +
+                        'Try again, or choose No to uninstall without a backup.'
+                );
+                return;
             }
             requestUninstall();
         })();
@@ -109,7 +127,15 @@ export function showUninstallModal(): void {
     });
 }
 
-async function exportAllAccounts(): Promise<void> {
+/**
+ * Download a backup file for every account.
+ *
+ * Each file carries tabs, rules and the browser-wide theme, the same payload
+ * the options page exports, so importing it after a reinstall restores
+ * everything and not just the tabs. Resolves to null when every download
+ * started, or to the reason one did not.
+ */
+async function exportAllAccounts(): Promise<string | null> {
     console.log('Gmail Tabs: Exporting all accounts...');
     try {
         const accounts = await getAllAccounts();
@@ -119,13 +145,16 @@ async function exportAllAccounts(): Promise<void> {
             accounts.push(getUserEmail()!);
         }
 
+        const theme = await getGlobalTheme();
         for (const email of accounts) {
             const settings = await getSettings(email);
-            const payload = buildExportPayload(email, settings.tabs);
+            const payload = buildExportPayload(email, settings.tabs, settings.rules, theme);
             const json = JSON.stringify(payload, null, 2);
             const filename = generateExportFilename(email);
-            await triggerDownload(filename, json);
+            const result = await triggerDownload(filename, json);
+            if (!result.success) return result.error || 'the download did not start';
         }
+        return null;
     } catch (e) {
         console.error('Gmail Tabs: Error exporting all accounts', e);
         throw e;

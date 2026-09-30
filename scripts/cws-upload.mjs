@@ -10,7 +10,13 @@
 // Upload and submit are separate on purpose. The listing text, the privacy tab,
 // the data usage answers and the video link are dashboard-only: the API cannot
 // set them. They have to be right before a version goes to review, so the
-// order is upload, fix the dashboard, then submit.
+// order is upload, fix the dashboard, then submit. Asking for both in one run
+// is refused for the same reason.
+//
+// An upload is refused when the git tree has any change, tracked or untracked
+// (other than the zip itself), or when the zip is older than the last commit:
+// either way the zip may not be what the commit says it is. Run npm run package
+// from a clean tree.
 //
 // Credentials are read from ~/.secrets (the palaniappan.tn2@gmail.com developer
 // account, OAuth client from the Cloud project chrome-web-store-508117) and
@@ -19,7 +25,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -38,9 +44,42 @@ const submit = args.includes('--submit');
 const zipArg = args.indexOf('--zip') >= 0 ? args[args.indexOf('--zip') + 1] : null;
 const ZIP = resolve(ROOT, zipArg ?? 'extension.zip');
 
+if (confirm && submit) {
+  fail('--confirm uploads and --submit submits; run them separately, with the dashboard checked in between');
+}
+
 function fail(message) {
   console.error(`Stopped: ${message}`);
   process.exit(1);
+}
+
+/** Every change in the tree, untracked files included, except the zip itself. */
+function dirtyPaths() {
+  let out;
+  try {
+    out = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' });
+  } catch {
+    fail('could not run git status; an upload needs a git checkout to check the zip against');
+  }
+  const zipRel = relative(ROOT, ZIP);
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => line.slice(3).replace(/^"|"$/g, ''))
+    .filter((path) => path !== zipRel && path !== 'extension.zip');
+}
+
+function checkZipMatchesHead() {
+  const dirty = dirtyPaths();
+  if (dirty.length) {
+    const shown = dirty.slice(0, 10).map((p) => `  ${p}`).join('\n');
+    fail(`the git tree is not clean, so the zip may not match any commit:\n${shown}${dirty.length > 10 ? `\n  and ${dirty.length - 10} more` : ''}\nCommit or stash, then run npm run package.`);
+  }
+  const headTime = Number(execFileSync('git', ['log', '-1', '--format=%ct'], { cwd: ROOT, encoding: 'utf8' }).trim());
+  const zipTime = Math.floor(statSync(ZIP).mtimeMs / 1000);
+  if (zipTime < headTime) {
+    fail(`${relative(ROOT, ZIP)} is older than the last commit; run npm run package`);
+  }
 }
 
 function secret(name) {
@@ -85,6 +124,20 @@ async function call(token, method, url, init = {}) {
 
 const itemPath = () => `publishers/${secret(SECRET_FILES.publisherId)}/items/${ITEM_ID}`;
 
+/**
+ * The draft's version, when fetchStatus reports one. The field is looked for
+ * rather than assumed, so a response without it prints nothing instead of
+ * a wrong answer.
+ */
+function draftVersion(status) {
+  for (const [key, rev] of Object.entries(status)) {
+    if (!/draft/i.test(key) || !rev || typeof rev !== 'object') continue;
+    const v = rev.distributionChannels?.map((c) => c.crxVersion).filter(Boolean).join(', ') || rev.crxVersion;
+    if (v) return `${v} (${rev.state ?? key})`;
+  }
+  return null;
+}
+
 function describe(status) {
   const published = status.publishedItemRevisionStatus;
   const submitted = status.submittedItemRevisionStatus;
@@ -92,7 +145,16 @@ function describe(status) {
   console.log(`Live:      ${published ? `${published.state}, ${version(published)}` : 'nothing published'}`);
   console.log(`In review: ${submitted ? `${submitted.state}, ${version(submitted)}` : 'nothing'}`);
   if (status.lastAsyncUploadState) console.log(`Last upload: ${status.lastAsyncUploadState}`);
+  const draft = draftVersion(status);
+  if (draft) console.log(`Draft:     ${draft}`);
   if (status.takenDown || status.warned) console.log(`Warnings: takenDown=${!!status.takenDown} warned=${!!status.warned}`);
+}
+
+// Local checks first: they need no network, and an upload that would be
+// refused should be refused before anything is fetched.
+if (!submit) {
+  if (!existsSync(ZIP)) fail(`no zip at ${ZIP}; run npm run package`);
+  checkZipMatchesHead();
 }
 
 const token = await accessToken();
@@ -102,6 +164,8 @@ const liveVersion = status.publishedItemRevisionStatus?.distributionChannels?.[0
 
 if (submit) {
   if (status.submittedItemRevisionStatus) fail('a version is already in review; withdraw it in the dashboard first');
+  const draft = draftVersion(status);
+  console.log(draft ? `Submitting the draft: ${draft}` : 'Submitting the draft (fetchStatus does not report its version; check the dashboard)');
   const res = await call(token, 'POST', `${API}/v2/${itemPath()}:publish`, {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ publishType: 'DEFAULT_PUBLISH' }),

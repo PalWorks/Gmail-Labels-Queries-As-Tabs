@@ -202,14 +202,16 @@ export const DEMO_QUERY = 'is:unread has:attachment';
  * The rule and script shown on slide 5.
  *
  * Kept close to what `generateAppsScript` actually emits: the quoted label, the
- * 200-thread cap. A demo that promised something the generator does not do
- * would be the worst kind of onboarding.
+ * inbox-only search an archive rule makes, the 200-thread cap, and batches of
+ * 100, which is all GmailApp accepts in one call. A demo that promised
+ * something the generator does not do would be the worst kind of onboarding.
  */
 export const DEMO_RULE = { label: 'Newsletters', action: 'Archive after 14 days' } as const;
 
 export const DEMO_SCRIPT_LINES: readonly { readonly text: string; readonly kind?: 'comment' | 'keyword' }[] = [
     { text: '// You paste this into your own account.', kind: 'comment' },
-    { text: "var q = 'label:\"Newsletters\" older_than:14d';", kind: 'keyword' },
+    { text: "var q = 'label:\"Newsletters\" older_than:14d in:inbox';", kind: 'keyword' },
     { text: 'var t = GmailApp.search(q, 0, 200);', kind: 'keyword' },
-    { text: 'GmailApp.moveThreadsToArchive(t);' },
+    { text: 'for (var i = 0; i < t.length; i += 100)', kind: 'keyword' },
+    { text: '  GmailApp.moveThreadsToArchive(t.slice(i, i + 100));' },
 ];

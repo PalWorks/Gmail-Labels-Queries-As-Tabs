@@ -44,7 +44,7 @@ import path from 'node:path';
 
 export const CONFIG_FILE = path.join(os.homedir(), '.config', 'gmail-labels-as-tabs', 'alerts.env');
 
-const EVENTS = new Set(['FAIL', 'DEGRADED', 'ERROR', 'RECOVERED', 'PROPOSAL', 'TEST']);
+const EVENTS = new Set(['FAIL', 'DEGRADED', 'ERROR', 'SKIPPED', 'RECOVERED', 'PROPOSAL', 'TEST']);
 const MAX_BODY = 3500;
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 10_000;

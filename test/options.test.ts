@@ -21,7 +21,7 @@ import { flush } from './helpers/async';
 const mockGetSettings = jest.fn();
 const mockSaveSettings = jest.fn().mockResolvedValue(undefined);
 const mockSavePreferences = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
-const mockUpsertRule = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
+const mockPatchRule = jest.fn().mockResolvedValue({ tabs: [], rules: [], theme: 'light', showUnreadCount: true, rev: 1 });
 const mockGetAllAccounts = jest.fn();
 const mockGetGlobalTheme = jest.fn().mockResolvedValue('system');
 const mockSetGlobalTheme = jest.fn().mockResolvedValue(undefined);
@@ -42,7 +42,18 @@ jest.mock('../src/utils/storage', () => ({
     getSettings: (...args: any[]) => mockGetSettings(...args),
     saveSettings: (...args: any[]) => mockSaveSettings(...args),
     savePreferences: (...args: any[]) => mockSavePreferences(...args),
-    upsertRule: (...args: any[]) => mockUpsertRule(...args),
+    patchRule: (...args: any[]) => mockPatchRule(...args),
+    describeWriteFailure: (e: unknown) =>
+        /QUOTA_BYTES/.test(String((e as Error)?.message ?? e))
+            ? 'Settings are full: Chrome sync allows about 8 KB per account. Remove some tabs or rules.'
+            : 'That change could not be saved. Please try again.',
+    isQuotaError: (e: unknown) => /QUOTA_BYTES/.test(String((e as Error)?.message ?? e)),
+    clampDaysOld: (v: unknown, fallback = 30) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        return Number.isFinite(n) ? Math.min(3650, Math.max(1, Math.round(n))) : fallback;
+    },
+    MIN_DAYS_OLD: 1,
+    MAX_DAYS_OLD: 3650,
     accountStorageKey: (id: string) => `account_${id}`,
     getAllAccounts: (...args: any[]) => mockGetAllAccounts(...args),
     addTab: (...args: any[]) => mockAddTab(...args),
@@ -58,6 +69,8 @@ jest.mock('../src/utils/importExport', () => ({
     generateExportFilename: (...args: any[]) => mockGenerateExportFilename(...args),
     validateImportData: (...args: any[]) => mockValidateImportData(...args),
     triggerDownload: (...args: any[]) => mockTriggerDownload(...args),
+    sameAccount: (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase(),
+    MAX_IMPORT_BYTES: 256 * 1024,
 }));
 
 jest.mock('../src/utils/tabListRenderer', () => ({
@@ -65,16 +78,13 @@ jest.mock('../src/utils/tabListRenderer', () => ({
     escapeHtml: (str: string) => str,
 }));
 
-jest.mock('../src/modules/rules', () => ({
-    generateAppsScript: (...args: any[]) => mockGenerateAppsScript(...args),
-    tabToGmailLabel: (tab: any) => {
-        if (tab.type === 'label') return tab.value.trim() || null;
-        if (tab.type === 'hash' && tab.value.startsWith('#label/')) {
-            return decodeURIComponent(tab.value.slice('#label/'.length).replace(/\+/g, ' ')).trim() || null;
-        }
-        return null;
-    },
-}));
+jest.mock('../src/modules/rules', () => {
+    const actual = jest.requireActual('../src/modules/rules');
+    return {
+        ...actual,
+        generateAppsScript: (...args: any[]) => mockGenerateAppsScript(...args),
+    };
+});
 
 jest.mock('../src/modules/state', () => {
     const s = { currentUserEmail: null as string | null, currentSettings: null as any };
@@ -822,5 +832,275 @@ describe('Gmail integration health', () => {
         expect(button.textContent).toBe('Could not copy');
         expect(warn).toHaveBeenCalled();
         warn.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Rule edits: deltas, debounce, account capture, clamping, failures
+// ---------------------------------------------------------------------------
+
+describe('rule edits', () => {
+    const LABEL_SETTINGS = {
+        ...DEFAULT_SETTINGS,
+        tabs: [{ id: 'news', title: 'Newsletters', value: 'Newsletters', type: 'label' as const }],
+        rules: [{ tabId: 'news', action: 'moveToLabel', daysOld: 30, enabled: true, targetLabel: '' }],
+        rev: 4,
+    };
+
+    let alertSpy: jest.SpyInstance;
+    beforeEach(() => {
+        alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        mockGetSettings.mockResolvedValue({ ...LABEL_SETTINGS });
+        mockPatchRule.mockResolvedValue({ ...LABEL_SETTINGS, rev: 5 });
+    });
+    afterEach(() => alertSpy.mockRestore());
+
+    function field<T extends HTMLElement>(selector: string): T {
+        return document.querySelector(selector) as T;
+    }
+
+    function edit(selector: string, value: string): void {
+        const input = field<HTMLInputElement>(selector);
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    test('only the changed field is sent, so two debounced edits cannot undo each other', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        edit('.rule-days[data-tab-id="news"]', '14');
+        edit('.rule-target-label[data-tab-id="news"]', 'Archive/Old');
+        await flush(30);
+        await new Promise((r) => setTimeout(r, 300));
+        await flush();
+
+        const calls = mockPatchRule.mock.calls;
+        expect(calls).toContainEqual(['user@gmail.com', 'news', { daysOld: 14 }, expect.objectContaining({ tabId: 'news' })]);
+        expect(calls).toContainEqual([
+            'user@gmail.com',
+            'news',
+            { targetLabel: 'Archive/Old' },
+            expect.objectContaining({ tabId: 'news' }),
+        ]);
+    });
+
+    test('days are clamped to a whole number from 1 to 3650, in the field as well as in storage', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        edit('.rule-days[data-tab-id="news"]', '99999');
+        expect(field<HTMLInputElement>('.rule-days[data-tab-id="news"]').value).toBe('3650');
+        edit('.rule-days[data-tab-id="news"]', '0');
+        expect(field<HTMLInputElement>('.rule-days[data-tab-id="news"]').value).toBe('1');
+        await new Promise((r) => setTimeout(r, 300));
+        await flush();
+
+        expect(mockPatchRule).toHaveBeenCalledWith('user@gmail.com', 'news', { daysOld: 1 }, expect.anything());
+        expect(field<HTMLInputElement>('.rule-days[data-tab-id="news"]').max).toBe('3650');
+    });
+
+    test('Generate commits a pending edit and re-reads storage before building the script', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+        const fresh = {
+            ...LABEL_SETTINGS,
+            rules: [{ ...LABEL_SETTINGS.rules[0], daysOld: 21 }],
+            rev: 5,
+        };
+
+        edit('.rule-days[data-tab-id="news"]', '21');
+        // The edit is still inside the debounce window when the button is pressed.
+        mockGetSettings.mockResolvedValue(fresh);
+        document.getElementById('generate-script-btn')!.click();
+        await flush(30);
+
+        expect(mockPatchRule).toHaveBeenCalledWith('user@gmail.com', 'news', { daysOld: 21 }, expect.anything());
+        expect(mockGenerateAppsScript).toHaveBeenCalled();
+        const firstPatch = Math.min(...mockPatchRule.mock.invocationCallOrder);
+        const firstGenerate = Math.min(...mockGenerateAppsScript.mock.invocationCallOrder);
+        expect(firstPatch).toBeLessThan(firstGenerate);
+        expect(mockGenerateAppsScript.mock.calls[0][1]).toEqual(fresh.rules);
+    });
+
+    test('an edit is saved to the account it was made on, even after switching account', async () => {
+        mockGetAllAccounts.mockResolvedValue(['work@gmail.com', 'personal@gmail.com']);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        edit('.rule-days[data-tab-id="news"]', '9');
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'personal@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flush(30);
+        await new Promise((r) => setTimeout(r, 300));
+        await flush();
+
+        const accounts = mockPatchRule.mock.calls.filter((c) => c[2].daysOld === 9).map((c) => c[0]);
+        expect(accounts.length).toBeGreaterThan(0);
+        expect(new Set(accounts)).toEqual(new Set(['work@gmail.com']));
+        // Flushed before the switch, not left to a timer.
+        const firstPatch = Math.min(...mockPatchRule.mock.invocationCallOrder);
+        const personalRead = mockGetSettings.mock.calls.findIndex((c) => c[0] === 'personal@gmail.com');
+        expect(firstPatch).toBeLessThan(mockGetSettings.mock.invocationCallOrder[personalRead]);
+    });
+
+    test('a failed rule write is reported and the page redraws from storage', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+        mockPatchRule.mockRejectedValue(new Error('Settings changed while saving'));
+        const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const readsBefore = mockGetSettings.mock.calls.length;
+
+        const toggle = field<HTMLInputElement>('.rule-enabled[data-tab-id="news"]');
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event('change', { bubbles: true }));
+        await flush(30);
+
+        expect(alertSpy).toHaveBeenCalledWith('That change could not be saved. Please try again.');
+        expect(mockGetSettings.mock.calls.length).toBeGreaterThan(readsBefore);
+        error.mockRestore();
+    });
+
+    test('a full sync quota says so, and what to do', async () => {
+        buildOptionsDOM();
+        await loadOptionsPage();
+        mockPatchRule.mockRejectedValue(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'));
+        const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        const select = field<HTMLSelectElement>('.rule-action[data-tab-id="news"]');
+        select.value = 'archive';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        await flush(30);
+
+        expect(alertSpy).toHaveBeenCalledWith(
+            'Settings are full: Chrome sync allows about 8 KB per account. Remove some tabs or rules.'
+        );
+        error.mockRestore();
+    });
+
+    test('a category tab can carry a rule, and the row says it searches the category', async () => {
+        mockGetSettings.mockResolvedValue({
+            ...DEFAULT_SETTINGS,
+            tabs: [{ id: 'promo', title: 'Promotions', value: '#category/promotions', type: 'hash' as const }],
+            rules: [],
+        });
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const row = document.querySelector('.rule-row[data-tab-id="promo"]');
+        expect(row).not.toBeNull();
+        expect(row!.querySelector('.rule-tab-scope')?.textContent).toBe('category:promotions');
+    });
+});
+
+describe('preference write failures', () => {
+    test('a failed unread toggle is reported and the toggle shows what storage holds', async () => {
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockGetSettings.mockResolvedValue({ ...DEFAULT_SETTINGS, showUnreadCount: false });
+        buildOptionsDOM();
+        await loadOptionsPage();
+        mockSavePreferences.mockRejectedValueOnce(new Error('boom'));
+
+        const checkbox = document.getElementById('pref-unread') as HTMLInputElement;
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change'));
+        await flush(30);
+
+        expect(alertSpy).toHaveBeenCalledWith('That change could not be saved. Please try again.');
+        expect(checkbox.checked).toBe(false);
+        alertSpy.mockRestore();
+        error.mockRestore();
+    });
+});
+
+describe('following storage changes', () => {
+    type Listener = (changes: Record<string, { newValue?: unknown }>, area: string) => void;
+    function listeners(): Listener[] {
+        return ((global as any).chrome.storage.onChanged.addListener as jest.Mock).mock.calls.map((c) => c[0]);
+    }
+    function emit(changes: Record<string, { newValue?: unknown }>, area = 'sync'): void {
+        for (const l of listeners()) l(changes, area);
+    }
+
+    test('the first account to appear replaces "No account yet" without a reload', async () => {
+        mockGetAllAccounts.mockResolvedValue([]);
+        buildOptionsDOM();
+        await loadOptionsPage();
+        expect((document.getElementById('account-select') as HTMLSelectElement).disabled).toBe(true);
+
+        mockGetAllAccounts.mockResolvedValue(['new@gmail.com']);
+        emit({ 'account_new@gmail.com': { newValue: { ...DEFAULT_SETTINGS, rev: 1 } } });
+        await flush(30);
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        expect(select.disabled).toBe(false);
+        expect(select.value).toBe('new@gmail.com');
+        expect(mockGetSettings).toHaveBeenCalledWith('new@gmail.com');
+    });
+
+    test('a change with the rev this page holds but different content still redraws', async () => {
+        // Two devices offline can each bump the same rev with different edits.
+        mockGetSettings.mockResolvedValue({ ...DEFAULT_SETTINGS, rev: 7 });
+        buildOptionsDOM();
+        await loadOptionsPage();
+        const readsBefore = mockGetSettings.mock.calls.length;
+
+        emit({
+            'account_user@gmail.com': {
+                newValue: {
+                    ...DEFAULT_SETTINGS,
+                    tabs: [...DEFAULT_SETTINGS.tabs, { id: 'x', title: 'X', type: 'label', value: 'X' }],
+                    rev: 7,
+                },
+            },
+        });
+        await flush(30);
+
+        expect(mockGetSettings.mock.calls.length).toBeGreaterThan(readsBefore);
+    });
+
+    test('an identical change, such as this page\'s own write, does not redraw', async () => {
+        mockGetSettings.mockResolvedValue({ ...DEFAULT_SETTINGS, rev: 7 });
+        buildOptionsDOM();
+        await loadOptionsPage();
+        const readsBefore = mockGetSettings.mock.calls.length;
+
+        emit({ 'account_user@gmail.com': { newValue: { ...DEFAULT_SETTINGS, rev: 7 } } });
+        await flush(30);
+
+        expect(mockGetSettings.mock.calls.length).toBe(readsBefore);
+    });
+});
+
+describe('import file checks', () => {
+    test('a file over 256 KB is refused before it is read', async () => {
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const realCreate = document.createElement.bind(document);
+        let picker: HTMLInputElement | null = null;
+        const createSpy = jest.spyOn(document, 'createElement').mockImplementation((tag: string, opts?: any) => {
+            const el = realCreate(tag, opts);
+            if (tag === 'input') {
+                picker = el as HTMLInputElement;
+                (el as HTMLInputElement).click = () => {};
+            }
+            return el;
+        });
+        const readSpy = jest.spyOn(FileReader.prototype, 'readAsText');
+
+        document.getElementById('settings-import-btn')!.click();
+        createSpy.mockRestore();
+        expect(picker).not.toBeNull();
+        Object.defineProperty(picker!, 'files', { value: [{ size: 300 * 1024, name: 'big.json' }] });
+        picker!.dispatchEvent(new Event('change'));
+
+        expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('File too large'));
+        expect(readSpy).not.toHaveBeenCalled();
+        readSpy.mockRestore();
+        alertSpy.mockRestore();
     });
 });

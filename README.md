@@ -115,7 +115,7 @@ The extension operates across three Chrome execution contexts, each with a disti
 │  ● Extension lifecycle   │     │  ● Tab management UI     │
 │  ● File downloads        │     │  ● Theme preferences     │
 │  ● Install/update hooks  │     │  ● Automation rules      │
-│  ● Action click handler  │     │  ● Import/Export          │
+│  ● Settings write queue  │     │  ● Import/Export          │
 │  ● Uninstall flow        │     │  ● Privacy dashboard     │
 └──────────────────────────┘     └─────────────────────────┘
 ```
@@ -152,7 +152,7 @@ User clicks tab  →  window.location.hash changes (#inbox, #label/Work, #search
 | Layer | Technology |
 |-------|------------|
 | **Language** | TypeScript (ES2022, strict mode) |
-| **Bundler** | esbuild (5 entry points, minified, console-stripped) |
+| **Bundler** | esbuild (7 entry points, minified, console-stripped) |
 | **Extension Platform** | Chrome Manifest V3 |
 | **Route Detection** | Body `MutationObserver` + `popstate` |
 | **Storage** | `chrome.storage.sync` (cross-device, per-account namespaced) |
@@ -242,7 +242,8 @@ interface Tab {
   id: string;       // UUID
   title: string;    // Display name
   type: 'label' | 'hash';
-  value: string;    // Gmail label name or hash route
+  value: string;    // Gmail label name or hash route (#category/promotions for a category)
+  color?: string;   // A palette token, optional
 }
 
 interface Rule {
@@ -313,7 +314,7 @@ Type any Gmail hash route directly:
 
 ### Export / Import
 
-- **Export**: Settings modal or Options page > Export Config > downloads `gmail-tabs-config.json`
+- **Export**: Settings modal or Options page > Export Config > downloads `GmailTabs_<account>_<date>.json`
 - **Import**: Settings modal or Options page > Import Config > select JSON file (schema validated before import)
 
 ### Automation Rules
@@ -332,7 +333,7 @@ Gmail-Labels-As-Tabs/
 ├── manifest.json                     # Chrome MV3 manifest
 ├── package.json                      # Dependencies & scripts
 ├── tsconfig.json                     # TypeScript config (ES2022, strict)
-├── build.js                          # esbuild config (5 entry points)
+├── build.js                          # esbuild config (7 entry points)
 ├── jest.config.js                    # Test config (ts-jest, jsdom, coverage thresholds)
 ├── .eslintrc.json                    # ESLint + @typescript-eslint rules
 ├── .prettierrc                       # Prettier formatting rules
@@ -360,28 +361,35 @@ Gmail-Labels-As-Tabs/
 │   │   ├── health.ts                 # Whether the Gmail integrations are working, locally
 │   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
 │   │   ├── rules.ts                  # Automation rules & Apps Script generation
-│   │   └── modals/                   # Modal dialogs (7 files)
+│   │   ├── ruleTemplates.ts          # One-click rule presets
+│   │   ├── tabManager.ts, colorPicker.ts, feedback.ts, extensionContext.ts, handover.ts, messages.ts
+│   │   ├── onboarding/               # The tour: content, view, and the modal over Gmail
+│   │   └── modals/                   # Modal dialogs (9 files, see CONTEXT_MAP.md)
 │   │       ├── index.ts              # Barrel export
 │   │       ├── pinModal.ts           # Add/pin new tab modal
 │   │       ├── editModal.ts          # Edit tab title/value
 │   │       ├── deleteModal.ts        # Delete tab confirmation
 │   │       ├── importModal.ts        # Import configuration
 │   │       ├── settingsModal.ts      # Settings & preferences
-│   │       └── uninstallModal.ts     # Uninstall flow with data export
+│   │       ├── uninstallModal.ts     # Uninstall flow with data export
+│   │       ├── contextNotice.ts      # The orphaned notice and the failed-save notice
+│   │       └── dialogA11y.ts         # Dialog role, focus trap and focus return
 │   │
 │   ├── utils/                        # Shared utilities
 │   │   ├── storage.ts                # chrome.storage.sync wrapper (CRUD, migration)
 │   │   ├── importExport.ts           # Import/Export logic with schema validation
 │   │   ├── selectors.ts              # DOM selector constants
 │   │   ├── domain.ts                 # Sender address to organisation domain
+│   │   ├── colors.ts                 # Tab colour palette tokens
 │   │   └── tabListRenderer.ts        # Reusable tab list rendering
 │   │
 │   ├── ui/
-│   │   └── toolbar.css               # Design system (CSS custom properties, theming)
+│   │   ├── toolbar.css               # Design system (CSS custom properties, theming)
+│   │   └── onboarding.css            # The tour
 │   │
 │   └── icons/                        # Extension icons (16/32/48/128 png)
 │
-├── test/                             # Test suite (20 files)
+├── test/                             # Test suite (47 files; the main ones below)
 │   ├── background.test.ts            # Service worker tests
 │   ├── content.test.ts               # Content script tests
 │   ├── dragdrop.test.ts              # Drag and drop tests
@@ -461,7 +469,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 44 test files, 965 test cases.**
+**Total: 47 test files, 1082 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -471,17 +479,18 @@ Configured in `jest.config.js`:
 
 | Metric | Threshold |
 |--------|-----------|
-| Statements | 60% |
-| Branches | 45% |
-| Functions | 60% |
-| Lines | 60% |
+| Statements | 65% |
+| Branches | 50% |
+| Functions | 65% |
+| Lines | 65% |
 
 ## CI/CD
 
-The CI pipeline runs on every push and pull request to `main`:
+The CI pipeline runs when dispatched by hand (`gh workflow run ci.yml --ref main`), so
+Actions minutes are spent deliberately:
 
 ```
-Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifact
+Dispatch → Install → Type-check → Test + Coverage → Lint → Build → Verify → Artifact
 ```
 
 ### Pipeline Steps
@@ -489,7 +498,7 @@ Push/PR → Install → Test + Coverage → Lint → Build → Verify → Artifa
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 965 tests across 44 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 1082 tests across 47 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -596,9 +605,11 @@ That site deploys **manually**: `gh workflow run deploy.yml --repo PalWorks/Gmai
 
 Every release from 1.5.0 is in [CHANGELOG.md](CHANGELOG.md) in full.
 
-### v1.7 and v1.8: Shipped in 1.8.0
+### v1.7 and v1.8: Shipped in 1.8.1
 
-1.7.0 to 1.7.4 were built and never submitted; 1.8.0 carries all of them.
+1.7.0 to 1.8.0 were built and never submitted; 1.8.1 carries all of them, plus the fixes from
+the pre-submission audit (category cleanup templates, rules that keep making progress, visible
+save failures, a clean handover between two copies of the script).
 
 - "Show as Tabs" in Gmail's own label menu, sublabels included (1.7)
 - Gmail integration health on the settings page, and a daily drift canary (1.7)
@@ -665,7 +676,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (965 tests across 44 suites)
+npm test          # Jest (1082 tests across 47 suites)
 npm run build     # Verify production build
 ```
 
@@ -674,9 +685,9 @@ npm run build     # Verify production build
 This extension is designed with privacy as a non-negotiable principle:
 
 - **No background requests**: No analytics, no telemetry, no remote config
-- **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and opt-in diagnostics (version, browser build, and counts of tabs, rules and accounts) to our relay. Never label names, tab titles, contacts or mail
+- **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and diagnostics unless you untick them (version, browser build, and counts of tabs, rules and accounts) to our relay on Cloudflare, which passes it to the email service Resend. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
-- **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send, and it stores nothing
+- **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send. It stores no message, only a rate-limit counter named by a keyed hash of the network address, for up to a day
 - **Website icons, only if you turn them on**: sender icons are off by default and draw a coloured letter without any request. With **Load website icons** also on, the sender's domain alone (such as `mashreq.com`) is sent to Google's icon service at `t0.gstatic.com`, or `www.google.com` if that cannot be reached, with no referrer, once per domain (ADR-027)
 - **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
 - **Minimal permissions**: Only `storage`, `downloads`, `management` and `scripting`, the last of which injects this extension's own content script into Gmail and nothing else

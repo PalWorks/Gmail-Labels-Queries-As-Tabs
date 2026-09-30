@@ -16,12 +16,15 @@ const mockTabsQuery = jest.fn();
 const mockTabsCreate = jest.fn();
 const mockTabsUpdate = jest.fn();
 const mockTabsReload = jest.fn();
+const mockSendMessage = jest.fn();
+const mockWindowsUpdate = jest.fn();
 
 beforeAll(() => {
     (global as any).chrome = {
         // Theme is a browser-wide preference in chrome.storage.local.
         storage: { local: { get: mockStorageGet, set: mockStorageSet } },
-        runtime: { id: 'abcdef', lastError: null },
+        runtime: { id: 'abcdef', lastError: null, sendMessage: mockSendMessage },
+        windows: { update: mockWindowsUpdate },
         tabs: {
             query: mockTabsQuery,
             create: mockTabsCreate,
@@ -53,6 +56,8 @@ beforeEach(() => {
     document.documentElement.removeAttribute('data-theme');
     mockStorageGet.mockImplementation((_keys: any, cb: any) => cb({ globalTheme: 'light' }));
     mockStorageSet.mockImplementation((_items: any, cb?: any) => cb?.());
+    mockSendMessage.mockResolvedValue({ ok: true, adopted: 1 });
+    mockWindowsUpdate.mockResolvedValue(undefined);
     setupWelcomeDOM();
 });
 
@@ -181,19 +186,46 @@ describe('finishing the tour', () => {
         expect(document.querySelector('.glt-ob-next')?.textContent).toBe('Start using with Gmail');
     });
 
-    test('focuses an existing Gmail tab and reloads it', async () => {
-        // Reloaded because that tab may predate the install and so be running
-        // no content script: arriving at a Gmail with no tab bar, straight
-        // after a tour promising one, is the worst possible first impression.
-        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5 }]));
+    test('focuses an existing Gmail tab and its window, and adopts it without a reload', async () => {
+        // ADR-025: installing no longer reloads anyone's Gmail. A reload here
+        // would throw away an open compose, so the worker adopts the tab in
+        // place, injecting only where no content script answers.
+        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5, windowId: 9 }]));
 
         loadWelcome();
         await settle();
         finish();
+        await settle();
 
         expect(mockTabsUpdate).toHaveBeenCalledWith(5, { active: true });
-        expect(mockTabsReload).toHaveBeenCalledWith(5);
+        expect(mockWindowsUpdate).toHaveBeenCalledWith(9, { focused: true });
+        expect(mockSendMessage).toHaveBeenCalledWith({ action: 'ADOPT_GMAIL_TABS' });
+        expect(mockTabsReload).not.toHaveBeenCalled();
         expect(mockTabsCreate).not.toHaveBeenCalled();
+    });
+
+    test('falls back to a reload only when the worker cannot adopt the tab', async () => {
+        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5, windowId: 9 }]));
+        mockSendMessage.mockRejectedValue(new Error('Could not establish connection'));
+
+        loadWelcome();
+        await settle();
+        finish();
+        await settle();
+
+        expect(mockTabsReload).toHaveBeenCalledWith(5);
+    });
+
+    test('a worker that answers not ok also falls back to the reload', async () => {
+        mockTabsQuery.mockImplementation((_q: any, cb: any) => cb([{ id: 5, windowId: 9 }]));
+        mockSendMessage.mockResolvedValue({ ok: false, error: 'no scripting' });
+
+        loadWelcome();
+        await settle();
+        finish();
+        await settle();
+
+        expect(mockTabsReload).toHaveBeenCalledWith(5);
     });
 
     test('opens Gmail when none is open', async () => {

@@ -107,8 +107,8 @@ away, and it can automate routine cleanup of those labels.
   Gmail's own network traffic. They communicate via `CustomEvent` on `document`.
 - **InboxSDK.** A third-party library formerly bundled to locate Gmail UI anchor points
   and detect the signed-in address. **Removed after v1.6.2.** It never ran in any shipped
-  build, because its page world needs the `scripting` permission this extension does not
-  declare, and it cost 1,031,092 of the 1,103,251 bytes of the content script. Both jobs were already
+  build, because its page world needs the `scripting` permission this extension did not
+  declare while the SDK was bundled (it has declared it since 1.7.3, for a different job), and it cost 1,031,092 of the 1,103,251 bytes of the content script. Both jobs were already
   done by code we own. See ADR-021. Sender icons (v1.8.0) were rebuilt from an extension
   that uses it, again without it. See ADR-027.
 - **Degraded.** An integration that works only because a fallback held, or whose shipped

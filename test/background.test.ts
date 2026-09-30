@@ -24,6 +24,17 @@ if (typeof global.TextEncoder === 'undefined') {
 
 const syncStore: Record<string, any> = {};
 const localStore: Record<string, any> = {};
+const sessionStore: Record<string, any> = {};
+
+/** chrome.storage.session, in the promise form the worker uses it in. */
+function makeSessionArea(store: Record<string, any>) {
+    return {
+        get: jest.fn(async (key: string) => (store[key] !== undefined ? { [key]: store[key] } : {})),
+        set: jest.fn(async (items: Record<string, any>) => {
+            Object.assign(store, items);
+        }),
+    };
+}
 
 /** Minimal async chrome.storage area, so the mutation queue has somewhere to write. */
 function makeArea(store: Record<string, any>) {
@@ -56,6 +67,7 @@ function makeArea(store: Record<string, any>) {
 
 let messageListeners: Array<(message: any, sender: any, sendResponse: any) => boolean> = [];
 let installedListeners: Array<(details: any) => void> = [];
+let startupListeners: Array<() => void> = [];
 
 const mockDownload = jest.fn();
 const mockUninstallSelf = jest.fn();
@@ -86,6 +98,8 @@ function setupChromeMocks(): void {
     Object.keys(localStore).forEach((k) => delete localStore[k]);
     messageListeners = [];
     installedListeners = [];
+    startupListeners = [];
+    Object.keys(sessionStore).forEach((k) => delete sessionStore[k]);
     gmailTabs = [];
 
     (global as any).chrome = {
@@ -93,6 +107,7 @@ function setupChromeMocks(): void {
             lastError: null,
             onMessage: { addListener: jest.fn((cb: any) => messageListeners.push(cb)) },
             onInstalled: { addListener: jest.fn((cb: any) => installedListeners.push(cb)) },
+            onStartup: { addListener: jest.fn((cb: any) => startupListeners.push(cb)) },
             setUninstallURL: mockSetUninstallURL,
         },
         downloads: { download: mockDownload },
@@ -100,7 +115,7 @@ function setupChromeMocks(): void {
         // The toolbar icon opens a popup now, so chrome.action.onClicked never
         // fires. The stub stays so registering a listener would still be seen.
         action: { onClicked: { addListener: jest.fn() } },
-        storage: { sync: makeArea(syncStore), local: makeArea(localStore) },
+        storage: { sync: makeArea(syncStore), local: makeArea(localStore), session: makeSessionArea(sessionStore) },
         tabs: {
             create: mockTabsCreate,
             query: mockTabsQuery,
@@ -593,4 +608,91 @@ describe('message channel', () => {
         const held = messageListeners[0]({ action: 'UNINSTALL_SELF' }, {}, jest.fn());
         expect(held).toBe(false);
     });
+});
+
+// ---------------------------------------------------------------------------
+// Re-enable, and the welcome page's hand-over
+// ---------------------------------------------------------------------------
+
+describe('a worker started by no install, update or browser start', () => {
+    /** The worker defers this check a second so the lifecycle events can land first. */
+    async function afterStartupCheck(): Promise<void> {
+        jest.advanceTimersByTime(1000);
+        jest.useRealTimers();
+        await flush();
+    }
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        jest.resetModules();
+        setupChromeMocks();
+        jest.isolateModules(() => {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../src/background');
+        });
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    test('was re-enabled, so it reaches the Gmail tabs disabling left dead', async () => {
+        gmailTabs = [{ id: 7 }];
+        mockTabsSendMessage.mockRejectedValueOnce(new Error('Could not establish connection'));
+
+        await afterStartupCheck();
+
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['js/content.js'] });
+        expect(sessionStore.adoptedThisSession).toBe(true);
+    });
+
+    test('does it once a session, not on every wake-up', async () => {
+        gmailTabs = [{ id: 7 }];
+        sessionStore.adoptedThisSession = true;
+
+        await afterStartupCheck();
+
+        expect(mockExecuteScript).not.toHaveBeenCalled();
+    });
+
+    test('leaves a browser start to the manifest, which loads every tab fresh', async () => {
+        gmailTabs = [{ id: 7 }];
+        startupListeners.forEach((l) => l());
+
+        await afterStartupCheck();
+
+        expect(mockExecuteScript).not.toHaveBeenCalled();
+    });
+});
+
+describe('ADOPT_GMAIL_TABS handler', () => {
+    test('adopts the open Gmail tabs and answers', async () => {
+        gmailTabs = [{ id: 3 }];
+        mockTabsSendMessage.mockRejectedValueOnce(new Error('Could not establish connection'));
+        const sendResponse = jest.fn();
+
+        const held = messageListeners[0]({ action: 'ADOPT_GMAIL_TABS' }, {}, sendResponse);
+        await flush();
+
+        expect(held).toBe(true);
+        expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 3 }, files: ['js/content.js'] });
+        expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+});
+
+test('UNINSTALL_SELF answers, so the page that asked does not report a failure', () => {
+    const sendResponse = jest.fn();
+    messageListeners[0]({ action: 'UNINSTALL_SELF' }, {}, sendResponse);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+});
+
+test('a failed tour flag still gives the open Gmail tabs their tab bar', async () => {
+    gmailTabs = [{ id: 5 }];
+    (chrome.storage.local.set as jest.Mock).mockImplementation(() => {
+        throw new Error('QUOTA_BYTES quota exceeded');
+    });
+    mockTabsSendMessage.mockRejectedValueOnce(new Error('Could not establish connection'));
+
+    installedListeners[0]({ reason: 'install' });
+    await flush();
+
+    expect(mockExecuteScript).toHaveBeenCalledWith({ target: { tabId: 5 }, files: ['js/content.js'] });
 });

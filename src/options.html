@@ -356,8 +356,14 @@
                     <p>There are two exceptions, and each happens only because you asked for it. One is the website
                         icons described below, which stay off unless you turn them on. The other is pressing <strong>Send
                             Feedback</strong> on the Support &amp; Feedback page, which sends your message, your optional email address,
-                        and, if you leave the box ticked, the extension version, your browser build and how many tabs,
-                        rules and accounts you have. Never your labels, tab names, contacts or mail.</p>
+                        and, unless you untick the diagnostics box, the extension version, your browser build and how
+                        many tabs, rules and accounts you have. Never your labels, tab names, contacts or mail.</p>
+                    <p>Feedback travels through our own relay, which runs on Cloudflare at
+                        <code>gmail-tabs-feedback.sunmooncal.workers.dev</code>. The relay hands your message to the
+                        email service Resend, which delivers it to <code>support@palworks.ai</code>. The relay does not
+                        keep your message. The only thing it stores is a short-lived counter that limits how often one
+                        network can send, kept under a hashed form of the network address rather than the address
+                        itself. Resend and our support inbox hold the delivered email like any other email.</p>
                 </div>
                 <div class="card">
                     <h3>Website Icons, Only If You Ask</h3>
@@ -378,9 +384,10 @@
                     </p>
                 </div>
                 <div class="card">
-                    <h3>Local Storage Only</h3>
-                    <p>All settings are stored in <code>chrome.storage.sync</code>, synced between your Chrome browsers
-                        via your Google account, but never sent to any third-party server.</p>
+                    <h3>Your Settings Stay in Chrome</h3>
+                    <p>All settings are stored in <code>chrome.storage.sync</code>, which Chrome syncs between your
+                        own browsers through your Google account. The extension never sends them anywhere itself.
+                        Apart from feedback you choose to send, described above, everything stays in your browser.</p>
                 </div>
                 <div class="card">
                     <h3>Apps Script Runs Under Your Account</h3>
@@ -428,7 +435,7 @@
                                 <textarea id="feedback-message" class="feedback-textarea" rows="6" maxlength="4000"
                                     placeholder="What happened, and what did you expect instead?"
                                     aria-describedby="feedback-count"></textarea>
-                                <span class="feedback-hint" id="feedback-count" aria-live="polite">0 / 4000</span>
+                                <span class="feedback-hint" id="feedback-count">0 / 4000</span>
                             </div>
 
                             <div class="feedback-row">
@@ -440,12 +447,13 @@
 
                             <div class="feedback-row feedback-diagnostics-row">
                                 <label class="feedback-checkbox">
-                                    <input type="checkbox" id="feedback-diagnostics" checked />
+                                    <input type="checkbox" id="feedback-diagnostics" checked
+                                        aria-describedby="feedback-diagnostics-detail" />
                                     <span>Include diagnostics</span>
                                 </label>
-                                <p class="feedback-hint" id="feedback-diagnostics-detail">Extension version, browser
-                                    build, and how many tabs, rules and accounts you have. Never your labels, tab names,
-                                    email addresses or mail.</p>
+                                <p class="feedback-hint" id="feedback-diagnostics-detail">Included unless you untick
+                                    this: extension version, browser build, and how many tabs, rules and accounts you
+                                    have. Never your labels, tab names, email addresses or mail.</p>
                             </div>
 
                             <!-- Honeypot: hidden from people, irresistible to bots. -->
@@ -461,8 +469,10 @@
                         </form>
 
                         <p class="feedback-footnote">Prefer email? Write to <a
-                                href="mailto:support@palworks.ai">support@palworks.ai</a>. Your message is sent to our
-                            support inbox and nothing is stored on the way.</p>
+                                href="mailto:support@palworks.ai">support@palworks.ai</a>. The form sends your message
+                            through our relay on Cloudflare to the email service Resend, which delivers it to that
+                            inbox. The relay keeps only a short-lived rate-limit counter for your network, stored
+                            under a hashed network address, and not your message.</p>
                     </div>
 
                     <div class="card contact-rating-card">

@@ -14,11 +14,9 @@ import { getRenderCallback } from './index';
 import { exportSettings, showImportModal } from './importModal';
 import { showUninstallModal } from './uninstallModal';
 import { isExtensionContextAlive, isContextInvalidatedError, catchChromeError } from '../extensionContext';
-import { renderContextInvalidatedNotice } from './contextNotice';
+import { renderContextInvalidatedNotice, reportSettingsWriteFailure } from './contextNotice';
+import { makeDialog } from './dialogA11y';
 import { OPEN_OPTIONS_PAGE_ACTION } from '../messages';
-
-/** Asks the service worker to open the options page. See `openOptionsPage`. */
-export { OPEN_OPTIONS_PAGE_ACTION };
 
 /** Contact route on the marketing site (PalWorks/Gmail-Labels-As-Tabs). */
 export const SITE_CONTACT_URL = 'https://palworks.github.io/Gmail-Labels-As-Tabs/contact/';
@@ -103,9 +101,11 @@ function showContextInvalidatedNotice(close?: () => void): void {
  * the extension updating while the modal is already on screen, where every
  * control silently stops working and the modal still looks fine.
  *
- * Anything that is not a dead context is a real bug and is logged rather than
- * dressed up as one, because telling someone to reload when reloading will
- * not help is worse than saying nothing.
+ * Anything that is not a dead context is not dressed up as one, because
+ * telling someone to reload when reloading will not help is worse than saying
+ * nothing. It still has to be visible: the production build drops console
+ * output, so a sync quota error that was only logged left the user pressing a
+ * button that silently did nothing.
  */
 function guardedAction(work: Promise<unknown>): void {
     void work.catch(reportActionFailure);
@@ -117,7 +117,7 @@ function reportActionFailure(e: unknown): void {
         showContextInvalidatedNotice();
         return;
     }
-    console.error('Gmail Tabs: a settings action failed', e);
+    reportSettingsWriteFailure(e);
 }
 
 function createSettingsModal(): void {
@@ -143,9 +143,9 @@ function createSettingsModal(): void {
                 <div class="form-group theme-selector-group">
                     <label>Theme</label>
                     <div class="theme-options">
-                        <button class="theme-btn" data-theme="system">System</button>
-                        <button class="theme-btn" data-theme="light">Light</button>
-                        <button class="theme-btn" data-theme="dark">Dark</button>
+                        <button type="button" class="theme-btn" data-theme="system" aria-pressed="false">System</button>
+                        <button type="button" class="theme-btn" data-theme="light" aria-pressed="false">Light</button>
+                        <button type="button" class="theme-btn" data-theme="dark" aria-pressed="false">Dark</button>
                     </div>
                     <small class="muted" style="display:block; margin-top:6px;">Applies to all your Gmail accounts</small>
                 </div>
@@ -209,8 +209,14 @@ function createSettingsModal(): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    const releaseDialog = makeDialog(
+        modal.querySelector('.modal-content') as HTMLElement,
+        modal.querySelector('.modal-header h3'),
+        { onEscape: close }
+    );
     (modal as any)._close = close;
 
     // If this script is already orphaned, nothing else in the modal can work:
@@ -386,11 +392,9 @@ function createSettingsModal(): void {
     const themeBtns = modal.querySelectorAll('.theme-btn');
     const updateThemeUI = (activeTheme: string) => {
         themeBtns.forEach((btn) => {
-            if ((btn as HTMLElement).dataset.theme === activeTheme) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
+            const isActive = (btn as HTMLElement).dataset.theme === activeTheme;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-pressed', String(isActive));
         });
     };
 

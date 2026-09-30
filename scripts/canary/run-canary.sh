@@ -23,6 +23,17 @@
 #     break has its own thread, so a week of reminders reads as one
 #     conversation. A recovery is announced in the same thread.
 #
+# A failed build is an ERROR: it counts in the error streak and escalates the
+# same way, because a canary that cannot build cannot run.
+#
+# SKIPPED (not signed in) teaches nothing about Gmail and breaks no streak,
+# but a week of nothing but skips means the canary has gone blind, usually an
+# expired session. The seventh consecutive skip is announced once, in its own
+# thread; any run that is not a skip resets the count.
+#
+# Output embedded in a GitHub issue has $HOME replaced with ~, so an issue
+# never publishes a local user name or directory layout.
+#
 # DEGRADED means working, but only because a fallback held, or a fallback has
 # stopped matching. It escalates like FAIL (second run in a row), but it is a
 # warning, not a break. When the canary also wrote a selector proposal and
@@ -41,6 +52,7 @@ PROPOSAL="$HERE/selector-proposal.json"
 ALERTS_ENV="$HOME/.config/gmail-labels-as-tabs/alerts.env"
 
 ESCALATE_AFTER=2
+SKIP_ALERT_AT=7
 
 mkdir -p "$HERE"
 node_path="$(npm root -g 2>/dev/null || true)"
@@ -52,16 +64,25 @@ read_state() {
         FAIL_STREAK=$(grep -o '"failStreak"[[:space:]]*:[[:space:]]*[0-9]*' "$STATE" | grep -o '[0-9]*$' || echo 0)
         ERROR_STREAK=$(grep -o '"errorStreak"[[:space:]]*:[[:space:]]*[0-9]*' "$STATE" | grep -o '[0-9]*$' || echo 0)
         DEGRADED_STREAK=$(grep -o '"degradedStreak"[[:space:]]*:[[:space:]]*[0-9]*' "$STATE" | grep -o '[0-9]*$' || echo 0)
+        SKIP_STREAK=$(grep -o '"skipStreak"[[:space:]]*:[[:space:]]*[0-9]*' "$STATE" | grep -o '[0-9]*$' || echo 0)
     fi
     FAIL_STREAK=${FAIL_STREAK:-0}
     ERROR_STREAK=${ERROR_STREAK:-0}
     DEGRADED_STREAK=${DEGRADED_STREAK:-0}
+    SKIP_STREAK=${SKIP_STREAK:-0}
 }
 
-# failStreak errorStreak degradedStreak verdict
+# failStreak errorStreak degradedStreak verdict [skipStreak]
+# Any verdict but SKIPPED resets the skip streak, so it defaults to 0.
 write_state() {
-    printf '{ "failStreak": %s, "errorStreak": %s, "degradedStreak": %s, "lastRun": "%s", "lastVerdict": "%s" }\n' \
-        "$1" "$2" "$3" "$(stamp)" "$4" > "$STATE"
+    printf '{ "failStreak": %s, "errorStreak": %s, "degradedStreak": %s, "skipStreak": %s, "lastRun": "%s", "lastVerdict": "%s" }\n' \
+        "$1" "$2" "$3" "${5:-0}" "$(stamp)" "$4" > "$STATE"
+}
+
+# Replace the home directory with ~ in text bound for a public place.
+redact() {
+    local tilde='~'
+    printf '%s' "${1//"$HOME"/"$tilde"}"
 }
 
 # The run that crosses the threshold, then weekly. A daily reminder about
@@ -107,7 +128,24 @@ open_issue() {
         return 0
     fi
     gh issue create --repo PalWorks/Gmail-Labels-Queries-As-Tabs \
-        --title "$title" --body "$body" >> "$LOG" 2>&1 || echo "  gh issue create failed" >> "$LOG"
+        --title "$title" --body "$(redact "$body")" >> "$LOG" 2>&1 || echo "  gh issue create failed" >> "$LOG"
+}
+
+# The canary could not run: count it, and escalate on the second in a row.
+# Used for a canary ERROR and for a build that failed before the canary ran.
+escalate_error() {
+    local output="$1"
+    ERROR_STREAK=$((ERROR_STREAK + 1))
+    write_state "$FAIL_STREAK" "$ERROR_STREAK" "$DEGRADED_STREAK" ERROR
+    if [ "$ERROR_STREAK" -ge "$ESCALATE_AFTER" ]; then
+        TITLE="Gmail drift canary: the canary itself cannot run"
+        BODY=$(printf 'The canary has errored %s runs in a row. This is the canary, not Gmail.\n\n```\n%s\n```\n' "$ERROR_STREAK" "$output")
+        if due "$ERROR_STREAK"; then
+            notify "Gmail drift canary cannot run" "$ERROR_STREAK errors in a row. Check Playwright and Chrome."
+            gchat ERROR canary-error "the canary itself cannot run ($ERROR_STREAK runs in a row)" "$output"
+        fi
+        open_issue "$TITLE" "$BODY"
+    fi
 }
 
 read_state
@@ -115,8 +153,17 @@ read_state
 cd "$REPO" || exit 4
 
 # The canary loads dist/, so a stale or missing build would test the wrong
-# thing. Building is cheap and makes the timer self-sufficient.
-npm run build >/dev/null 2>&1 || { echo "$(stamp) BUILD-FAILED" >> "$LOG"; exit 4; }
+# thing. Building is cheap and makes the timer self-sufficient. A failed build
+# is an error like any other: silently exiting here once let a broken build
+# stop the canary for as long as nobody read the log.
+if ! BUILD_OUT="$(npm run build 2>&1)"; then
+    {
+        echo "$(stamp) BUILD-FAILED"
+        echo "$BUILD_OUT" | tail -20 | sed 's/^/  /'
+    } >> "$LOG"
+    escalate_error "npm run build failed:"$'\n'"$(echo "$BUILD_OUT" | tail -20)"
+    exit 4
+fi
 
 OUTPUT="$(NODE_PATH="$node_path" node "$HERE/gmail-drift-canary.mjs" "$@" 2>&1)"
 CODE=$?
@@ -150,8 +197,15 @@ case "$CODE" in
         announce_recovery PASS
         ;;
     3)
-        # A skip teaches nothing, so it neither breaks nor mends a streak.
-        write_state "$FAIL_STREAK" "$ERROR_STREAK" "$DEGRADED_STREAK" SKIPPED
+        # A skip teaches nothing, so it neither breaks nor mends a streak. A
+        # week of them is the canary gone blind, said once, not every day.
+        SKIP_STREAK=$((SKIP_STREAK + 1))
+        write_state "$FAIL_STREAK" "$ERROR_STREAK" "$DEGRADED_STREAK" SKIPPED "$SKIP_STREAK"
+        if [ "$SKIP_STREAK" -eq "$SKIP_ALERT_AT" ]; then
+            notify "Gmail drift canary has skipped $SKIP_STREAK runs" "It cannot reach a signed-in Gmail. Sign in again in Chrome."
+            gchat SKIPPED canary-skipped "the canary has learned nothing for $SKIP_STREAK runs" \
+                "Every run since the last real one could not reach a signed-in Gmail, usually an expired session. Sign in to Gmail in Chrome."$'\n\n'"$OUTPUT"
+        fi
         ;;
     5)
         DEGRADED_STREAK=$((DEGRADED_STREAK + 1))
@@ -160,7 +214,7 @@ case "$CODE" in
         if [ "$DEGRADED_STREAK" -ge "$ESCALATE_AFTER" ] && due "$DEGRADED_STREAK"; then
             notify "Gmail drift canary: degraded" "A fallback is carrying the load, or has stopped matching."
             gchat DEGRADED canary-degraded "a fallback is carrying the load ($DEGRADED_STREAK runs)" \
-                "Nothing is broken on screen yet.$(printf '\n\n')$OUTPUT"
+                "Nothing is broken on screen yet."$'\n\n'"$OUTPUT"
         fi
         # The proposal is acted on as soon as it exists: it is a pull request,
         # not a merge, and propose-selectors.mjs opens at most one per value.
@@ -171,7 +225,7 @@ case "$CODE" in
                 echo "  propose-selectors exit=$PR_CODE $PR_OUT" >> "$LOG"
                 if [ "$PR_CODE" -eq 0 ] && [ -n "$PR_OUT" ]; then
                     gchat PROPOSAL canary-degraded "a refreshed selector is ready for review" \
-                        "The canary opened a pull request with the value Gmail uses today:$(printf '\n')$PR_OUT"
+                        "The canary opened a pull request with the value Gmail uses today:"$'\n'"$PR_OUT"
                 fi
             else
                 echo "  selector proposal written; GLT_CANARY_AUTO_PR is not set, so no pull request" >> "$LOG"
@@ -194,17 +248,7 @@ case "$CODE" in
         fi
         ;;
     *)
-        ERROR_STREAK=$((ERROR_STREAK + 1))
-        write_state "$FAIL_STREAK" "$ERROR_STREAK" "$DEGRADED_STREAK" ERROR
-        if [ "$ERROR_STREAK" -ge "$ESCALATE_AFTER" ]; then
-            TITLE="Gmail drift canary: the canary itself cannot run"
-            BODY=$(printf 'The canary has errored %s runs in a row. This is the canary, not Gmail.\n\n```\n%s\n```\n' "$ERROR_STREAK" "$OUTPUT")
-            if due "$ERROR_STREAK"; then
-                notify "Gmail drift canary cannot run" "$ERROR_STREAK errors in a row. Check Playwright and Chrome."
-                gchat ERROR canary-error "the canary itself cannot run ($ERROR_STREAK runs in a row)" "$OUTPUT"
-            fi
-            open_issue "$TITLE" "$BODY"
-        fi
+        escalate_error "$OUTPUT"
         ;;
 esac
 

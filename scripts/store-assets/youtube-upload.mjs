@@ -4,9 +4,14 @@
 // thumbnail. No dependencies: OAuth is a loopback sign-in with PKCE, the upload
 // is YouTube's resumable protocol.
 //
-//   node scripts/store-assets/youtube-upload.mjs --check      sign in, print the channel
-//   node scripts/store-assets/youtube-upload.mjs              upload as private
-//   node scripts/store-assets/youtube-upload.mjs --privacy unlisted
+//   node scripts/store-assets/youtube-upload.mjs                        dry run: print what would be uploaded, send nothing
+//   node scripts/store-assets/youtube-upload.mjs --check                sign in, print the channel
+//   node scripts/store-assets/youtube-upload.mjs --confirm              upload as private
+//   node scripts/store-assets/youtube-upload.mjs --confirm --privacy unlisted
+//
+// A plain run is a dry run, like scripts/cws-upload.mjs: a video once
+// published to a channel cannot be taken back quietly, so uploading needs
+// --confirm.
 //
 // The OAuth client is a Desktop app client from the Google Cloud project, saved
 // as ~/.config/gmail-labels-as-tabs/youtube-client.json (or --client <path>).
@@ -201,6 +206,21 @@ async function setThumbnail(token, videoId) {
     // Custom thumbnails need a channel with phone verification.
     console.log(`Thumbnail not set: ${err.message}`);
   }
+}
+
+if (!flag('check') && !flag('confirm')) {
+  // No sign-in and no network: everything here is read from disk.
+  const meta = metadata();
+  if (!existsSync(VIDEO_FILE)) throw new Error(`No video at ${VIDEO_FILE}.`);
+  console.log('Dry run: nothing sent. This would upload:');
+  console.log(`  Video:       ${VIDEO_FILE} (${(statSync(VIDEO_FILE).size / 1048576).toFixed(1)} MB)`);
+  console.log(`  Thumbnail:   ${existsSync(THUMB_FILE) ? THUMB_FILE : `${THUMB_FILE} (missing; the upload would go ahead without it)`}`);
+  console.log(`  Privacy:     ${PRIVACY}`);
+  console.log(`  Title:       ${meta.title}`);
+  console.log(`  Tags:        ${meta.tags.join(', ') || 'none'}`);
+  console.log(`  Description:\n${meta.description.replace(/^/gm, '    ')}`);
+  console.log('Add --confirm to upload it.');
+  process.exit(0);
 }
 
 const client = loadClient();

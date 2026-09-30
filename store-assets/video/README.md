@@ -39,7 +39,8 @@ thumbnail, come from [scripts/store-assets/cards.html](../../scripts/store-asset
 
 ```bash
 node scripts/store-assets/youtube-upload.mjs --check    # sign in, print the channel
-node scripts/store-assets/youtube-upload.mjs            # upload with the metadata below, then set the thumbnail
+node scripts/store-assets/youtube-upload.mjs            # dry run: what would be uploaded, sends nothing
+node scripts/store-assets/youtube-upload.mjs --confirm  # upload with the metadata below, then set the thumbnail
 ```
 
 The uploader uses the YouTube Data API and has no dependencies. It needs a Desktop app

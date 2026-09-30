@@ -18,6 +18,7 @@ import { getGlobalTheme, setGlobalTheme, Theme } from '../../utils/storage';
 import { applyTheme, resolveSystemTheme } from '../theme';
 import { isExtensionContextAlive, isContextInvalidatedError } from '../extensionContext';
 import { renderContextInvalidatedNotice } from '../modals/contextNotice';
+import { makeDialog } from '../modals/dialogA11y';
 import { createWizard, WizardHandle } from './wizardView';
 export { SHOW_ONBOARDING_ACTION } from '../messages';
 
@@ -26,6 +27,7 @@ export const ONBOARDING_MODAL_ID = 'gmail-labels-onboarding';
 
 
 let wizard: WizardHandle | null = null;
+let releaseDialog: (() => void) | null = null;
 
 /** True while the tour is on screen. */
 export function isOnboardingOpen(): boolean {
@@ -51,6 +53,8 @@ export function showOnboarding(): void {
 
     const close = (): void => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog?.();
+        releaseDialog = null;
         wizard?.destroy();
         wizard = null;
         scrim.remove();
@@ -83,20 +87,27 @@ export function showOnboarding(): void {
     scrim.appendChild(wizard.element);
     document.body.appendChild(scrim);
 
+    // The panel already announces itself as a dialog; this adds the focus
+    // trap, keeps keystrokes away from Gmail's shortcuts, and returns focus
+    // to where it was when the tour closes. Focus moves in to the Next
+    // button, so the tour is operable from the keyboard immediately.
+    releaseDialog = makeDialog(wizard.element, wizard.element.querySelector<HTMLElement>('.glt-ob-title'), {
+        onEscape: close,
+        initialFocus: wizard.element.querySelector<HTMLElement>('.glt-ob-next'),
+    });
+
     // Checked after the panel is mounted so Escape still dismisses an orphaned
     // tour rather than trapping the user behind a scrim that cannot close.
     if (!isExtensionContextAlive()) {
         showDeadContextNotice(scrim, close);
         return;
     }
-
-    // Move focus in, so the tour is operable from the keyboard immediately.
-    const first = wizard.element.querySelector<HTMLElement>('.glt-ob-next');
-    first?.focus();
 }
 
 /** Dismiss the tour if it is open. Used when the page is being torn down. */
 export function hideOnboarding(): void {
+    releaseDialog?.();
+    releaseDialog = null;
     document.getElementById(ONBOARDING_MODAL_ID)?.remove();
     wizard?.destroy();
     wizard = null;

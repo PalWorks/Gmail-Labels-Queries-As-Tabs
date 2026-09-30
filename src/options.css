@@ -775,6 +775,14 @@ body.theme-light .account-selector-bar.is-empty {
     font-size: 14px;
 }
 
+/* A category tab's rule searches the category, not a label: say which. */
+.rule-tab-scope {
+    display: block;
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 .rule-target-row {
     display: flex;
     align-items: center;

@@ -163,6 +163,11 @@ export function renderManagedTabList(deps: ManagedTabListDeps): void {
 
     renderTabListItems(listEl, tabs, callbacks, listOptions);
 
-    const dragHandlers = createModalDragHandlers(listEl as HTMLUListElement, () => reRender(), renderTabBar);
+    const dragHandlers = createModalDragHandlers(
+        listEl as HTMLUListElement,
+        () => run(async () => reRender()),
+        renderTabBar,
+        onError
+    );
     wireTabListDragListeners(listEl, dragHandlers);
 }

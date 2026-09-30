@@ -226,3 +226,42 @@ describe('the copied diagnostic', () => {
         expect(text.split('\n').length).toBeLessThanOrEqual(3);
     });
 });
+
+describe('write suppression only trusts a write that landed', () => {
+    test('a rejected write is not remembered, so the same verdict is written again', async () => {
+        setSpy.mockImplementationOnce(() => Promise.reject(new Error('QUOTA_BYTES quota exceeded')));
+        recordIntegrationHealth('labelMenu', 'active');
+        expect(setSpy).toHaveBeenCalledTimes(1);
+        // Let the rejection settle.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        recordIntegrationHealth('labelMenu', 'active');
+        expect(setSpy).toHaveBeenCalledTimes(2);
+        expect(store[healthKeyFor('labelMenu')]).toMatchObject({ status: 'active' });
+    });
+
+    test('a repeat while the first write is still in flight costs nothing', () => {
+        let resolveSet: () => void = () => {};
+        setSpy.mockImplementationOnce(() => new Promise<void>((r) => (resolveSet = r)));
+        recordIntegrationHealth('senderIcons', 'active');
+        recordIntegrationHealth('senderIcons', 'active');
+        expect(setSpy).toHaveBeenCalledTimes(1);
+        resolveSet();
+    });
+
+    test('a write that throws synchronously is not remembered either', () => {
+        setSpy.mockImplementationOnce(() => {
+            throw new Error('storage unavailable');
+        });
+        recordIntegrationHealth('labelMenu', 'active');
+        recordIntegrationHealth('labelMenu', 'active');
+        expect(setSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('a failed label menu write reads as a storage problem, not a blank', () => {
+        expect(describeComponentHealth({ status: 'unavailable', reason: 'write-failed', at: 0 })).toBe(
+            'Could not save: settings storage may be full'
+        );
+    });
+});

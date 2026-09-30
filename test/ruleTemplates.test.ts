@@ -9,8 +9,11 @@ export {};
 import {
     RULE_TEMPLATES,
     RULE_TEMPLATES_ENABLED,
+    RuleTemplate,
     applyRuleTemplate,
+    describeTemplateScope,
 } from '../src/modules/ruleTemplates';
+import { generateAppsScript } from '../src/modules/rules';
 import { getSettings, saveSettings, RuleAction } from '../src/utils/storage';
 import { isValidTabColor } from '../src/utils/colors';
 
@@ -59,6 +62,13 @@ beforeEach(() => {
 
 const ACCOUNT = 'user@gmail.com';
 
+/** A template aimed at a user label, as most of them are. */
+const LABEL_TEMPLATE = RULE_TEMPLATES.find((t) => t.id === 'tidy-newsletters') as RuleTemplate;
+
+function templateById(id: string): RuleTemplate {
+    return RULE_TEMPLATES.find((t) => t.id === id) as RuleTemplate;
+}
+
 describe('RULE_TEMPLATES definitions', () => {
     test('feature flag is a boolean', () => {
         expect(typeof RULE_TEMPLATES_ENABLED).toBe('boolean');
@@ -81,7 +91,7 @@ describe('RULE_TEMPLATES definitions', () => {
 
 describe('applyRuleTemplate', () => {
     test('creates a label tab and an enabled rule on a fresh account', async () => {
-        const template = RULE_TEMPLATES[0];
+        const template = LABEL_TEMPLATE;
         const result = await applyRuleTemplate(ACCOUNT, template);
 
         expect(result.createdTab).toBe(true);
@@ -102,7 +112,7 @@ describe('applyRuleTemplate', () => {
     });
 
     test('does not duplicate the tab when applied twice', async () => {
-        const template = RULE_TEMPLATES[0];
+        const template = LABEL_TEMPLATE;
         const first = await applyRuleTemplate(ACCOUNT, template);
         const second = await applyRuleTemplate(ACCOUNT, template);
 
@@ -118,7 +128,7 @@ describe('applyRuleTemplate', () => {
 
     test('reuses an existing label tab that maps to the same Gmail label', async () => {
         // Seed a tab that already targets the template's label.
-        const template = RULE_TEMPLATES[0];
+        const template = LABEL_TEMPLATE;
         await saveSettings(ACCOUNT, {
             tabs: [{ id: 'existing', title: 'My Promos', type: 'label', value: template.labelName }],
             rules: [],
@@ -135,7 +145,7 @@ describe('applyRuleTemplate', () => {
     });
 
     test('clears a stale targetLabel when replacing a prior moveToLabel rule', async () => {
-        const template = RULE_TEMPLATES[0]; // action: 'trash'
+        const template = LABEL_TEMPLATE; // action: 'archive'
         // Seed a tab mapping to the template's label with a moveToLabel rule.
         await saveSettings(ACCOUNT, {
             tabs: [{ id: 'existing', title: 'Promos', type: 'label', value: template.labelName }],
@@ -146,12 +156,12 @@ describe('applyRuleTemplate', () => {
 
         const settings = await getSettings(ACCOUNT);
         const rule = settings.rules.find((r) => r.tabId === 'existing')!;
-        expect(rule.action).toBe('trash');
+        expect(rule.action).toBe(template.action);
         expect(rule.targetLabel).toBeUndefined();
     });
 
     test('updates an existing rule instead of adding a second', async () => {
-        const template = RULE_TEMPLATES[0];
+        const template = LABEL_TEMPLATE;
         const first = await applyRuleTemplate(ACCOUNT, template);
 
         // Disable the rule, then re-apply — it should be re-enabled, not duplicated.
@@ -167,5 +177,57 @@ describe('applyRuleTemplate', () => {
         const rules = after.rules.filter((r) => r.tabId === first.tabId);
         expect(rules).toHaveLength(1);
         expect(rules[0].enabled).toBe(true);
+    });
+});
+
+describe('category templates', () => {
+    test('Promotions, Social and Updates target Gmail categories; the label templates stay labels', () => {
+        expect(templateById('clean-promotions').category).toBe('promotions');
+        expect(templateById('quiet-social').category).toBe('social');
+        expect(templateById('clear-updates').category).toBe('updates');
+        expect(templateById('tidy-newsletters').category).toBeUndefined();
+        expect(templateById('archive-receipts').category).toBeUndefined();
+    });
+
+    test('applying one creates a #category/ hash tab, not a label tab', async () => {
+        const result = await applyRuleTemplate(ACCOUNT, templateById('clean-promotions'));
+        const settings = await getSettings(ACCOUNT);
+        const tab = settings.tabs.find((t) => t.id === result.tabId)!;
+        expect(tab).toMatchObject({ type: 'hash', value: '#category/promotions', title: 'Promotions' });
+    });
+
+    test('the rule it creates generates a category: search that finds mail', async () => {
+        const result = await applyRuleTemplate(ACCOUNT, templateById('clean-promotions'));
+        const settings = await getSettings(ACCOUNT);
+        const script = generateAppsScript(settings.tabs, settings.rules, ACCOUNT);
+        expect(script).toContain("category: 'promotions'");
+        expect(script).not.toContain("label: 'Promotions'");
+        expect(settings.rules.find((r) => r.tabId === result.tabId)).toMatchObject({ action: 'trash', enabled: true });
+    });
+
+    test('an existing category tab is reused, however its value is cased', async () => {
+        await saveSettings(ACCOUNT, {
+            tabs: [{ id: 'mine', title: 'Social stuff', type: 'hash', value: '#category/Social' }],
+            rules: [],
+        });
+        const result = await applyRuleTemplate(ACCOUNT, templateById('quiet-social'));
+        expect(result).toMatchObject({ tabId: 'mine', createdTab: false });
+    });
+
+    test('an old label tab from an earlier template is left alone, not migrated', async () => {
+        await saveSettings(ACCOUNT, {
+            tabs: [{ id: 'old', title: 'Updates', type: 'label', value: 'Updates' }],
+            rules: [{ tabId: 'old', action: 'trash', daysOld: 60, enabled: true }],
+        });
+        const result = await applyRuleTemplate(ACCOUNT, templateById('clear-updates'));
+        const settings = await getSettings(ACCOUNT);
+        expect(result.createdTab).toBe(true);
+        expect(settings.tabs.find((t) => t.id === 'old')).toMatchObject({ type: 'label', value: 'Updates' });
+        expect(settings.rules.find((r) => r.tabId === 'old')).toBeDefined();
+    });
+
+    test('the card names the scope the rule actually searches', () => {
+        expect(describeTemplateScope(templateById('clean-promotions'))).toBe('category:promotions');
+        expect(describeTemplateScope(LABEL_TEMPLATE)).toBe('label:Newsletters');
     });
 });

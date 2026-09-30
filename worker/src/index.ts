@@ -8,14 +8,20 @@
  * key instead and is the only origin the extension ever talks to besides
  * mail.google.com.
  *
- * It accepts one POST, validates it hard, rate limits per IP, and sends.
- * It stores nothing.
+ * It accepts one POST, validates it hard, rate limits per network, and sends.
+ * It stores no message content. The only things it writes are rate-limit
+ * counters: one per network, named by a keyed hash of the IP rather than the
+ * IP, and one for everyone together; each expires within a day.
  */
 
 export interface Env {
     RESEND_API_KEY: string;
-    /** KV namespace used only for per-IP rate-limit counters. */
+    /** Keys the HMAC that names a network in its counter, so no IP is ever stored. */
+    IP_HASH_SECRET: string;
+    /** KV namespace used only for rate-limit counters. */
     FEEDBACK_RATE_LIMIT: KVNamespace;
+    /** Cloudflare's rate-limit binding: a burst limit per network, per data centre. */
+    BURST?: { limit: (o: { key: string }) => Promise<{ success: boolean }> };
     /** Verified Resend sender, e.g. GmailLabelsAsTabs.Support@palworks.ai */
     FEEDBACK_FROM: string;
     /** Destination mailbox, e.g. support@palworks.ai */
@@ -28,6 +34,11 @@ const MAX_EMAIL_CHARS = 254;
 const MAX_BODY_BYTES = 16 * 1024;
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_SECONDS = 3600;
+/** Everyone together, per UTC day: bounds the worst case however a flood arrives. */
+const DAILY_GLOBAL_MAX = 300;
+const DAILY_WINDOW_SECONDS = 60 * 60 * 26;
+/** Resend normally answers in well under a second; past this, give up and say so. */
+const SEND_TIMEOUT_MS = 8000;
 
 const CATEGORIES = ['bug', 'feature', 'question', 'other'] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -80,25 +91,39 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Per-IP counter in KV. Best effort by design: if KV is unavailable the
- * request is allowed rather than dropping genuine feedback on the floor.
+ * Name a network without storing its address: HMAC-SHA256 of the IP under a
+ * secret, so the key cannot be reversed or matched against a list of IPs by
+ * anyone without the secret.
  */
-async function isRateLimited(env: Env, ip: string): Promise<boolean> {
+export async function ipKey(secret: string, ip: string): Promise<string> {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+        'sign',
+    ]);
+    const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`ip:${ip}`)));
+    return Array.from(mac.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Increment a counter in KV; true when it was already at the cap. Best effort
+ * by design: if KV is unavailable the request is allowed rather than dropping
+ * genuine feedback on the floor.
+ */
+async function overCap(env: Env, key: string, cap: number, ttl: number): Promise<boolean> {
     if (!env.FEEDBACK_RATE_LIMIT) return false;
-    const key = `rl:${ip}`;
     try {
         const current = parseInt((await env.FEEDBACK_RATE_LIMIT.get(key)) || '0', 10);
-        if (current >= RATE_LIMIT_MAX) return true;
-        await env.FEEDBACK_RATE_LIMIT.put(key, String(current + 1), {
-            expirationTtl: RATE_LIMIT_WINDOW_SECONDS,
-        });
+        if (current >= cap) return true;
+        await env.FEEDBACK_RATE_LIMIT.put(key, String(current + 1), { expirationTtl: ttl });
         return false;
     } catch {
         return false;
     }
 }
 
-export function buildEmail(payload: FeedbackPayload, meta: { ip: string; country: string }) {
+export function buildEmail(payload: FeedbackPayload) {
     const diagnostics = payload.diagnostics || {};
     const diagnosticRows = Object.entries(diagnostics)
         .map(([k, v]) => `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(String(v))}</td></tr>`)
@@ -106,19 +131,25 @@ export function buildEmail(payload: FeedbackPayload, meta: { ip: string; country
 
     const subject = `[Gmail Tabs feedback] ${payload.category}: ${payload.message.slice(0, 60)}`;
     const html = `
-        <h2>Gmail Labels as Tabs — feedback</h2>
+        <h2>Gmail Labels as Tabs: feedback</h2>
         <p><strong>Category:</strong> ${escapeHtml(payload.category)}</p>
         <p><strong>Reply to:</strong> ${payload.replyTo ? escapeHtml(payload.replyTo) : 'not supplied'}</p>
         <hr />
         <p style="white-space: pre-wrap">${escapeHtml(payload.message)}</p>
         <hr />
-        <table>${diagnosticRows}<tr><td><strong>country</strong></td><td>${escapeHtml(meta.country)}</td></tr></table>
+        <table>${diagnosticRows}</table>
     `;
 
     return { subject, html };
 }
 
 async function handleFeedback(request: Request, env: Env): Promise<Response> {
+    // Without the secret the counter would have to name the raw IP, which the
+    // privacy policy says is never kept. Refuse rather than store it.
+    if (!env.IP_HASH_SECRET) {
+        return json({ error: 'Feedback is not available right now. Please try again later.' }, 500);
+    }
+
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
         return json({ error: 'Expected application/json' }, 415);
@@ -149,8 +180,20 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
     }
 
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    if (await isRateLimited(env, ip)) {
+    const who = await ipKey(env.IP_HASH_SECRET, ip);
+    if (env.BURST) {
+        try {
+            const { success } = await env.BURST.limit({ key: who });
+            if (!success) return json({ error: 'Too many messages from this network. Try again later.' }, 429);
+        } catch {
+            /* the KV counters below still hold */
+        }
+    }
+    if (await overCap(env, `rl:${who}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_SECONDS)) {
         return json({ error: 'Too many messages from this network. Try again later.' }, 429);
+    }
+    if (await overCap(env, `all:${today()}`, DAILY_GLOBAL_MAX, DAILY_WINDOW_SECONDS)) {
+        return json({ error: 'Feedback is busy today. Please try again tomorrow.' }, 503);
     }
 
     const diagnostics: Record<string, string> = {};
@@ -160,25 +203,35 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
         }
     }
 
-    const country = request.headers.get('cf-ipcountry') || 'unknown';
-    const { subject, html } = buildEmail({ category: category as Category, message, replyTo, diagnostics }, { ip, country });
+    const { subject, html } = buildEmail({ category: category as Category, message, replyTo, diagnostics });
 
-    const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            from: env.FEEDBACK_FROM,
-            to: [env.FEEDBACK_TO],
-            subject,
-            html,
-            // Lets you hit reply straight from the inbox when the user left an
-            // address; Resend omits the header when the array is empty.
-            reply_to: replyTo ? [replyTo] : undefined,
-        }),
-    });
+    let res: Response;
+    try {
+        res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: env.FEEDBACK_FROM,
+                to: [env.FEEDBACK_TO],
+                subject,
+                html,
+                // Lets you hit reply straight from the inbox when the user left an
+                // address; Resend omits the header when the array is empty.
+                reply_to: replyTo ? [replyTo] : undefined,
+            }),
+            signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+        });
+    } catch (e) {
+        // A provider that hangs must not hold the form open until the
+        // extension's own timeout fires.
+        if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+            return json({ error: 'Sending took too long. Please try again later.' }, 504);
+        }
+        return json({ error: 'Could not send right now. Please try again later.' }, 502);
+    }
 
     if (!res.ok) {
         // Never echo the provider's response: it can carry account details.

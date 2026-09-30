@@ -144,7 +144,7 @@ Orientation reading order for a new agent:
 
 ## Coding conventions
 
-- TypeScript, ES2022, strict. Two-space indentation, single quotes, semicolons
+- TypeScript, ES2022, strict. Four-space indentation, single quotes, semicolons
   (Prettier enforced via `.prettierrc`; ESLint via `.eslintrc.json`).
 - Match the surrounding code's comment density and naming. Modules carry a top-of-file
   block comment describing their responsibility.

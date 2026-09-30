@@ -266,7 +266,6 @@ describe('settings modal behavior', () => {
         // Telling someone to reload when reloading will not help is worse
         // than saying nothing.
         mockSetGlobalTheme.mockRejectedValueOnce(new Error('QUOTA_BYTES_PER_ITEM quota exceeded'));
-        const err = jest.spyOn(console, 'error').mockImplementation(() => {});
 
         toggleSettingsModal();
         (document.querySelector('[data-theme="dark"]') as HTMLElement).click();
@@ -275,8 +274,9 @@ describe('settings modal behavior', () => {
         expect(document.getElementById('gmail-tabs-settings-modal')!.textContent).not.toContain(
             'Reload Gmail to continue'
         );
-        expect(err).toHaveBeenCalled();
-        err.mockRestore();
+        // Visible, because production builds drop console output: a quota
+        // failure that was only logged was a failure nobody ever saw.
+        expect(document.getElementById('gmail-tabs-write-failure')?.textContent).toContain('Settings are full');
     });
 
     test('the notice is still dismissible', () => {
@@ -356,3 +356,38 @@ describe('settings modal behavior', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// Accessibility
+// ---------------------------------------------------------------------------
+
+describe('settings modal accessibility', () => {
+    test('is a named modal dialog', () => {
+        toggleSettingsModal();
+        const dialog = document.querySelector('#gmail-tabs-settings-modal .modal-content') as HTMLElement;
+        expect(dialog.getAttribute('role')).toBe('dialog');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent).toBe('Configure Tabs');
+    });
+
+    test('theme buttons say which one is pressed', async () => {
+        mockGetGlobalTheme.mockResolvedValueOnce('dark');
+        toggleSettingsModal();
+        await new Promise((r) => setTimeout(r, 0));
+        const pressed = (theme: string) =>
+            document.querySelector(`.theme-btn[data-theme="${theme}"]`)!.getAttribute('aria-pressed');
+        expect(pressed('dark')).toBe('true');
+        expect(pressed('light')).toBe('false');
+        expect(pressed('system')).toBe('false');
+    });
+
+    test('focus goes back to the control that opened it', () => {
+        const opener = document.createElement('button');
+        document.body.appendChild(opener);
+        opener.focus();
+        toggleSettingsModal();
+        toggleSettingsModal();
+        expect(document.activeElement).toBe(opener);
+    });
+});
+

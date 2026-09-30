@@ -55,6 +55,9 @@ function setupGlobalMocks(): void {
             },
             onChanged: {
                 addListener: jest.fn((cb: any) => storageChangeListeners.push(cb)),
+                removeListener: jest.fn((cb: any) => {
+                    storageChangeListeners = storageChangeListeners.filter((l) => l !== cb);
+                }),
             },
         },
         runtime: {
@@ -62,6 +65,9 @@ function setupGlobalMocks(): void {
             getURL: jest.fn((path: string) => `chrome-extension://test-id/${path}`),
             onMessage: {
                 addListener: jest.fn((cb: any) => messageListeners.push(cb)),
+                removeListener: jest.fn((cb: any) => {
+                    messageListeners = messageListeners.filter((l) => l !== cb);
+                }),
             },
         },
     };
@@ -175,6 +181,35 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
         await flush();
 
         expect(mockState.currentUserEmail).toBe('user@gmail.com');
+    });
+
+    test('takes the account from the end of a thread title, not an address in the subject', async () => {
+        document.title = 'Invoice from billing@vendor.com - user@gmail.com - Gmail';
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+
+        await importContent();
+        await flush();
+
+        expect(mockState.currentUserEmail).toBe('user@gmail.com');
+    });
+
+    test('keeps looking for the account after a minute, at a slower rate', async () => {
+        // A slow link or a login interstitial can keep the address out of the
+        // page for over a minute. Giving up then left an empty bar for good.
+        jest.useFakeTimers();
+        document.title = 'Gmail';
+        mockGetSettings.mockResolvedValue({ tabs: [], showUnreadCount: false, theme: 'system', rules: [] });
+        await importContent();
+
+        jest.advanceTimersByTime(61000);
+        expect(mockState.currentUserEmail).toBeNull();
+
+        document.title = 'Inbox - slow@gmail.com - Gmail';
+        jest.advanceTimersByTime(5000);
+        jest.useRealTimers();
+        await flush();
+
+        expect(mockState.currentUserEmail).toBe('slow@gmail.com');
     });
 
     test('extracts email from aria-label on account element', async () => {
@@ -531,8 +566,12 @@ describe('handover between two copies in one page', () => {
                     showPinModal: jest.fn(),
                     showEditModal: jest.fn(),
                     showDeleteModal: jest.fn(),
-                    toggleSettingsModal: jest.fn(),
+                    toggleSettingsModal: mockToggleSettings,
                     setRenderCallback: jest.fn(),
+                }));
+                jest.doMock('../src/modules/onboarding/onboardingModal', () => ({
+                    showOnboarding: mockShowOnboarding,
+                    SHOW_ONBOARDING_ACTION: 'SHOW_ONBOARDING',
                 }));
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 require('../src/content');
@@ -540,6 +579,15 @@ describe('handover between two copies in one page', () => {
             });
         });
     }
+
+    const mockToggleSettings = jest.fn();
+    /** Opens a stand-in for the tour, so a later stand-down has one to hand on. */
+    const mockShowOnboarding = jest.fn(() => {
+        if (document.querySelector('.glt-ob-scrim')) return;
+        const scrim = document.createElement('div');
+        scrim.className = 'glt-ob-scrim';
+        document.body.appendChild(scrim);
+    });
 
     function addVisibleToolbar(): void {
         const toolbar = document.createElement('div');
@@ -550,6 +598,9 @@ describe('handover between two copies in one page', () => {
     }
 
     beforeEach(() => {
+        mockToggleSettings.mockReset();
+        mockShowOnboarding.mockClear();
+        mockTakePendingOnboarding.mockReset().mockResolvedValue(false);
         observerCallback = null;
         (global as any).MutationObserver = jest.fn().mockImplementation((cb: () => void) => {
             observerCallback = cb;
@@ -609,5 +660,60 @@ describe('handover between two copies in one page', () => {
         await new Promise((r) => setTimeout(r, 150));
 
         expect(document.getElementById('gmail-labels-as-tabs-bar')).toBeNull();
+    });
+
+    test('takes its chrome listeners with it, so only the live copy answers', async () => {
+        // Two live copies of one version share chrome.runtime: a tab still
+        // loading at install gets the manifest's copy and the worker's. Left
+        // registered, both toggled the settings modal, so Configure did nothing.
+        await importContent();
+        await flush();
+        expect(messageListeners).toHaveLength(1);
+        expect(storageChangeListeners).toHaveLength(1);
+
+        await importContent();
+        await flush();
+
+        expect(messageListeners).toHaveLength(1);
+        expect(storageChangeListeners).toHaveLength(1);
+        const sendResponse = jest.fn();
+        messageListeners[0]({ action: 'TOGGLE_SETTINGS' }, {}, sendResponse);
+        expect(mockToggleSettings).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+    });
+
+    test('hands an open first-run tour to the copy that takes over', async () => {
+        mockTakePendingOnboarding.mockResolvedValueOnce(true);
+        await importContent();
+        await flush();
+        expect(mockShowOnboarding).toHaveBeenCalledTimes(1);
+
+        // The flag is spent. The newcomer clears the page, tour included, so
+        // without the handover the user never sees the tour at all.
+        await importContent();
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(mockShowOnboarding).toHaveBeenCalledTimes(2);
+        expect(document.querySelector('.glt-ob-scrim')).not.toBeNull();
+    });
+
+    test('passes the tour on when it was taken over while reading the flag', async () => {
+        let answer!: (pending: boolean) => void;
+        mockTakePendingOnboarding.mockImplementationOnce(() => new Promise((r) => (answer = r)));
+        await importContent();
+        await flush();
+
+        await importContent();
+        await flush();
+        const handedOn = jest.fn();
+        document.addEventListener('gmailTabs:tourHandover', handedOn);
+        answer(true);
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Shown once, by the copy that owns the page: the one that stood down
+        // hands it on instead of opening a tour whose buttons are dead.
+        expect(handedOn).toHaveBeenCalledTimes(1);
+        expect(mockShowOnboarding).toHaveBeenCalledTimes(1);
+        expect(document.querySelector('.glt-ob-scrim')).not.toBeNull();
     });
 });

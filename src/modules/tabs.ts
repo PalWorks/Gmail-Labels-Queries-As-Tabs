@@ -444,19 +444,29 @@ export function updateActiveTab(): void {
     const covers = (value: string): boolean =>
         labelPath !== null && (labelPath === value || labelPath.startsWith(`${value}/`));
 
+    // The label a tab points at, decoded, or null for a hash view that is not
+    // a label. A pinned `#label/X` hash tab is the same view as a label tab
+    // for X, so it gets the same nesting rule: comparing the raw hash lost
+    // the highlight the moment a thread inside it was opened.
+    const labelOf = (tabEl: HTMLElement): string | null => {
+        const value = tabEl.dataset.value;
+        if (!value) return null;
+        if (tabEl.dataset.type !== 'hash') return value;
+        return currentLabelPath(value);
+    };
+
     let longestMatch = -1;
     for (const tabEl of tabs) {
-        const value = tabEl.dataset.value;
-        if (!value || tabEl.dataset.type === 'hash') continue;
-        if (covers(value)) longestMatch = Math.max(longestMatch, value.length);
+        const label = labelOf(tabEl);
+        if (label !== null && covers(label)) longestMatch = Math.max(longestMatch, label.length);
     }
 
     for (const tabEl of tabs) {
         const value = tabEl.dataset.value;
         if (!value) continue;
 
-        const isActive =
-            tabEl.dataset.type === 'hash' ? hash === value : covers(value) && value.length === longestMatch;
+        const label = labelOf(tabEl);
+        const isActive = label === null ? hash === value : covers(label) && label.length === longestMatch;
 
         const nameSpan = tabEl.querySelector('.tab-name');
         if (isActive) {

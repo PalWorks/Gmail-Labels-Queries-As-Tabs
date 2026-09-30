@@ -7,6 +7,8 @@
 import { Tab, getSettings, removeTab } from '../../utils/storage';
 import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
+import { guardModalAction } from './contextNotice';
+import { makeDialog } from './dialogA11y';
 
 export function showDeleteModal(tab: Tab): void {
     const modal = document.createElement('div');
@@ -61,8 +63,11 @@ export function showDeleteModal(tab: Tab): void {
 
     const close = () => {
         document.removeEventListener('keydown', onKeyDown);
+        releaseDialog();
         modal.remove();
     };
+    // Cancel takes focus first: Enter on a destructive dialog should not remove.
+    const releaseDialog = makeDialog(content, h3, { onEscape: close, initialFocus: cancelBtn });
     modal.querySelectorAll('.close-btn-action').forEach((btn) => {
         btn.addEventListener('click', close);
     });
@@ -70,14 +75,19 @@ export function showDeleteModal(tab: Tab): void {
         if (e.target === modal) close();
     });
 
-    modal.querySelector('#delete-confirm-btn')?.addEventListener('click', async () => {
-        if (getUserEmail()) {
-            await removeTab(getUserEmail()!, tab.id);
-            close();
-            setAppSettings(await getSettings(getUserEmail()!));
-            getRenderCallback()();
-        } else {
+    confirmBtn.addEventListener('click', () => {
+        if (!getUserEmail()) {
             console.error('Gmail Tabs: Cannot delete, currentUserEmail is null');
+            return;
         }
+        guardModalAction(
+            async () => {
+                await removeTab(getUserEmail()!, tab.id);
+                close();
+                setAppSettings(await getSettings(getUserEmail()!));
+                getRenderCallback()();
+            },
+            { content, close, trigger: confirmBtn }
+        );
     });
 }

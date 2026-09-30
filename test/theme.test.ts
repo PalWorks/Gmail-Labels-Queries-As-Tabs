@@ -3,16 +3,16 @@ export {};
  * theme.test.ts
  *
  * Unit tests for the theme module.
- * Covers detectGmailDarkMode(), applyTheme(), and listenForSystemThemeChanges().
+ * Covers resolveSystemTheme(), applyTheme(), and listenForSystemThemeChanges().
  */
 
 import { microtasks } from './helpers/async';
 import {
-    detectGmailDarkMode,
     detectGmailTheme,
     resolveSystemTheme,
     applyTheme,
     commitGuessedTheme,
+    resetThemeStateForTests,
     listenForSystemThemeChanges,
     watchGmailTheme,
     THEME_UNRESOLVED_CLASS,
@@ -57,13 +57,14 @@ function mockMatchMedia(prefersDark: boolean): jest.Mock {
 beforeEach(() => {
     document.body.className = '';
     document.body.innerHTML = '';
+    resetThemeStateForTests();
 });
 
 // ---------------------------------------------------------------------------
 // detectGmailDarkMode
 // ---------------------------------------------------------------------------
 
-describe('detectGmailDarkMode', () => {
+describe('resolveSystemTheme reads dark surfaces', () => {
     test('returns true for standard Gmail dark body background', () => {
         const map = new Map<Element, string>();
         map.set(document.body, 'rgb(32, 33, 36)');
@@ -71,7 +72,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 
     test('returns true for alternate dark background', () => {
@@ -81,7 +82,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 
     test('returns true when html element has dark background', () => {
@@ -91,7 +92,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 
     test('returns true when .nH content area has dark background', () => {
@@ -106,7 +107,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 
     test('returns true for arbitrary dark rgb via luminance fallback', () => {
@@ -116,7 +117,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 
     test('returns false for white/light background', () => {
@@ -126,7 +127,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(false);
 
-        expect(detectGmailDarkMode()).toBe(false);
+        expect(resolveSystemTheme() === 'dark').toBe(false);
     });
 
     test('falls back to OS media query when background is unparseable', () => {
@@ -136,7 +137,7 @@ describe('detectGmailDarkMode', () => {
         mockComputedStyle(map);
         mockMatchMedia(true);
 
-        expect(detectGmailDarkMode()).toBe(true);
+        expect(resolveSystemTheme() === 'dark').toBe(true);
     });
 });
 
@@ -238,7 +239,7 @@ describe('detectGmailTheme', () => {
         mockMatchMedia(true);
 
         expect(detectGmailTheme()).toBe('light');
-        expect(detectGmailDarkMode()).toBe(false);
+        expect(resolveSystemTheme() === 'dark').toBe(false);
     });
 
     test('reports dark for a dark Gmail background even when the OS is light', () => {
@@ -364,6 +365,31 @@ describe('system mode while Gmail has not painted yet', () => {
         commitGuessedTheme();
 
         expect(document.body.classList.contains('force-dark')).toBe(true);
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+    });
+
+    test('once the guess is committed, a later system apply does not hide the bar again', () => {
+        gmailNotPaintedYet();
+        mockMatchMedia(true);
+        applyTheme('system');
+        commitGuessedTheme();
+
+        // The OS flips, or anything else re-applies 'system', and Gmail is
+        // still unreadable. Nothing is left that would end a new wait.
+        applyTheme('system');
+
+        expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
+    });
+
+    test('once Gmail has been read, a momentary blank is not a new guess', () => {
+        const map = gmailNotPaintedYet();
+        mockMatchMedia(true);
+        map.set(document.body, 'rgb(255, 255, 255)');
+        applyTheme('system');
+
+        map.set(document.body, 'transparent');
+        applyTheme('system');
+
         expect(document.body.classList.contains(THEME_UNRESOLVED_CLASS)).toBe(false);
     });
 

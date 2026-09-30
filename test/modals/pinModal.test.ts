@@ -14,6 +14,7 @@ const mockChrome = {
         },
     },
     runtime: {
+        id: 'test-extension-id',
         sendMessage: jest.fn(),
         lastError: null as chrome.runtime.LastError | null,
     },
@@ -163,5 +164,44 @@ describe('showPinModal', () => {
             'hash'
         );
         expect(mockRenderTabs).toHaveBeenCalled();
+    });
+
+    it('is a named modal dialog that takes focus', () => {
+        showPinModal();
+        const dialog = document.querySelector('.gmail-tabs-modal .modal-content') as HTMLElement;
+        expect(dialog.getAttribute('role')).toBe('dialog');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        const title = document.getElementById(dialog.getAttribute('aria-labelledby')!);
+        expect(title?.textContent).toBe('Pin Current View');
+        expect(document.activeElement).toBe(document.querySelector('#pin-title'));
+    });
+
+    it('a failed save keeps the modal open, says so, and can be retried', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { addTab } = require('../../src/utils/storage');
+        addTab.mockRejectedValueOnce(new Error('QUOTA_BYTES quota exceeded'));
+
+        showPinModal();
+        const saveBtn = document.querySelector('#pin-save-btn') as HTMLButtonElement;
+        saveBtn.click();
+        expect(saveBtn.disabled).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(document.querySelector('.gmail-tabs-modal')).not.toBeNull();
+        expect(document.getElementById('gmail-tabs-write-failure')?.textContent).toContain('Settings are full');
+        expect(saveBtn.disabled).toBe(false);
+        expect(mockRenderTabs).not.toHaveBeenCalled();
+    });
+
+    it('a dead context during save shows the reload notice', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { addTab } = require('../../src/utils/storage');
+        addTab.mockRejectedValueOnce(new Error('Extension context invalidated.'));
+
+        showPinModal();
+        (document.querySelector('#pin-save-btn') as HTMLElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(document.querySelector('#modal-reload-page')).not.toBeNull();
     });
 });

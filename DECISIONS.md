@@ -158,9 +158,10 @@ would let a stranger send mail as our domain. A relay holds the key instead.
 **Consequences.** The "zero external network requests" claim becomes "no telemetry, and no
 request at all unless you submit feedback", which the Privacy page now states in those
 terms. The Chrome Web Store data disclosure must declare that a message, an optional email
-address, and opt-in diagnostics are transmitted. Diagnostics are counts, the extension
+address, and diagnostics (included unless the user unticks them) are transmitted. Diagnostics are counts, the extension
 version and the browser build only: never label names, tab titles, addresses or mail
-content. The relay validates hard, rate limits per IP, and stores nothing. If the Worker is
+content. The relay validates hard, rate limits per network, and stores no message (since
+1.8.1 its counter is named by a keyed hash of the IP, not the IP; see ADR-029). If the Worker is
 ever taken down, the form degrades to an error message and the `mailto:` fallback beneath
 it still works.
 
@@ -1044,3 +1045,55 @@ issue.
 - The escalation logic is tested end to end in a sandbox
   (`test/canaryRun.test.ts`) with stub `gh` and `notify-send`, so a change to it
   cannot open a real issue or post a real message from a test run.
+
+## ADR-029: What the pre-submission audit of 1.8.0 changed, and why
+
+**Status:** Accepted, 2026-09-30, in 1.8.1
+
+### Context
+
+Before 1.8.0 was submitted, six reviews read the codebase against itself: the
+lifecycle and messaging layer, storage, everything that touches Gmail's page, the
+extension's own pages and the generated Apps Script, the tooling and the two
+repositories' agreement, and dead code against the documents. Each finding was
+reproduced before it was fixed, and each fix came with a test that failed first.
+The decisions below are the ones a later change could quietly undo.
+
+### Decisions
+
+- **A copy that stands down takes everything it registered with it.** Two live
+  copies of one version share `chrome.runtime`, which happens whenever a Gmail tab
+  is still loading at install. `content.ts` keeps a disposer for every listener on
+  a shared object (the extension's events, `document`, `window`, the theme
+  watchers) and runs them all in `standDown`. A first-run tour the leaving copy
+  consumed is handed on by a `gmailTabs:tourHandover` event, deferred a turn
+  because the arriving copy clears the page right after. This extends ADR-025.
+- **The page-world interceptor wraps XHR once per page, not once per injection.**
+  The first copy wraps; each later one swaps in its own parser through a hook on
+  `window`. Wrapping again stacked the parsers, one per update the tab outlived.
+- **A worker start that no lifecycle event explains is an enable.** Enabling fires
+  neither `onInstalled` nor `onStartup`, so the worker adopts the open Gmail tabs
+  once per session, remembered in `chrome.storage.session`, which Chrome clears on
+  disable. Adoption pings first, so a live tab is left alone.
+- **Cleanup rules search what is still to do.** Archive adds `in:inbox`, Mark read
+  adds `is:unread`, batch calls go 100 threads at a time, and a run stops starting
+  work after five minutes. Rules may belong to Gmail category tabs
+  (`#category/<name>`, searched `category:<name>`), which is what the Promotions,
+  Social and Updates templates always meant.
+- **A rule edit is a delta.** `patchRule` carries only the changed fields, applied
+  inside the op queue, so two quick edits cannot write each other back.
+- **Every failed save is visible.** Production builds drop the console, so a
+  failure that is only logged is a failure nobody sees. `describeWriteFailure` names
+  a full sync item plainly; Gmail shows it through `reportSettingsWriteFailure`.
+- **The feedback relay names a network by an HMAC of its IP**, keyed by the
+  `IP_HASH_SECRET` Worker secret, and no longer adds the sender's country. It gives
+  up on Resend after eight seconds, inside the extension's own twelve, so a slow
+  provider no longer invites a duplicate send.
+
+### Consequences
+
+- Users with rules must regenerate their Apps Script to get the rule fixes; the
+  release notes say so. Tabs made from the old category templates are left alone.
+- The relay fails closed with a 500 if `IP_HASH_SECRET` is missing, so a redeploy
+  to a fresh account must set it first.
+

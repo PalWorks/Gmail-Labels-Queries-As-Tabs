@@ -45,7 +45,7 @@ async function sandbox(): Promise<Sandbox> {
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { build: 'true' } }));
     fs.writeFileSync(
         path.join(dir, 'gmail-drift-canary.mjs'),
-        `console.log('fake canary'); process.exit(Number(process.env.FAKE_EXIT));\n`
+        `console.log('fake canary at ' + process.env.HOME + '/profile'); process.exit(Number(process.env.FAKE_EXIT));\n`
     );
     fs.writeFileSync(
         path.join(dir, 'propose-selectors.mjs'),
@@ -57,7 +57,10 @@ async function sandbox(): Promise<Sandbox> {
         fs.chmodSync(stub, 0o755);
     }
     const npm = path.join(bin, 'npm');
-    fs.writeFileSync(npm, '#!/bin/sh\n[ "$1" = root ] && exit 1\nexit 0\n');
+    fs.writeFileSync(
+        npm,
+        '#!/bin/sh\n[ "$1" = root ] && exit 1\n[ "$1" = run ] && [ -n "$FAKE_BUILD_FAIL" ] && { echo "build broke in $HOME/src"; exit 1; }\nexit 0\n'
+    );
     fs.chmodSync(npm, 0o755);
 
     const posts: any[] = [];
@@ -183,6 +186,39 @@ describe('run-canary.sh escalation', () => {
         await sb.run(4);
         await sb.run(4);
         expect(events(sb.posts)).toEqual(['ERROR:canary-error']);
+    });
+
+    test('a failed build counts as an error and escalates on the second', async () => {
+        expect(await sb.run(0, { FAKE_BUILD_FAIL: '1' })).toBe(4);
+        expect(sb.state()).toMatchObject({ errorStreak: 1, lastVerdict: 'ERROR' });
+        expect(sb.posts).toHaveLength(0);
+        expect(await sb.run(0, { FAKE_BUILD_FAIL: '1' })).toBe(4);
+        expect(events(sb.posts)).toEqual(['ERROR:canary-error']);
+        expect(sb.calls('gh').some((c) => c.startsWith('issue create'))).toBe(true);
+    });
+
+    test('the seventh skip in a row is announced once, and a real run resets the count', async () => {
+        for (let i = 0; i < 6; i++) await sb.run(3);
+        expect(sb.posts).toHaveLength(0);
+        expect(sb.state()).toMatchObject({ skipStreak: 6 });
+        await sb.run(3);
+        expect(events(sb.posts)).toEqual(['SKIPPED:canary-skipped']);
+        expect(sb.calls('notify-send')).toHaveLength(1);
+        await sb.run(3);
+        expect(events(sb.posts)).toEqual(['SKIPPED:canary-skipped']);
+        await sb.run(0);
+        expect(sb.state()).toMatchObject({ skipStreak: 0 });
+        // A skip is not a break: it opens no issue.
+        expect(sb.calls('gh')).toHaveLength(0);
+    });
+
+    test('an issue body never carries the local home directory', async () => {
+        await sb.run(2);
+        await sb.run(2);
+        const created = fs.readFileSync(path.join(sb.root, 'gh.calls'), 'utf8');
+        expect(created).toContain('issue create');
+        expect(created).toContain('fake canary at ~/profile');
+        expect(created).not.toContain(sb.home);
     });
 
     test('with no webhook configured the run still completes and still escalates elsewhere', async () => {

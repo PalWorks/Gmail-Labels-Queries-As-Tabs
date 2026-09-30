@@ -4,7 +4,13 @@
  * Unit tests for the shared import/export utilities.
  */
 
-import { buildExportPayload, generateExportFilename, validateImportData, triggerDownload } from '../src/utils/importExport';
+import {
+    buildExportPayload,
+    generateExportFilename,
+    validateImportData,
+    triggerDownload,
+    sameAccount,
+} from '../src/utils/importExport';
 import { Tab } from '../src/utils/storage';
 
 // ---------------------------------------------------------------------------
@@ -297,5 +303,102 @@ describe('validateImportData id sanitization', () => {
             rules: [{ tabId: 'a', action: 'moveToLabel', daysOld: 30, enabled: true, targetLabel: { evil: true } }],
         };
         expect(() => validateImportData(data as any)).toThrow(/targetLabel/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Imports are rebuilt from known fields
+// ---------------------------------------------------------------------------
+
+describe('validateImportData rebuilds what it imports', () => {
+    const tab = (id: string, extra: Record<string, unknown> = {}) => ({
+        id,
+        title: `T ${id}`,
+        type: 'label',
+        value: `v-${id}`,
+        ...extra,
+    });
+
+    test('unknown keys on tabs and rules are dropped', () => {
+        const data: Record<string, unknown> = {
+            tabs: [tab('a', { color: 'blue', evil: '<script>', nested: { big: 'x' } })],
+            rules: [{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true, payload: 'junk' }],
+        };
+        validateImportData(data);
+        expect(data.tabs).toEqual([{ id: 'a', title: 'T a', type: 'label', value: 'v-a', color: 'blue' }]);
+        expect(data.rules).toEqual([{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true }]);
+    });
+
+    test('an exact duplicate tab is dropped, and a reused id gets a fresh one', () => {
+        const data: Record<string, unknown> = {
+            tabs: [tab('a'), tab('a'), tab('a', { title: 'Other', value: 'other' })],
+            rules: [{ tabId: 'a', action: 'archive', daysOld: 7, enabled: true }],
+        };
+        const tabs = validateImportData(data);
+        expect(tabs).toHaveLength(2);
+        expect(new Set(tabs.map((t) => t.id)).size).toBe(2);
+        expect(tabs[0].id).toBe('a');
+        expect((data.rules as any[])[0].tabId).toBe('a');
+    });
+
+    test('a rule for a tab that is not in the file is dropped, as is a second rule for one tab', () => {
+        const data: Record<string, unknown> = {
+            tabs: [tab('a')],
+            rules: [
+                { tabId: 'a', action: 'trash', daysOld: 30, enabled: true },
+                { tabId: 'a', action: 'archive', daysOld: 5, enabled: false },
+                { tabId: 'ghost', action: 'trash', daysOld: 30, enabled: true },
+            ],
+        };
+        validateImportData(data);
+        expect(data.rules).toEqual([{ tabId: 'a', action: 'trash', daysOld: 30, enabled: true }]);
+    });
+
+    test('a backup with no rules imports as no rules, so old ones cannot outlive their tabs', () => {
+        const data: Record<string, unknown> = { tabs: [tab('a')] };
+        validateImportData(data);
+        expect(data.rules).toEqual([]);
+    });
+
+    test('daysOld is clamped to a whole number from 1 to 3650', () => {
+        const data: Record<string, unknown> = {
+            tabs: [tab('a'), tab('b'), tab('c')],
+            rules: [
+                { tabId: 'a', action: 'trash', daysOld: 0, enabled: true },
+                { tabId: 'b', action: 'trash', daysOld: 99999, enabled: true },
+                { tabId: 'c', action: 'trash', daysOld: 14.6, enabled: true },
+            ],
+        };
+        validateImportData(data);
+        expect((data.rules as any[]).map((r) => r.daysOld)).toEqual([1, 3650, 15]);
+    });
+
+    test('a non-finite daysOld is rejected', () => {
+        const data = { tabs: [tab('a')], rules: [{ tabId: 'a', action: 'trash', daysOld: NaN, enabled: true }] };
+        expect(() => validateImportData(data)).toThrow('"daysOld" must be a number');
+    });
+
+    test('an over-long title, value or target label is rejected', () => {
+        const long = 'x'.repeat(501);
+        expect(() => validateImportData({ tabs: [tab('a', { title: long })] })).toThrow(/longer than 500/);
+        expect(() => validateImportData({ tabs: [tab('a', { value: long })] })).toThrow(/longer than 500/);
+        expect(() =>
+            validateImportData({
+                tabs: [tab('a')],
+                rules: [{ tabId: 'a', action: 'moveToLabel', daysOld: 3, enabled: true, targetLabel: long }],
+            })
+        ).toThrow(/longer than 500/);
+    });
+
+    test('a file over 256 KB is rejected before anything else is looked at', () => {
+        const data = { tabs: [tab('a')], padding: 'x'.repeat(256 * 1024) };
+        expect(() => validateImportData(data)).toThrow(/too large/);
+    });
+});
+
+describe('sameAccount', () => {
+    test('compares addresses without regard to case or stray spaces', () => {
+        expect(sameAccount('User@Gmail.com', 'user@gmail.com ')).toBe(true);
+        expect(sameAccount('a@gmail.com', 'b@gmail.com')).toBe(false);
     });
 });

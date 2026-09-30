@@ -57,6 +57,20 @@ export const DETECTED_GMAIL_THEME_KEY = 'detectedGmailTheme';
 export const THEME_UNRESOLVED_CLASS = 'theme-unresolved';
 
 /**
+ * Set once the guessing is over: Gmail's theme has been read at least once,
+ * or the ladder ran out and committed the guess. After that a null detection
+ * is a momentary blank (a repaint, a stylesheet swap), not the start of a new
+ * wait, and nothing is left that would end one. Re-marking the bar then left
+ * it transparent for the life of the tab.
+ */
+let themeSettled = false;
+
+/** Forget that the theme was ever settled. Tests use this; nothing else should. */
+export function resetThemeStateForTests(): void {
+    themeSettled = false;
+}
+
+/**
  * Read Gmail's rendered theme from the page itself.
  *
  * Returns `null` — not a guess — when no candidate element has a readable,
@@ -96,15 +110,6 @@ export function resolveSystemTheme(): ResolvedTheme {
     const detected = detectGmailTheme();
     if (detected) return detected;
     return prefersDarkOS() ? 'dark' : 'light';
-}
-
-/**
- * Detect whether Gmail is currently rendering in dark mode.
- * Retained for backward compatibility; prefer `detectGmailTheme()`, which can
- * also say "unknown".
- */
-export function detectGmailDarkMode(): boolean {
-    return resolveSystemTheme() === 'dark';
 }
 
 /** True when the string is a fully transparent / absent color. */
@@ -171,6 +176,7 @@ export function applyTheme(theme: ThemeMode): void {
         const detected = detectGmailTheme();
         if (detected) {
             resolved = detected;
+            themeSettled = true;
             // Only a real reading is published. The other pages fall back to
             // the OS themselves when this key is absent, so publishing a guess
             // would have told them "this is Gmail's theme" about a value that
@@ -178,7 +184,7 @@ export function applyTheme(theme: ThemeMode): void {
             publishDetectedTheme(resolved);
         } else {
             resolved = prefersDarkOS() ? 'dark' : 'light';
-            guessing = true;
+            guessing = !themeSettled;
         }
     }
 
@@ -195,6 +201,7 @@ export function applyTheme(theme: ThemeMode): void {
  * looks like the extension is broken rather than merely mistaken.
  */
 export function commitGuessedTheme(): void {
+    themeSettled = true;
     document.body.classList.remove(THEME_UNRESOLVED_CLASS);
 }
 
@@ -202,13 +209,15 @@ export function commitGuessedTheme(): void {
  * Set up a listener for OS-level theme changes so that 'system' mode
  * auto-updates when the user toggles OS dark mode.
  */
-export function listenForSystemThemeChanges(getCurrentTheme: () => ThemeMode): void {
+export function listenForSystemThemeChanges(getCurrentTheme: () => ThemeMode): () => void {
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mql.addEventListener('change', () => {
+    const onChange = (): void => {
         if (getCurrentTheme() === 'system') {
             applyTheme('system');
         }
-    });
+    };
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
 }
 
 // Gmail paints its real background well after injection, and the user can flip

@@ -17,6 +17,7 @@ const mockChrome = {
         },
     },
     runtime: {
+        id: 'test-extension-id',
         sendMessage: jest.fn(),
         lastError: null as chrome.runtime.LastError | null,
     },
@@ -141,5 +142,24 @@ describe('showEditModal', () => {
             title: 'Updated Work',
         });
         expect(mockRenderTabs).toHaveBeenCalled();
+    });
+
+    it('a failed save keeps the modal open and says so', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { updateTab } = require('../../src/utils/storage');
+        updateTab.mockRejectedValueOnce(new Error('boom'));
+
+        showEditModal(sampleTab);
+        const dialog = document.querySelector('.gmail-tabs-modal .modal-content') as HTMLElement;
+        expect(dialog.getAttribute('role')).toBe('dialog');
+        const saveBtn = document.querySelector('#edit-save-btn') as HTMLButtonElement;
+        saveBtn.click();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(document.querySelector('.gmail-tabs-modal')).not.toBeNull();
+        expect(document.getElementById('gmail-tabs-write-failure')?.textContent).toContain(
+            'Could not save that change'
+        );
+        expect(saveBtn.disabled).toBe(false);
     });
 });

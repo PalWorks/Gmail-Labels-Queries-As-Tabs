@@ -70,6 +70,22 @@ export interface Rule {
     targetLabel?: string; // Only for 'moveToLabel' action
 }
 
+/** The age range a rule accepts: a day, up to ten years. */
+export const MIN_DAYS_OLD = 1;
+export const MAX_DAYS_OLD = 3650;
+
+/**
+ * A rule's age as a whole number of days in range. The value goes straight
+ * into a Gmail search (`older_than:<n>d`), where a fraction, a negative or a
+ * NaN is at best ignored and at worst matches everything, so anything that is
+ * not a finite number reads as `fallback` and the rest is rounded and clamped.
+ */
+export function clampDaysOld(value: unknown, fallback = 30): number {
+    const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(MAX_DAYS_OLD, Math.max(MIN_DAYS_OLD, Math.round(n)));
+}
+
 export interface Settings {
     tabs: Tab[];
     rules: Rule[];
@@ -257,6 +273,7 @@ export type SettingsOp =
     | { kind: 'addRule'; rule: Rule }
     | { kind: 'upsertRule'; rule: Rule }
     | { kind: 'updateRule'; tabId: string; updates: Partial<Rule> }
+    | { kind: 'patchRule'; tabId: string; updates: Partial<Rule>; defaults: Rule }
     | { kind: 'removeRule'; tabId: string }
     | { kind: 'applyTemplate'; tab: Tab; rule: Rule };
 
@@ -346,6 +363,22 @@ export function applyOp(current: Settings, op: SettingsOp): Settings {
                 ...current,
                 rules: current.rules.map((r) => (r.tabId === op.tabId ? { ...r, ...op.updates, tabId: r.tabId } : r)),
             };
+        }
+
+        case 'patchRule': {
+            // Carries only the fields the user changed. Sending a whole rule
+            // built from a read made before the write was queued is the lost
+            // update this op replaces: two debounced edits to one rule (days,
+            // then target label) each wrote the other's field back as it was.
+            const existing = current.rules.find((r) => r.tabId === op.tabId);
+            if (!existing) {
+                const created: Rule = { ...op.defaults, ...op.updates, tabId: op.tabId };
+                return { ...current, rules: [...current.rules, created] };
+            }
+            const merged: Rule = { ...existing, ...op.updates, tabId: existing.tabId };
+            const keys = new Set([...Object.keys(existing), ...Object.keys(merged)]) as Set<keyof Rule>;
+            if ([...keys].every((k) => existing[k] === merged[k])) return current;
+            return { ...current, rules: current.rules.map((r) => (r === existing ? merged : r)) };
         }
 
         case 'removeRule': {
@@ -532,6 +565,33 @@ export async function mutateSettings(accountId: string, op: SettingsOp): Promise
     const viaWorker = await mutateViaServiceWorker(accountId, op);
     if (viaWorker) return viaWorker;
     return mutateLocally(accountId, op);
+}
+
+/** The sentence shown when a write fails because the account's sync quota is used up. */
+export const QUOTA_WRITE_FAILURE_MESSAGE =
+    'Settings are full: Chrome sync allows about 8 KB per account. Remove some tabs or rules.';
+
+/** The sentence shown for any other failed write. */
+export const GENERIC_WRITE_FAILURE_MESSAGE = 'That change could not be saved. Please try again.';
+
+/**
+ * Turn a failed settings write into a sentence a user can act on.
+ *
+ * chrome.storage.sync caps each item at about 8 KB, and an account's settings
+ * are one item, so a long list of tabs and rules eventually fails with
+ * `QUOTA_BYTES_PER_ITEM` (or `QUOTA_BYTES` for the whole store). "Please try
+ * again" is the wrong advice for that one: trying again fails the same way
+ * until something is removed. Exported so every surface that writes settings
+ * says the same thing.
+ */
+export function describeWriteFailure(error: unknown): string {
+    return isQuotaError(error) ? QUOTA_WRITE_FAILURE_MESSAGE : GENERIC_WRITE_FAILURE_MESSAGE;
+}
+
+/** True when a failed write was chrome.storage.sync refusing it for size. */
+export function isQuotaError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+    return /QUOTA_BYTES/.test(message);
 }
 
 /**
@@ -735,6 +795,21 @@ export async function updateRule(accountId: string, tabId: string, updates: Part
 }
 
 /**
+ * Changes only the given fields of a tab's rule, creating the rule from
+ * `defaults` first if the tab has none. The fields are merged into whatever
+ * storage holds when the op is applied, not into a copy the caller read
+ * earlier, so two edits to different fields of one rule both survive.
+ */
+export async function patchRule(
+    accountId: string,
+    tabId: string,
+    updates: Partial<Rule>,
+    defaults: Rule
+): Promise<Settings> {
+    return mutateSettings(accountId, { kind: 'patchRule', tabId, updates, defaults: { ...defaults, tabId } });
+}
+
+/**
  * Removes a rule by tabId.
  */
 export async function removeRule(accountId: string, tabId: string): Promise<Settings> {
@@ -881,6 +956,12 @@ export async function migrateThemeToGlobalIfNeeded(accountId: string): Promise<v
     const alreadySet = await new Promise<boolean>((resolve) => {
         try {
             chrome.storage.local.get([GLOBAL_THEME_KEY], (items) => {
+                // An unreadable store answers "already set": seeding over a
+                // value we could not read would be the worse mistake.
+                if (chrome.runtime.lastError || !items) {
+                    resolve(true);
+                    return;
+                }
                 resolve(items[GLOBAL_THEME_KEY] !== undefined);
             });
         } catch {
@@ -893,6 +974,10 @@ export async function migrateThemeToGlobalIfNeeded(accountId: string): Promise<v
     const legacyTheme = await new Promise<Theme | null>((resolve) => {
         try {
             chrome.storage.sync.get(['theme'], (items) => {
+                if (chrome.runtime.lastError || !items) {
+                    resolve(null);
+                    return;
+                }
                 const t = items.theme;
                 resolve(t === 'light' || t === 'dark' || t === 'system' ? t : null);
             });
@@ -933,52 +1018,96 @@ export async function migrateThemeToGlobalIfNeeded(accountId: string): Promise<v
 export async function migrateLegacySettingsIfNeeded(accountId: string): Promise<void> {
     const key = getAccountKey(accountId);
 
-    // Check if account settings already exist
+    // Check if account settings already exist. Every callback here resolves,
+    // whatever storage says: a lastError leaves `items` undefined, and reading
+    // a property of it threw inside the callback, where nothing could catch
+    // it, so the promise never settled and whoever awaited it hung.
     const exists = await new Promise<boolean>((resolve) => {
-        chrome.storage.sync.get(key, (items) => {
-            resolve(!!items[key]);
-        });
+        try {
+            chrome.storage.sync.get(key, (items) => {
+                // Unreadable counts as "exists": migrating over settings we
+                // could not see would be the worse mistake.
+                if (chrome.runtime.lastError || !items) {
+                    resolve(true);
+                    return;
+                }
+                resolve(!!items[key]);
+            });
+        } catch {
+            resolve(true);
+        }
     });
 
     if (exists) return;
 
     // Check for legacy top-level settings
     await new Promise<void>((resolve, reject) => {
-        chrome.storage.sync.get(['tabs', 'labels', 'theme', 'showUnreadCount'], async (items) => {
-            try {
-                // If we have legacy data (tabs or labels)
-                if (items.tabs || items.labels) {
-                    console.log(`Migrating legacy settings to account: ${accountId}`);
-
-                    let tabs: Tab[] = items.tabs || [];
-
-                    // Handle very old 'labels' format migration if needed
-                    if (items.labels && (!tabs || tabs.length === 0)) {
-                        tabs = (items.labels as LegacyTabLabel[]).map((l) => ({
-                            id: l.id,
-                            title: l.displayName || l.name,
-                            type: 'label',
-                            value: l.name,
-                        }));
-                    }
-
-                    const newSettings: Settings = {
-                        tabs: tabs,
-                        rules: [],
-                        theme: items.theme || 'light',
-                        showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true,
-                        senderIcons: DEFAULT_SETTINGS.senderIcons,
-                        senderIconsFavicons: DEFAULT_SETTINGS.senderIconsFavicons,
-                        senderIconsDomain: DEFAULT_SETTINGS.senderIconsDomain,
-                        senderIconsMailbox: DEFAULT_SETTINGS.senderIconsMailbox,
-                    };
-
-                    await saveSettings(accountId, newSettings);
+        try {
+            chrome.storage.sync.get(['tabs', 'labels', 'theme', 'showUnreadCount'], async (items) => {
+                if (chrome.runtime.lastError || !items) {
+                    resolve();
+                    return;
                 }
+                try {
+                    // If we have legacy data (tabs or labels)
+                    if (items.tabs || items.labels) {
+                        console.log(`Migrating legacy settings to account: ${accountId}`);
+
+                        let tabs: Tab[] = items.tabs || [];
+
+                        // Handle very old 'labels' format migration if needed
+                        if (items.labels && (!tabs || tabs.length === 0)) {
+                            tabs = (items.labels as LegacyTabLabel[]).map((l) => ({
+                                id: l.id,
+                                title: l.displayName || l.name,
+                                type: 'label',
+                                value: l.name,
+                            }));
+                        }
+
+                        const newSettings: Settings = {
+                            tabs: tabs,
+                            rules: [],
+                            theme: items.theme || 'light',
+                            showUnreadCount: items.showUnreadCount !== undefined ? items.showUnreadCount : true,
+                            senderIcons: DEFAULT_SETTINGS.senderIcons,
+                            senderIconsFavicons: DEFAULT_SETTINGS.senderIconsFavicons,
+                            senderIconsDomain: DEFAULT_SETTINGS.senderIconsDomain,
+                            senderIconsMailbox: DEFAULT_SETTINGS.senderIconsMailbox,
+                        };
+
+                        await saveSettings(accountId, newSettings);
+
+                        // The legacy keys belong to whichever account migrated
+                        // first. Left behind, every account signed in later
+                        // found them too and inherited the first one's tabs.
+                        // `theme` stays: migrateThemeToGlobalIfNeeded consumes
+                        // and removes it. Best effort: the account is already
+                        // saved, and a leftover key costs one more migration
+                        // at worst.
+                        await removeLegacyKeys(['tabs', 'labels', 'showUnreadCount']);
+                    }
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+/** Remove top-level sync keys, resolving whatever happens. */
+function removeLegacyKeys(keys: string[]): Promise<void> {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.sync.remove(keys, () => {
+                void chrome.runtime.lastError; // best-effort cleanup
                 resolve();
-            } catch (e) {
-                reject(e);
-            }
-        });
+            });
+        } catch {
+            resolve();
+        }
     });
 }

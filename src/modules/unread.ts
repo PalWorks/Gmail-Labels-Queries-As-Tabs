@@ -23,7 +23,14 @@ import {
  * Lowercase, replace separators with space, collapse whitespace.
  */
 export function normalizeLabel(name: string): string {
-    return decodeURIComponent(name)
+    let decoded = name;
+    try {
+        decoded = decodeURIComponent(name);
+    } catch {
+        // A label name may contain a literal '%' ("100% done"), which is not
+        // a valid escape. Match on the raw name rather than throw.
+    }
+    return decoded
         .toLowerCase()
         .replace(/[/\-_]/g, ' ')
         .replace(/\s+/g, ' ')
@@ -206,8 +213,25 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
             if (countSpan) {
                 countSpan.textContent = count > 0 ? count.toString() : '';
             }
+            recordLiveCount(tabType, tabValue, count);
         }
     });
+}
+
+/**
+ * Store a live XHR count in the feed cache, so the next redraw shows it.
+ *
+ * Writing only the badge was not enough: renderTabs() rebuilds every badge
+ * from the feed cache, and inside the 30 s TTL that cache still held the
+ * older feed count, so a live update was reverted by the next redraw.
+ */
+function recordLiveCount(tabType: string | undefined, tabValue: string, count: number): void {
+    if (tabType !== 'label' && tabType !== 'hash') return;
+    const feedLabel = resolveFeedLabel({ id: '', title: '', type: tabType, value: tabValue });
+    if (feedLabel === null) return;
+    const now = Date.now();
+    feedCache.set(feedLabel, { count, ts: now, failures: 0 });
+    lastLiveUpdate.set(feedLabel, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,9 +251,27 @@ export function resolveFeedLabel(tab: Tab): string | null {
     if (tab.type === 'hash') {
         if (tab.value === '#inbox') return '';
         if (tab.value === '#sent') return '^f';
-        if (tab.value.startsWith('#label/')) return tab.value.replace('#label/', '');
+        if (tab.value.startsWith('#label/')) return decodeLabelHash(tab.value);
     }
     return null;
+}
+
+/**
+ * The label name inside a `#label/...` hash, decoded.
+ *
+ * A pinned hash tab stores the address bar as Gmail wrote it, so the name is
+ * already encoded (`My+Label`, `Parent%2FChild`). The feed URL encodes it
+ * again, and without decoding first that produced `My%2BLabel` and
+ * `Parent%252FChild`, feeds for labels that do not exist.
+ */
+function decodeLabelHash(hash: string): string {
+    const raw = hash.slice('#label/'.length).replace(/\+/g, ' ');
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        // A malformed escape is better sent as it is than not at all.
+        return raw;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -272,14 +314,26 @@ interface FeedCacheEntry {
 }
 
 const feedCache = new Map<string, FeedCacheEntry>();
+
+/**
+ * When a live XHR count last arrived for each feed label. A feed fetch that
+ * started before that moment is older news than the badge, so its answer is
+ * not allowed to overwrite it.
+ */
+const lastLiveUpdate = new Map<string, number>();
 const inFlightFeeds = new Map<string, Promise<number | null>>();
 
 let activeFeedFetches = 0;
 const feedFetchWaiters: Array<() => void> = [];
 
-/** Clears the Atom feed cache. Primarily used by tests and forced refreshes. */
+/**
+ * Clears the Atom feed cache. Test-only reset hook: nothing in `src/` calls
+ * it, and tests need it because the cache is module state that outlives
+ * each case.
+ */
 export function clearUnreadCountCache(): void {
     feedCache.clear();
+    lastLiveUpdate.clear();
     inFlightFeeds.clear();
     activeFeedFetches = 0;
     // Resolve rather than drop: a waiter whose promise is thrown away never
@@ -383,9 +437,15 @@ async function getCachedFeedCount(labelForFeed: string): Promise<number | null> 
     const existing = inFlightFeeds.get(labelForFeed);
     if (existing) return existing;
 
+    const fetchStarted = Date.now();
     const promise = fetchFeedCount(labelForFeed)
         .then((count) => {
             const previous = feedCache.get(labelForFeed);
+            // A live count landed while this fetch was on the wire: it is
+            // newer than whatever the feed says, so keep it.
+            if ((lastLiveUpdate.get(labelForFeed) ?? -Infinity) >= fetchStarted) {
+                return previous?.count ?? count;
+            }
             if (count === null) {
                 feedCache.set(labelForFeed, {
                     // Keep the last good number so the badge does not blink to
@@ -491,7 +551,9 @@ export function getUnreadCountFromDOM(tab: Tab): string {
     // For Labels (and hash labels)
     let labelName = tab.value;
     if (tab.type === 'hash' && tab.value.startsWith('#label/')) {
-        labelName = tab.value.replace('#label/', '');
+        // Decoded first: a pinned view keeps Gmail's own encoding, and
+        // encoding that again below would look for an href Gmail never writes.
+        labelName = decodeLabelHash(tab.value);
     }
 
     const encodedLabel = encodeURIComponent(labelName).replace(/%20/g, '+');

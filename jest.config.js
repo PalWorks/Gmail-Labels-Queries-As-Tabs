@@ -11,6 +11,9 @@ module.exports = {
      * compilation, not a hang, so the timeout is what was wrong.
      */
     testTimeout: 20000,
+    // The feedback relay under worker/ is its own package with its own test
+    // runner (`cd worker && npm test`); its tests are not the extension's.
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/worker/'],
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
     },

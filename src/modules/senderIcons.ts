@@ -374,34 +374,63 @@ type FaviconEntry = { state: 'pending' } | { state: 'ok'; url: string } | { stat
 
 const favicons = new Map<string, FaviconEntry>();
 const faviconQueue: string[] = [];
+/**
+ * Probes currently holding a concurrency slot. Each one leaves this set
+ * exactly once, when its own work settles, so the count is the number of
+ * image requests the network really has open.
+ */
 let faviconsInFlight = 0;
+/** One per running probe chain, so cancelling can stop the requests themselves. */
+const faviconAborts = new Set<AbortController>();
 let unreachableStreak = 0;
 /** While in the future, no new icon is requested. See FAVICON_UNREACHABLE_AFTER. */
 let faviconPausedUntil = 0;
 
 export type ProbeResult = 'ok' | 'placeholder' | 'error';
 
-/** Swappable in tests, where jsdom never loads an image. */
-let probeImage = (url: string): Promise<ProbeResult> =>
-    new Promise((resolve) => {
+/**
+ * Load one icon URL into a detached image and report what came back.
+ *
+ * A timeout or an abort ends the request, not just the wait for it: the
+ * handlers are dropped and `src` is cleared, which is how a browser is told
+ * to stop fetching an image. Resolving early while the load carried on meant
+ * the four-at-a-time limit held for our bookkeeping but not on the network.
+ */
+export function probeImageElement(url: string, signal?: AbortSignal): Promise<ProbeResult> {
+    return new Promise((resolve) => {
         const img = new Image();
         let settled = false;
-        const finish = (r: ProbeResult) => {
+        const finish = (r: ProbeResult, abandon: boolean) => {
             if (settled) return;
             settled = true;
             clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            if (abandon) {
+                img.onload = img.onerror = null;
+                img.src = '';
+            }
             resolve(r);
         };
-        const timer = setTimeout(() => finish('error'), FAVICON_TIMEOUT_MS);
+        const onAbort = () => finish('error', true);
+        const timer = setTimeout(() => finish('error', true), FAVICON_TIMEOUT_MS);
+        if (signal?.aborted) {
+            finish('error', false);
+            return;
+        }
+        signal?.addEventListener('abort', onAbort);
         img.referrerPolicy = 'no-referrer';
         img.decoding = 'async';
-        img.onload = () => finish(img.naturalWidth >= FAVICON_MIN_REAL_PX ? 'ok' : 'placeholder');
-        img.onerror = () => finish('error');
+        img.onload = () => finish(img.naturalWidth >= FAVICON_MIN_REAL_PX ? 'ok' : 'placeholder', false);
+        img.onerror = () => finish('error', false);
         img.src = url;
     });
+}
+
+/** Swappable in tests, where jsdom never loads an image. */
+let probeImage: (url: string, signal?: AbortSignal) => Promise<ProbeResult> = probeImageElement;
 
 /** For tests only. */
-export function setImageProbe(probe: (url: string) => Promise<ProbeResult>): void {
+export function setImageProbe(probe: (url: string, signal?: AbortSignal) => Promise<ProbeResult>): void {
     probeImage = probe;
 }
 
@@ -410,13 +439,15 @@ export function setImageProbe(probe: (url: string) => Promise<ProbeResult>): voi
  * then the organisation's domain. Each provider is tried only when the one
  * before it could not be reached; a placeholder is an answer, not an error.
  */
-async function resolveFavicon(host: string): Promise<{ url: string | null; reachable: boolean }> {
+async function resolveFavicon(host: string, signal: AbortSignal): Promise<{ url: string | null; reachable: boolean }> {
     const domains = [...new Set([host, registrableDomain(host)])];
     let reachable = false;
     for (const domain of domains) {
         for (const provider of FAVICON_PROVIDERS) {
+            // Cancelled between two probes: start no further request.
+            if (signal.aborted) return { url: null, reachable };
             const url = provider(domain);
-            const result = await probeImage(url);
+            const result = await probeImage(url, signal);
             if (result === 'ok') return { url, reachable: true };
             if (result === 'placeholder') {
                 reachable = true;
@@ -440,8 +471,10 @@ function pumpFavicons(): void {
     }
     while (faviconsInFlight < FAVICON_CONCURRENCY && faviconQueue.length > 0) {
         const host = faviconQueue.shift()!;
+        const abort = new AbortController();
+        faviconAborts.add(abort);
         faviconsInFlight++;
-        resolveFavicon(host)
+        resolveFavicon(host, abort.signal)
             .then(({ url, reachable }) => {
                 if (gen !== generation) return;
                 if (url) {
@@ -467,7 +500,11 @@ function pumpFavicons(): void {
                     favicons.set(host, { state: 'none', retryAt: Date.now() + FAVICON_ERROR_RETRY_MS });
             })
             .finally(() => {
-                if (gen !== generation) return;
+                // Released whatever the generation: this request held a
+                // slot until now, cancelled or not.
+                // Membership is the settled flag: only a probe still counted
+                // gives its slot back, so nothing is released twice.
+                if (!faviconAborts.delete(abort)) return;
                 faviconsInFlight--;
                 pumpFavicons();
             });
@@ -784,14 +821,15 @@ export function refreshSenderIcons(): void {
 }
 
 /**
- * Drop every queued icon request and ignore any still in flight. An image
- * already requested cannot be recalled, but its answer is discarded and no
- * further request starts.
+ * Drop every queued icon request and abort every one in flight. Aborting
+ * clears each image's `src`, which ends the request; its slot is released
+ * when its probe settles, so the in-flight count never claims a free slot the
+ * network does not have. Any answer that still arrives is discarded.
  */
 function cancelFaviconWork(): void {
     generation++;
     faviconQueue.length = 0;
-    faviconsInFlight = 0;
+    for (const abort of faviconAborts) abort.abort();
     for (const [host, entry] of favicons) if (entry.state === 'pending') favicons.delete(host);
 }
 
@@ -808,6 +846,9 @@ export function uninstallSenderIcons(): void {
 export function resetSenderIconsForTests(): void {
     uninstallSenderIcons();
     favicons.clear();
+    // A test may leave probes that never settle; forget them outright.
+    faviconAborts.clear();
+    faviconsInFlight = 0;
     unreachableStreak = 0;
     faviconPausedUntil = 0;
     learned = {};

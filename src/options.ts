@@ -14,13 +14,18 @@ import {
     getSettings,
     saveSettings,
     savePreferences,
-    upsertRule,
+    patchRule,
     accountStorageKey,
     getAllAccounts,
     addTab,
     getGlobalTheme,
     setGlobalTheme,
     GLOBAL_THEME_STORAGE_KEY,
+    describeWriteFailure,
+    isQuotaError,
+    clampDaysOld,
+    MIN_DAYS_OLD,
+    MAX_DAYS_OLD,
     Tab,
     Rule,
     Settings,
@@ -32,10 +37,18 @@ import {
     generateExportFilename,
     validateImportData,
     triggerDownload,
+    sameAccount,
+    MAX_IMPORT_BYTES,
 } from './utils/importExport';
 import { escapeHtml } from './utils/tabListRenderer';
-import { generateAppsScript, tabToGmailLabel } from './modules/rules';
-import { RULE_TEMPLATES, RULE_TEMPLATES_ENABLED, RuleTemplate, applyRuleTemplate } from './modules/ruleTemplates';
+import { generateAppsScript, tabToRuleTarget } from './modules/rules';
+import {
+    RULE_TEMPLATES,
+    RULE_TEMPLATES_ENABLED,
+    RuleTemplate,
+    applyRuleTemplate,
+    describeTemplateScope,
+} from './modules/ruleTemplates';
 import { setAppSettings, setUserEmail } from './modules/state';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
 import { writeMirroredTheme } from './modules/themeMirror';
@@ -92,8 +105,22 @@ let currentAccountId: string | null = null;
 let currentSettings: Settings | null = null;
 // Theme is browser-wide (shared by all accounts), not part of currentSettings.
 let currentTheme: Theme = 'light';
-// Count only, for opt-in feedback diagnostics; addresses never leave the page.
+// Count only, for the feedback diagnostics; addresses never leave the page.
 let knownAccountCount = 0;
+
+/**
+ * Say a settings write failed, in words that say what to do, and put the page
+ * back on what storage actually holds. `alert` is this page's existing idiom
+ * for a data operation that did not work. A full sync quota gets its own
+ * sentence, because "try again" is the wrong advice there: it fails the same
+ * way until something is removed.
+ */
+function reportWriteFailure(context: string, error: unknown): void {
+    console.error(`Options: ${context}`, error);
+    alert(describeWriteFailure(error));
+    // Renders its own failure; see reloadCurrentAccount's callers.
+    void reloadCurrentAccount().catch((e) => console.error('Options: failed to sync settings', e));
+}
 
 // ---------------------------------------------------------------------------
 // Settings Loading
@@ -395,7 +422,7 @@ function setupAddTab(): void {
             titleGroup.classList.add('hidden');
             addBtn.disabled = true;
         } catch (e: any) {
-            errorEl.textContent = e.message || 'Failed to add tab';
+            errorEl.textContent = isQuotaError(e) ? describeWriteFailure(e) : e.message || 'Failed to add tab';
             errorEl.classList.remove('hidden');
         }
     });
@@ -428,7 +455,7 @@ function renderSettingsTabList(tabs: Tab[]): void {
         // this page's existing idiom for a data operation that did not work.
         onError: (e) => {
             console.error('Options: tab list action failed', e);
-            alert('That change could not be saved. Please try again.');
+            alert(describeWriteFailure(e));
         },
     });
 }
@@ -442,8 +469,15 @@ function setupPreferences(): void {
     if (unreadCheck) {
         unreadCheck.addEventListener('change', async () => {
             if (!currentAccountId) return;
-            const next = await savePreferences(currentAccountId, { showUnreadCount: unreadCheck.checked });
-            currentSettings = next;
+            try {
+                currentSettings = await savePreferences(currentAccountId, { showUnreadCount: unreadCheck.checked });
+            } catch (e) {
+                // Same handling as the sender icon controls: say so, and
+                // show what storage holds rather than a toggle that lies.
+                console.error('Options: could not save the unread count preference', e);
+                alert(describeWriteFailure(e));
+                if (currentSettings) renderPreferences(currentSettings);
+            }
         });
     }
     setupSenderIconPreferences();
@@ -499,7 +533,7 @@ function setupSenderIconPreferences(): void {
             })
             .catch((e) => {
                 console.error('Options: could not save sender icon preference', e);
-                alert('That change could not be saved. Please try again.');
+                alert(describeWriteFailure(e));
                 if (currentSettings) renderPreferences(currentSettings);
             });
     };
@@ -602,6 +636,13 @@ function showImportDialog(): void {
     fileInput.addEventListener('change', (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        // Checked before reading, so a large file is never pulled into memory.
+        // validateImportData checks the parsed size too, for the in-Gmail
+        // import, which reads pasted text rather than a file.
+        if (file.size > MAX_IMPORT_BYTES) {
+            alert(`Error importing: File too large: a settings backup is at most ${MAX_IMPORT_BYTES / 1024} KB.`);
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
@@ -609,13 +650,20 @@ function showImportDialog(): void {
                 const data = JSON.parse(evt.target?.result as string);
                 validateImportData(data);
 
-                if (data.email && currentAccountId && data.email !== currentAccountId) {
+                if (
+                    typeof data.email === 'string' &&
+                    data.email &&
+                    currentAccountId &&
+                    !sameAccount(data.email, currentAccountId)
+                ) {
                     alert(
                         `This configuration belongs to "${data.email}" but you are signed in as "${currentAccountId}". Import rejected.`
                     );
                     return;
                 }
 
+                // validateImportData rebuilt both arrays from known fields and
+                // always leaves `rules` an array.
                 const ruleCount = Array.isArray(data.rules) ? data.rules.length : 0;
                 const summary =
                     `Import ${data.tabs.length} tabs` +
@@ -647,7 +695,7 @@ function showImportDialog(): void {
                     }
                 }
             } catch (err: any) {
-                alert('Error importing: ' + err.message);
+                alert(isQuotaError(err) ? describeWriteFailure(err) : 'Error importing: ' + err.message);
             }
         };
         reader.readAsText(file);
@@ -677,7 +725,7 @@ function renderRuleTemplates(): void {
         <div class="rule-template-card" data-template-id="${escapeHtml(t.id)}">
             <span class="rt-title">${escapeHtml(t.icon)} ${escapeHtml(t.name)}</span>
             <span class="rt-desc">${escapeHtml(t.description)}</span>
-            <span class="rt-meta">label:${escapeHtml(t.labelName)} · ${escapeHtml(t.action)} · ${escapeHtml(String(t.daysOld))}d</span>
+            <span class="rt-meta">${escapeHtml(describeTemplateScope(t))} · ${escapeHtml(t.action)} · ${escapeHtml(String(t.daysOld))}d</span>
             <button class="btn-secondary rt-apply" data-template-id="${escapeHtml(t.id)}">Apply</button>
         </div>
     `
@@ -735,16 +783,17 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
         return;
     }
 
-    // Automation rules run as Gmail "label:" searches, so they only apply to
-    // tabs that resolve to a real label (label tabs and #label/ hash tabs).
-    // System/search hash tabs (#inbox, #starred, #search/...) are excluded.
-    const ruleTabs = tabs.filter((tab) => tabToGmailLabel(tab) !== null);
+    // Automation rules run as Gmail searches scoped to a label or to one of
+    // Gmail's inbox categories, so they apply to tabs that resolve to one:
+    // label tabs, #label/ hash tabs and #category/ hash tabs. Other hash tabs
+    // (#inbox, #starred, #search/...) are excluded. rules.ts decides.
+    const ruleTabs = tabs.filter((tab) => tabToRuleTarget(tab) !== null);
 
     if (ruleTabs.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">\ud83c\udff7\ufe0f</div>
-                <p>No label tabs yet. Automation rules apply to Gmail labels. Add a label tab in Settings to configure a rule.</p>
+                <p>No label or category tabs yet. Automation rules apply to Gmail labels and to the Promotions, Social, Updates and Forums categories. Add one as a tab in Settings to configure a rule.</p>
             </div>
         `;
         return;
@@ -762,6 +811,11 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
         ${ruleTabs
             .map((tab) => {
                 const rule = ruleMap.get(tab.id);
+                // A category tab says so, because its rule searches the
+                // category and not a label, and its title alone can read as
+                // either.
+                const target = tabToRuleTarget(tab);
+                const category = target?.kind === 'category' ? target.category : '';
                 const action = rule?.action || 'trash';
                 const daysOld = rule?.daysOld ?? 30;
                 const enabled = rule?.enabled ?? false;
@@ -769,14 +823,14 @@ function renderRulesList(tabs: Tab[], rules: Rule[]): void {
 
                 return `
                 <div class="rule-row" data-tab-id="${escapeHtml(tab.id)}">
-                    <span class="rule-tab-name">${escapeHtml(tab.title)}</span>
+                    <span class="rule-tab-name">${escapeHtml(tab.title)}${category ? `<span class="rule-tab-scope">category:${escapeHtml(category)}</span>` : ''}</span>
                     <select class="input-select rule-action" data-tab-id="${escapeHtml(tab.id)}">
                         <option value="trash" ${action === 'trash' ? 'selected' : ''}>\ud83d\uddd1 Trash</option>
                         <option value="archive" ${action === 'archive' ? 'selected' : ''}>\ud83d\udce6 Archive</option>
                         <option value="markRead" ${action === 'markRead' ? 'selected' : ''}>✉️ Mark Read</option>
                         <option value="moveToLabel" ${action === 'moveToLabel' ? 'selected' : ''}>\ud83c\udff7 Move to Label</option>
                     </select>
-                    <input type="number" class="input-number rule-days" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(String(daysOld))}" min="1" max="365">
+                    <input type="number" class="input-number rule-days" data-tab-id="${escapeHtml(tab.id)}" value="${escapeHtml(String(daysOld))}" min="${escapeHtml(String(MIN_DAYS_OLD))}" max="${escapeHtml(String(MAX_DAYS_OLD))}" step="1">
                     <label class="toggle-switch">
                         <input type="checkbox" class="rule-enabled" data-tab-id="${escapeHtml(tab.id)}" ${enabled ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
@@ -822,7 +876,11 @@ const pendingRuleWrites = new Map<string, PendingWrite>();
  *
  * Called when the page is hidden, because a tab closed 100ms after the last
  * edit would otherwise drop it, and losing a setting to save a storage write
- * is a bad trade.
+ * is a bad trade. Also called before anything that reads the rules back
+ * (generating the script, switching account, redrawing from storage), so
+ * none of them acts on a value the user has already changed.
+ *
+ * A failure is reported by the write itself, so this never rejects.
  */
 async function flushPendingRuleWrites(): Promise<void> {
     const queued = Array.from(pendingRuleWrites.values());
@@ -830,15 +888,24 @@ async function flushPendingRuleWrites(): Promise<void> {
     await Promise.all(
         queued.map(({ timer, run }) => {
             clearTimeout(timer);
-            return run().catch((err) => console.error('Options: failed to save rule', err));
+            return run();
         })
     );
+}
+
+/** What a tab with no rule shows, and what a first edit creates the rule from. */
+function defaultRuleFor(tabId: string): Rule {
+    return { tabId, action: 'trash', daysOld: 30, enabled: false };
 }
 
 async function handleRuleChange(e: Event): Promise<void> {
     const target = e.target as HTMLElement;
     const tabId = target.getAttribute('data-tab-id');
-    if (!tabId || !currentAccountId) return;
+    // Captured now, at the moment of the edit. Reading it when the debounce
+    // timer fires would write an edit made on one account into whichever
+    // account the page had switched to in the meantime.
+    const accountId = currentAccountId;
+    if (!tabId || !accountId) return;
 
     const updates: Partial<Rule> = {};
     let redrawRow = false;
@@ -849,7 +916,12 @@ async function handleRuleChange(e: Event): Promise<void> {
         redrawRow = true;
     }
     if (target.classList.contains('rule-days')) {
-        updates.daysOld = parseInt((target as HTMLInputElement).value, 10) || 30;
+        const input = target as HTMLInputElement;
+        updates.daysOld = clampDaysOld(parseInt(input.value, 10));
+        // Show what will be saved. `min` and `max` only constrain the
+        // spinner; a typed 0, 99999 or 2.5 would otherwise sit in the field
+        // while storage held something else.
+        input.value = String(updates.daysOld);
     }
     if (target.classList.contains('rule-enabled')) {
         updates.enabled = (target as HTMLInputElement).checked;
@@ -859,18 +931,20 @@ async function handleRuleChange(e: Event): Promise<void> {
     }
     if (Object.keys(updates).length === 0) return;
 
+    // Only the changed fields travel. They are merged into the rule inside
+    // the op queue, against whatever storage holds by then, so two queued
+    // edits to one rule (days, then target label) cannot write each other's
+    // field back as it was. Never rejects: a failure is reported here.
     const write = async (): Promise<void> => {
-        const accountId = currentAccountId;
-        if (!accountId) return;
-        // Read fresh rather than trusting the rendered state: another surface
-        // may have changed this rule since the page last drew it.
-        const settings = await getSettings(accountId);
-        const existing = settings.rules.find((r) => r.tabId === tabId);
-        const base: Rule = existing ?? { tabId, action: 'trash', daysOld: 30, enabled: false };
-
-        const next = await upsertRule(accountId, { ...base, ...updates, tabId });
-        currentSettings = next;
-        if (redrawRow) renderRulesList(next.tabs, next.rules);
+        try {
+            const next = await patchRule(accountId, tabId, updates, defaultRuleFor(tabId));
+            // The page may have moved to another account since the edit.
+            if (accountId !== currentAccountId) return;
+            currentSettings = next;
+            if (redrawRow) renderRulesList(next.tabs, next.rules);
+        } catch (err) {
+            reportWriteFailure('failed to save rule', err);
+        }
     };
 
     const debounced = target.classList.contains('rule-days') || target.classList.contains('rule-target-label');
@@ -879,14 +953,15 @@ async function handleRuleChange(e: Event): Promise<void> {
         return;
     }
 
-    const key = `${tabId}:${target.className}`;
+    const key = `${accountId}:${tabId}:${target.className}`;
     const queued = pendingRuleWrites.get(key);
     if (queued) clearTimeout(queued.timer);
     pendingRuleWrites.set(key, {
         run: write,
         timer: setTimeout(() => {
             pendingRuleWrites.delete(key);
-            void write().catch((err) => console.error('Options: failed to save rule', err));
+            // Reports its own failure; cannot reject.
+            void write();
         }, RULE_WRITE_DEBOUNCE_MS),
     });
 }
@@ -902,7 +977,22 @@ function setupScriptGeneration(): void {
     if (!btn) return;
 
     btn.addEventListener('click', async () => {
-        if (!currentSettings) return;
+        if (!currentSettings || !currentAccountId) return;
+
+        // A days or target-label edit made just before the click is still in
+        // the debounce window. Commit it and read back what storage holds, or
+        // the script is built from the value before the edit.
+        try {
+            await flushPendingRuleWrites();
+            currentSettings = await getSettings(currentAccountId);
+        } catch (e) {
+            console.error('Options: could not read the rules to generate the script', e);
+            btn.textContent = '\u26a0\ufe0f Could not read your rules. Please try again.';
+            setTimeout(() => {
+                btn.textContent = '\ud83d\ude80 Generate & Copy Script';
+            }, 3000);
+            return;
+        }
 
         const sheetUrl = sheetUrlInput?.value?.trim() || undefined;
         const enabledRules = currentSettings.rules.filter((r) => r.enabled);
@@ -916,7 +1006,7 @@ function setupScriptGeneration(): void {
             return;
         }
 
-        const script = generateAppsScript(currentSettings.tabs, currentSettings.rules, currentAccountId!, sheetUrl);
+        const script = generateAppsScript(currentSettings.tabs, currentSettings.rules, currentAccountId, sheetUrl);
 
         try {
             await navigator.clipboard.writeText(script);
@@ -984,10 +1074,21 @@ function setupAccountSwitcher(): void {
         const newAccountId = select.value;
         if (!newAccountId || newAccountId === currentAccountId) return;
 
+        // Land the previous account's pending edits before leaving it. Each
+        // carries the account it was made on, so this is about not losing
+        // them to a closed tab, not about where they go.
+        await flushPendingRuleWrites();
+
         currentAccountId = newAccountId;
         setUserEmail(currentAccountId);
 
-        currentSettings = await getSettings(currentAccountId);
+        try {
+            currentSettings = await getSettings(currentAccountId);
+        } catch (e) {
+            console.error('Options: could not load the selected account', e);
+            showEmptyState('settings-tab-list', 'Failed to load settings. Please try again.');
+            return;
+        }
         setAppSettings(currentSettings);
 
         // Theme is global, so it stays put when switching accounts.
@@ -1190,7 +1291,18 @@ async function reloadCurrentAccount(): Promise<void> {
 function setupSettingsSync(): void {
     if (!chrome.storage?.onChanged) return;
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== 'sync' || !currentAccountId) return;
+        if (area !== 'sync') return;
+
+        // The page opened before any Gmail tab had registered an account, so
+        // it is showing "No account yet". The first one to appear should
+        // replace that without a manual reload.
+        if (!currentAccountId) {
+            if (Object.keys(changes).some((k) => k.startsWith('account_'))) {
+                // Renders its own failure into the tab list; cannot reject.
+                void loadSettings();
+            }
+            return;
+        }
 
         const change = changes[accountStorageKey(currentAccountId)];
         if (!change) {
@@ -1202,13 +1314,42 @@ function setupSettingsSync(): void {
             return;
         }
 
-        // Skip our own writes. `rev` is bumped on every successful write, so
-        // storage already matching what we hold means there is nothing to do.
-        const incomingRev = (change.newValue as Settings | undefined)?.rev;
-        if (typeof incomingRev === 'number' && incomingRev === currentSettings?.rev) return;
+        // Skip our own writes: storage already matching what we hold means
+        // there is nothing to do. The rev alone cannot say that. Two devices
+        // editing offline each bump the same rev to the same number with
+        // different content, and Chrome Sync then delivers the other one's
+        // under a rev this page already holds. So the content has to match
+        // too.
+        const incoming = change.newValue as Settings | undefined;
+        if (
+            incoming &&
+            currentSettings &&
+            typeof incoming.rev === 'number' &&
+            incoming.rev === currentSettings.rev &&
+            settingsFingerprint(incoming) === settingsFingerprint(currentSettings)
+        ) {
+            return;
+        }
 
         void reloadCurrentAccount().catch((e) => console.error('Options: failed to sync settings', e));
     });
+}
+
+/**
+ * The parts of an account's settings this page draws, as one comparable
+ * string. Key order is fixed here rather than taken from the objects, which
+ * can come from different writers.
+ */
+function settingsFingerprint(settings: Settings): string {
+    return JSON.stringify([
+        settings.tabs,
+        settings.rules,
+        settings.showUnreadCount,
+        settings.senderIcons,
+        settings.senderIconsFavicons,
+        settings.senderIconsDomain,
+        settings.senderIconsMailbox,
+    ]);
 }
 
 /** Repopulate the account selector when the set of accounts actually changed. */

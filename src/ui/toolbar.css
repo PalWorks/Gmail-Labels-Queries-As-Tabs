@@ -1092,6 +1092,41 @@ body.theme-unresolved .gmail-tabs-bar {
     box-sizing: border-box;
 }
 
+/*
+ * A settings write that failed for a reason other than a dead context
+ * (reportSettingsWriteFailure). Pinned to the bottom of the page, above
+ * Gmail and our own modals, and dismissed by its button.
+ */
+.gmail-tabs-notice {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 10002;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: var(--modal-bg);
+    color: var(--modal-text);
+    border: 1px solid var(--input-border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.gmail-tabs-notice-close {
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--modal-close-btn);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+}
+
 .tab-color-trigger.is-none .tab-color-dot {
     background: transparent;
     border-style: dashed;

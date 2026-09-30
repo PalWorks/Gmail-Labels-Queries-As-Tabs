@@ -8,7 +8,8 @@
  * key. Nothing secret lives in this bundle — a published extension is a zip
  * anyone can unpack.
  *
- * Diagnostics are opt-in and deliberately narrow: extension version, browser
+ * Diagnostics are included by default, the user can untick them before
+ * sending, and they are deliberately narrow: extension version, browser
  * build, and counts. No label names, no tab titles, no email addresses, no
  * message contents. See ADR-012 in DECISIONS.md.
  */
@@ -68,7 +69,7 @@ export function validateFeedback(input: Pick<FeedbackInput, 'message' | 'replyTo
 }
 
 /**
- * Collect the opt-in diagnostics. Counts only: enough to reproduce a bug,
+ * Collect the diagnostics the form sends unless the box is unticked. Counts only: enough to reproduce a bug,
  * nothing that identifies the user or their mail.
  */
 export function buildDiagnostics(counts: {
