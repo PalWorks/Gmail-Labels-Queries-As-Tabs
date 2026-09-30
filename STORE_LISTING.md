@@ -37,6 +37,7 @@ so a future edit does not quietly undo the placement.
 | Screenshots | 1280x800 or 640x400, 1 required, 5 allowed | Dashboard | 4 |
 | Small promo tile | 440x280 | Dashboard | 4 |
 | Marquee promo tile | 1400x560, featured placement only | Dashboard | 4 |
+| YouTube video | one YouTube URL, no file upload | Dashboard, Store listing tab | `https://youtu.be/PtjGAnSIG5o` ([store-assets/video/](store-assets/video/README.md)) |
 | Single purpose | free text | Privacy tab | 2.1 |
 | Permission justifications | one per permission, keep each under 1,000 characters | Privacy tab | 2.2 |
 | Data usage disclosure | checkboxes plus three certifications | Privacy tab | 2.4 |
@@ -854,6 +855,7 @@ Still to do by hand, before submitting:
 - [ ] Load the zip in a clean Chrome profile and click through once, including the tour.
       Install with a Gmail tab open, then again with none, to see both onboarding surfaces
 - [ ] Paste sections 1.3, 1.4 and 5 into the dashboard, upload all six screenshots, submit
+- [ ] Paste `https://youtu.be/PtjGAnSIG5o` into the Store listing tab's "YouTube video" field
 
 Done since, in the website repository (`PalWorks/Gmail-Labels-As-Tabs`), which nothing in
 this build can verify and which deploys manually:

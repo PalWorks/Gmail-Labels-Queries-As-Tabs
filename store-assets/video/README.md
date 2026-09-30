@@ -15,12 +15,14 @@ which is 1.8.0's and mentions website icons.
 
 ## Where it goes
 
-1. **YouTube**, on the palworks-ai channel, with the title, description, chapters and tags
-   below.
+1. **YouTube**: uploaded 2026-09-30 to the palworks-ai channel as
+   [`https://youtu.be/PtjGAnSIG5o`](https://youtu.be/PtjGAnSIG5o), with the title,
+   description, chapters and tags below.
 2. **Chrome Web Store**: the listing takes a YouTube link, not a file. Paste the video's URL
    into the dashboard's Store listing tab, "YouTube video", at the next submission.
-3. **The website** can embed it on the homepage and on `/gmail-custom-tabs/`, with
-   VideoObject structured data, once it has a YouTube id.
+3. **The website** embeds it on the homepage, with VideoObject structured data whose
+   chapters are Clips, a video sitemap entry and a line in llms.txt. Its id lives in the
+   website repository's `content/video.ts`; a new upload changes it there.
 
 ## YouTube metadata
 
