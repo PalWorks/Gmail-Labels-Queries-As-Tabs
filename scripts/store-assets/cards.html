@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video cards</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700..800&family=Hanken+Grotesk:wght@400..600&family=Martian+Mono:wght@400..500&display=swap">
+<!--
+  The title and end cards for record-video.mjs, in the website's design:
+  the Gmail canvas, the navy ink, and the tab bar as the headline.
+  ?title or ?end in the address picks which one. Adding class "go" to body
+  starts the entrance.
+-->
+<style>
+  :root { --bg: #f2f5fa; --ink: #0e1726; --ink2: #445066; --accent: #1a5fd6; --line: #dde3ec; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); }
+  body { display: flex; flex-direction: column; justify-content: center; padding: 0 180px; font-family: 'Hanken Grotesk', Arial, sans-serif; }
+  .card { display: none; }
+  .brand { display: flex; align-items: center; gap: 18px; font: 700 34px 'Schibsted Grotesk', Arial, sans-serif; }
+  .brand img { width: 64px; height: 64px; border-radius: 14px; }
+  h1 { margin-top: 40px; max-width: 16ch; font: 800 132px/0.94 'Schibsted Grotesk', Arial, sans-serif; letter-spacing: -0.045em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  p { margin-top: 36px; font-size: 40px; color: var(--ink2); }
+  .url { margin-top: 28px; font: 500 34px 'Martian Mono', monospace; color: var(--accent); }
+  .bar { display: flex; gap: 16px; margin-top: 64px; }
+  .tab { display: inline-flex; align-items: center; gap: 12px; height: 72px; padding: 0 30px; border: 2px solid #dadce0; border-radius: 16px;
+    background: #fff; font: 500 32px 'Hanken Grotesk', Arial, sans-serif; color: #444746; }
+  .tab.on { background: #e8f0fe; border-color: #c2d7fb; color: #1967d2; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; }
+  .n { font-size: 26px; font-weight: 700; }
+  .rise { opacity: 0; transform: translateY(24px); }
+  .go .rise { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i) * 110ms); }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <section class="card" id="title">
+    <div class="brand rise" style="--i:0"><img src="../../src/icons/icon128.png" alt=""><span>Gmail Labels as Tabs</span></div>
+    <h1 class="rise" style="--i:1">Your Gmail labels and searches, <em>as tabs.</em></h1>
+    <div class="bar">
+      <span class="tab on rise" style="--i:3">Inbox <span class="n">24</span></span>
+      <span class="tab rise" style="--i:4"><span class="dot" style="background:#1a73e8"></span>Clients <span class="n">6</span></span>
+      <span class="tab rise" style="--i:5"><span class="dot" style="background:#1e8e3e"></span>Invoices <span class="n">3</span></span>
+      <span class="tab rise" style="--i:6"><span class="dot" style="background:#12a4af"></span>Recent files <span class="n">2</span></span>
+    </div>
+  </section>
+  <section class="card" id="end">
+    <div class="brand rise" style="--i:0"><img src="../../src/icons/icon128.png" alt=""><span>Gmail Labels and Search Queries as Tabs</span></div>
+    <h1 class="rise" style="--i:1">Free on the <em>Chrome Web Store.</em></h1>
+    <p class="rise" style="--i:2">Open source. No account. It never reads your mail.</p>
+    <p class="url rise" style="--i:3">palworks.github.io/Gmail-Labels-As-Tabs</p>
+  </section>
+  <script>
+    document.getElementById(location.search.slice(1) || "title").style.display = 'block';
+  </script>
+</body>
+</html>
