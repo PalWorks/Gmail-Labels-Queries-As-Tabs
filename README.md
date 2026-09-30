@@ -20,6 +20,7 @@
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde">Install from Chrome Web Store</a> · 
   <a href="https://palworks.github.io/Gmail-Labels-As-Tabs/">Website</a> · 
+  <a href="https://youtu.be/PtjGAnSIG5o">Demo video</a> · 
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
 </p>
 
@@ -516,7 +517,10 @@ npm run package
 # Creates extension.zip in the project root
 ```
 
-Upload `extension.zip` to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
+Upload `extension.zip` to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole),
+or as a draft through the Chrome Web Store API with `node scripts/cws-upload.mjs` (a dry run
+unless given `--confirm`; it never submits for review on its own). The full sequence is in
+[PLAYBOOK.md](PLAYBOOK.md).
 
 **Published listing:** [Gmail Labels as Tabs on Chrome Web Store](https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde)
 
@@ -526,6 +530,14 @@ The marketing site is **not in this repository**. It lives in
 [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) and is
 published at <https://palworks.github.io/Gmail-Labels-As-Tabs/>, including the privacy
 policy the Chrome Web Store listing links to.
+
+It is a Vite and React site prerendered to real HTML at real paths (`/privacy/`, `/terms/`,
+`/contact/`, `/changelog/`, `/about/`, and two guides, `/gmail-custom-tabs/` and
+`/gmail-search-operators/`), each with its own JSON-LD, plus `llms.txt`, `llms-full.txt`
+and a sitemap. Old `#/` links redirect to the real paths. The homepage embeds the
+[product video](https://youtu.be/PtjGAnSIG5o). Its `/contact/` form, which the extension's
+Help button opens, posts to a Cloudflare Worker in that repository, separate from this
+repository's feedback relay in [worker/](worker/).
 
 A `website/` folder used to sit here as well, left over from the March 2026 split, and it
 kept deploying a second copy of the site. Two privacy policies drifted apart as a result.
@@ -573,12 +585,34 @@ That site deploys **manually**: `gh workflow run deploy.yml --repo PalWorks/Gmai
 - Expanded test suite to 365 tests across 21 suites
 - Agent-oriented documentation set (see Documentation)
 
-### v2.0: Planned
+### v1.3 to v1.6: Shipped
+
+- Tab colours from an accessible, theme-safe palette (1.3)
+- Cleanup rule starter templates (1.3)
+- "System" theme follows Gmail's own theme, not the operating system (1.3, 1.6.1)
+- In-product feedback form, through the feedback relay Worker (1.4)
+- A hardening release: serialized settings writes, the import XSS fix, rules that cannot act on the wrong mail (1.5)
+- The one-minute tour, over Gmail or standalone, and a toolbar menu (1.6)
+
+Every release from 1.5.0 is in [CHANGELOG.md](CHANGELOG.md) in full.
+
+### v1.7 and v1.8: Shipped in 1.8.0
+
+1.7.0 to 1.7.4 were built and never submitted; 1.8.0 carries all of them.
+
+- "Show as Tabs" in Gmail's own label menu, sublabels included (1.7)
+- Gmail integration health on the settings page, and a daily drift canary (1.7)
+- An open Gmail tab gets the bar on install or update without a reload (1.7.3)
+- Only the open tab is highlighted, not its parent too (1.7.4)
+- Sender icons, off by default, with optional website icons (1.8.0)
+- Canary alerts in Google Chat, with proposed selector refreshes (1.8.0)
+
+### Planned
 
 - [ ] Keyboard shortcuts for tab switching (<kbd>Ctrl+1</kbd>, <kbd>Ctrl+2</kbd>, etc.)
 - [ ] Tab grouping and categories
-- [ ] Custom tab icons and colors
-- [ ] Nested label support (parent/child hierarchies)
+- [ ] Custom tab icons
+- [ ] Parent and child tabs that mirror nested labels (a sublabel can already be a tab of its own)
 - [ ] Firefox extension port (WebExtension APIs)
 
 ## Documentation

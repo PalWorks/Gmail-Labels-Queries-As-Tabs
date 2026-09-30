@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.0)
 
 ## Local setup
 
@@ -68,10 +68,21 @@ Confirm `manifest.json` and `package.json` carry the same version.
    deploys only on manual dispatch, and CI's last step will fail if it does not name every
    outbound host and permission this build has. That page went four versions stale because
    it lives somewhere else; assume it is stale until you have read it.
-7. Upload `extension.zip` to the Chrome Web Store Developer Dashboard.
+7. Upload `extension.zip` to the Chrome Web Store as a draft:
+   ```
+   node scripts/cws-upload.mjs              # dry run: checks the zip and the store, sends nothing
+   node scripts/cws-upload.mjs --confirm    # uploads the zip as a draft
+   ```
+   It uses the Chrome Web Store API v2 with the credentials in `~/.secrets` and refuses
+   while another version is in review. The listing text, privacy tab, data usage answers
+   and the YouTube video link are dashboard-only, so fix them there next. Then submit, in
+   the dashboard or with `node scripts/cws-upload.mjs --submit`. Uploading never submits.
 8. Tag the release in git and push the tag.
 9. Dispatch CI on `main` (`gh workflow run ci.yml --ref main`). It is manual-trigger only,
    so nothing runs on the merge itself.
+10. **When the store approves it**, set `LIVE_VERSION` in the website's `content/site.ts`
+    and dispatch its deploy. Features, FAQ answers and changelog entries written ahead for
+    the new version stay hidden on the site until then.
 
 ## Roll back a release
 
@@ -183,7 +194,7 @@ the **published privacy policy** and fails if it no longer describes this code.
 The marketing site is a different repository and also deploys by hand:
 
 ```
-gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main
+gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main -f ref_note="why this deploy"
 ```
 
 A change to the privacy policy is not live, and must not be described as live, until that

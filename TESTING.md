@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-24 (v1.7.4)
+Last updated: 2026-09-30 (v1.8.0)
 
 ## Philosophy
 

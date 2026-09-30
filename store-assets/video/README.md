@@ -24,6 +24,29 @@ which is 1.8.0's and mentions website icons.
    chapters are Clips, a video sitemap entry and a line in llms.txt. Its id lives in the
    website repository's `content/video.ts`; a new upload changes it there.
 
+## Re-recording and uploading
+
+```bash
+npm run build
+NODE_PATH=$(npm root -g) node scripts/store-assets/record-video.mjs [--profile <dir>] [--out <dir>]
+```
+
+It copies the signed-in Chrome profile to a throwaway directory, runs headless Chrome with
+sync off, loads `dist/` unpacked, blurs the personal content listed above, records each
+scene with the DevTools screencast and joins the clips with ffmpeg. The copy is deleted
+afterwards. It needs a global Playwright and ffmpeg. The title and end cards, and the
+thumbnail, come from [scripts/store-assets/cards.html](../../scripts/store-assets/cards.html).
+
+```bash
+node scripts/store-assets/youtube-upload.mjs --check    # sign in, print the channel
+node scripts/store-assets/youtube-upload.mjs            # upload with the metadata below, then set the thumbnail
+```
+
+The uploader uses the YouTube Data API and has no dependencies. It needs a Desktop app
+OAuth client saved as `~/.config/gmail-labels-as-tabs/youtube-client.json`, and keeps its
+refresh token beside it. Until the Cloud project passes YouTube's API audit, every upload
+it makes is restricted to private, whatever `--privacy` says.
+
 ## YouTube metadata
 
 **Title** (under 70 characters, the query first):

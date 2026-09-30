@@ -4,7 +4,7 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
-## [1.8.0] - 2026-09-29
+## [1.8.0] - 2026-09-30
 
 > 1.7.4 was built, tagged and never submitted. This carries it, and everything since 1.6.2.
 
@@ -43,6 +43,13 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
   fallback doing the work, or a shipped fallback that has stopped matching. When a sender
   fallback rots while ARIA still works, the canary writes the value Gmail uses today, and
   `propose-selectors.mjs` opens a pull request with it, tested, never merged (ADR-028).
+- **A product video, and the tooling to make and publish the next one.**
+  `scripts/store-assets/record-video.mjs` records the extension in a real, signed-in Gmail
+  from a throwaway copy of the Chrome profile, with inbox content blurred before the first
+  frame; the result is on YouTube as https://youtu.be/PtjGAnSIG5o and on the website's
+  homepage. `scripts/store-assets/youtube-upload.mjs` uploads through the YouTube Data API,
+  and `scripts/cws-upload.mjs` puts the packaged zip into the Chrome Web Store as a draft,
+  and submits it for review only when asked.
 
 ### Changed
 
@@ -50,6 +57,9 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
   serves every page as real HTML at its own address; the old `#/contact` form still
   redirects there, so versions already installed keep working. The store listing's
   privacy, support and changelog links move to the same real addresses.
+- **Sender icons survive Gmail redrawing a row without flicker.** When Gmail replaces a
+  row's cell, the chip it discarded is put back rather than rebuilt, so its icon does not
+  reload; a chip that no longer matches the settings is still rebuilt.
 
 ### Fixed
 

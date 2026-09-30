@@ -6,7 +6,7 @@ written to be found and to be quoted. Copy each fenced block verbatim.
 **Version this listing describes:** 1.8.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -406,14 +406,12 @@ the help link stops matching a real route, or if a `website/` folder reappears.
 | Support URL | `https://palworks.github.io/Gmail-Labels-As-Tabs/contact/` |
 | Support email | `support@palworks.ai` |
 
-The site has five routes: `/`, `/privacy`, `/terms`, `/changelog` and `/contact`. The last
-one renders the homepage and scrolls to its contact section, which is why the extension's
-own help button already points there. Confirmed present in the deployed bundle on
-2026-09-22, not just in the website source.
-
-An earlier draft of this file claimed `/contact` did not exist and pointed the Support URL
-at the homepage instead. It does exist. The note is kept because the earlier draft is what
-sent somebody looking.
+The site is prerendered, one real page per address: `/`, `/gmail-custom-tabs/`,
+`/gmail-search-operators/`, `/about/`, `/changelog/`, `/privacy/`, `/terms/` and
+`/contact/`. The contact page is a form that reaches `support@palworks.ai` through the
+website's own relay, which is why the extension's Help button points there. The old hash
+addresses (`#/privacy`, `#/contact`) still redirect. Checked on the deployed site on
+2026-09-30.
 
 ---
 
@@ -434,6 +432,7 @@ All generated from the real extension by `scripts/store-assets/build.mjs`. Files
 | Screenshot 4 | 1280x800 | `store-assets/screenshot-4-dark-mode.png` | |
 | Screenshot 5 | 1280x800 | `store-assets/screenshot-5-privacy.png` | |
 | Screenshot 6 | 1280x800 | `store-assets/screenshot-6-tour.png` | |
+| YouTube video | 1:31, 1080p | `https://youtu.be/PtjGAnSIG5o`, from `store-assets/video/` | No, but it is the only moving asset |
 
 **The store has no caption field for screenshots.** Whatever the image has to say must be
 in the image, which is why the generator draws a headline and a subhead onto every one.
@@ -461,7 +460,13 @@ beyond the version:
   the one asset about colour contained no colour picker. The capture now centres the row
   first and fails loudly if the palette is not inside the frame.
 
-**For 1.7.4, the six assets stand unchanged.** The releases since 1.6.2 add two visible
+**For 1.8.0, the six stills stand unchanged, and the video is new.** The video, recorded
+from the 1.8.0 build in a real Gmail with inbox content blurred (see
+[store-assets/video/README.md](store-assets/video/README.md)), shows the tab bar, pinning a
+search, colours, reordering, the tour, the cleanup rules and the privacy page. It does not
+show sender icons either.
+
+**For 1.7.4, the six assets stood unchanged.** The releases since 1.6.2 add two visible
 things: the "Show as Tabs" entry at the end of Gmail's label menu, and the Gmail
 integration row on the settings page. Neither is on the shipped assets. 1.7.3 and 1.7.4 are
 invisible in a still by definition: one removes a reload that no longer has to happen, and
@@ -706,14 +711,16 @@ had both, and had done for months.
 
 | Surface | State |
 |---|---|
-| Store listing | Ready. Paste sections 1 to 5 |
-| Extension README | Done. Heading now carries the full product name |
-| Website homepage | Done. The extension's own tour is embedded under "Take the tour", running the same code, vendored into that repo by its own `sync-wizard.mjs` |
-| Website FAQ | Done. Eleven questions, worded identically to section 7, feeding the existing `FAQPage` markup |
-| `SoftwareApplication` JSON-LD | Done. Existed already, but named a different product and claimed version 1.0.0. Now the full name, the shipping version, licence, feature list, privacy and support URLs |
-| `llms.txt` | Done, at `/Gmail-Labels-As-Tabs/llms.txt`. See the caveat below |
+| Store listing | Ready for 1.8.0. Paste sections 1 to 5 |
+| Extension README | Done. Heading carries the full product name |
+| Website homepage | Done. Design A, with the extension's own tour under "Take the tour" (vendored by the website's `sync-wizard.mjs`) and the demo video under "Watch it" |
+| Website FAQ | Done. 15 questions for 1.6.2, two more that appear when `LIVE_VERSION` reaches 1.7.0 and 1.8.0, feeding `FAQPage` |
+| Website guides | Done. `/gmail-custom-tabs/` compares every way to get tabs in Gmail; `/gmail-search-operators/` lists every operator, checked against Google's own list |
+| Structured data | Done. See point 4 below |
+| `llms.txt`, `llms-full.txt` | Done, generated at build. See the caveat below |
 | `robots.txt` | Present, and names the AI crawlers explicitly. See the caveat below |
-| Website `/changelog` | Keep publishing per release |
+| Website `/changelog/` | Generated from the website's `content/releases.ts`, gated by `LIVE_VERSION`. Keep adding each release |
+| YouTube | Done. `https://youtu.be/PtjGAnSIG5o` on the palworks-ai channel, linking back to the store, the site and both guides |
 | Third-party mentions (blogs, Reddit, alternative-to directories) | None known. The largest gap, and the slowest to close |
 
 **The caveat on both crawler files.** This is a GitHub Pages *project* site, so they serve
@@ -724,61 +731,19 @@ nothing in this direction: a missing `robots.txt` means everything is allowed, a
 is what we want. It would matter if we ever needed to *block* a crawler, which would then
 require either a custom domain or a root Pages repository.
 
-**4. Machine-readable identity.** What the website now carries, kept here because the
-listing and the site have to agree and this file is where that agreement is recorded:
+**4. Machine-readable identity.** The website generates it, from one set of content
+modules, so the site, its structured data and its `llms.txt` cannot disagree. Rebuilt on
+2026-09-29 and extended on 2026-09-30:
 
-`index.html`, in the `<head>`:
+| What | Where it comes from in the website repository | What it carries |
+|---|---|---|
+| JSON-LD, one linked graph per page | `content/schema.ts` | Organization, WebSite, SoftwareApplication (the live version, `LIVE_VERSION` in `content/site.ts`, never a version still in review), SoftwareSourceCode for this repository, FAQPage, HowTo, TechArticle for both guides, the releases as an ItemList, and a VideoObject whose chapters are Clips |
+| `llms.txt` and `llms-full.txt` | the website repository's `prerender.mjs` | The facts, the live features, features not yet in the store marked as such, the FAQ, the video chapters, and every page as plain text |
+| `sitemap.xml` | The same script | Every page, the video, and its poster |
 
-```html
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Gmail Labels and Search Queries as Tabs",
-  "applicationCategory": "BrowserApplication",
-  "operatingSystem": "Chrome",
-  "url": "https://palworks.github.io/Gmail-Labels-As-Tabs/",
-  "downloadUrl": "https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde",
-  "softwareVersion": "1.6.2",
-  "license": "https://opensource.org/licenses/MIT",
-  "isAccessibleForFree": true,
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "description": "Turn Gmail labels and saved searches into a tab bar above your inbox, with live unread counts, tab colors and cleanup rules that run in your own Google account.",
-  "featureList": [
-    "Gmail labels as tabs",
-    "Saved Gmail searches as tabs",
-    "Live unread counts",
-    "Per-account configuration",
-    "Light, dark and Gmail-matching themes",
-    "Cleanup rules as a Google Apps Script",
-    "Export and import configuration as JSON"
-  ]
-}
-</script>
-```
-
-`llms.txt` at the site root:
-
-```
-# Gmail Labels and Search Queries as Tabs
-
-> A Chrome extension (Manifest V3) that puts Gmail labels and saved searches in a tab bar
-> above the inbox, with live unread counts, tab colors, per-account configuration and
-> optional cleanup rules that run as a Google Apps Script in the user's own account.
-
-- Install: https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-- Source: https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs
-- Privacy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
-- Changelog: https://palworks.github.io/Gmail-Labels-As-Tabs/changelog/
-
-## Facts
-
-- Free, MIT licensed, no account required.
-- Runs only on mail.google.com. Message content is never read, stored or transmitted.
-- Permissions: storage, downloads, management, scripting, and the host mail.google.com.
-- Outbound requests only on a user action: the feedback form, and website icons for the optional sender icons.
-- Settings sync through Chrome's own sync, per Gmail account.
-```
+When 1.8.0 is live, bump `LIVE_VERSION` in the website's `content/site.ts` to `1.8.0` and
+redeploy. That one change moves sender icons, the label menu item and their FAQ answers
+from "coming" to "available" on every surface at once.
 
 A note on crawler policy, which is a decision rather than a task: allowing `GPTBot`,
 `PerplexityBot`, `ClaudeBot` and `Google-Extended` in the website's `robots.txt` is what
@@ -807,7 +772,30 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
-Verified on 2026-09-24 against `main` at the 1.7.4 release commit.
+### For 1.8.0, verified on 2026-09-30
+
+- [x] `manifest.json` and `package.json` both read 1.8.0 (CI checks parity), 965 tests pass
+- [x] The website's privacy policy covers 1.8.0: sender icons, both icon hosts, `scripting`,
+      the contact form and the homepage video. Deployed and read back from the live
+      `/privacy/` page on 2026-09-30
+- [x] `node scripts/cws-upload.mjs` (dry run) reads the store: 1.6.2 live at 100%, nothing
+      in review, and accepts the 1.8.0 zip as higher
+- [ ] Dashboard, Store listing tab: paste 1.3 and 1.4, and put `https://youtu.be/PtjGAnSIG5o`
+      in "YouTube video"
+- [ ] Dashboard, Privacy tab: paste 2.1 and 2.2 (single purpose, storage, host and
+      `scripting` justifications), change "Personal communications" as section 2.4 says,
+      and set the Privacy policy URL to `https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/`
+      (the field may still hold the old `#/privacy` address, which redirects but is not the
+      page reviewers should land on)
+- [ ] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
+      for review from the dashboard or with `node scripts/cws-upload.mjs --submit`, only
+      after the two items above
+- [ ] After approval: bump `LIVE_VERSION` to 1.8.0 in the website's `content/site.ts`,
+      deploy the site, and update `cws-store-state` records
+- [ ] Optional: a seventh screenshot showing sender icons in an inbox of demo data; none of
+      the six stills shows them
+
+### For 1.7.4, verified on 2026-09-24 against `main` at the 1.7.4 release commit
 
 - [x] `npm run package` produces the zip from a clean `main`
 - [x] `manifest.json` and `package.json` both read 1.7.4 (CI checks parity)
@@ -842,32 +830,12 @@ Verified on 2026-09-24 against `main` at the 1.7.4 release commit.
       offers to remove it on reopening
 - [x] Screenshots still current: 1.7.0 adds a menu item inside Gmail's own menu and one row
       on the options page, neither of which appears in any of the six shots
-- [ ] **1.8.0:** the data usage answer for "Personal communications" changes (section 2.4),
-      the single purpose statement and the storage and host justifications change
-      (section 2). Paste all four. The two new hosts are disclosed in SECURITY.md, on the
-      in-extension privacy page and in 2.3, and the website's privacy policy needs the same
-      paragraph deployed before submitting
-- [ ] **1.8.0:** consider a seventh screenshot showing sender icons in an inbox of demo data;
-      none of the six shows them
+- [x] Superseded before submission: 1.7.4 was never uploaded, and 1.8.0 carries its changes
 
-Still to do by hand, before submitting:
-
-- [ ] Load the zip in a clean Chrome profile and click through once, including the tour.
-      Install with a Gmail tab open, then again with none, to see both onboarding surfaces
-- [ ] Paste sections 1.3, 1.4 and 5 into the dashboard, upload all six screenshots, submit
-- [ ] Paste `https://youtu.be/PtjGAnSIG5o` into the Store listing tab's "YouTube video" field
-
-Done since, in the website repository (`PalWorks/Gmail-Labels-As-Tabs`), which nothing in
-this build can verify and which deploys manually:
-
-- The product tour is embedded on the homepage, running the extension's own code.
-- The FAQ matches section 7 word for word, and feeds the `FAQPage` markup that was already
-  there.
-- The `SoftwareApplication` markup names the shipping product and version.
-- `llms.txt` added; `robots.txt` names the AI crawlers.
-
-Nothing is live until `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs
---ref main` has run and the page has been checked.
+The website is in its own repository (`PalWorks/Gmail-Labels-As-Tabs`), which nothing in
+this build can verify and which deploys only when
+`gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main` is run and the
+page has been checked. Section 8 records what it carries.
 
 A note for next time: the website deploys **manually**, in both repositories. A change to
 the privacy policy is not live, and must not be described as live, until

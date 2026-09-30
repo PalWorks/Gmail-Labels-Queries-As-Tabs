@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -289,8 +289,9 @@ Checking the deployed page is stronger than co-location, because what a reviewer
 the deployed page and not a file in a tree.
 
 **Consequences.** The extension's own Help link had to move: it pointed at the site being
-retired and would have 404'd for every installed user. It now opens `#/contact`, a real
-route, rather than the `#/#contact` it used, which was not one.
+retired and would have 404'd for every installed user. It then opened `#/contact`, a real
+route, rather than the `#/#contact` it used, which was not one. Since the site was
+prerendered to real paths (1.8.0), it opens `/contact/`; the hash link still redirects.
 
 CI depends on an external site being reachable. That is deliberate. If the privacy policy
 cannot be produced, the release should not proceed.

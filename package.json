@@ -17,7 +17,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/palani/gmail-labels-as-tabs.git"
+    "url": "https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs.git"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.260",

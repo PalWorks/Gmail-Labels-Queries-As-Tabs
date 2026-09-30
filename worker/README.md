@@ -4,12 +4,19 @@ Relays the extension's in-product feedback form to email via Resend.
 
 The extension cannot call Resend directly: a published CRX is a zip anyone can unpack, so
 an API key inside it is a public key. This Worker holds the key instead, and is the only
-origin the *running* extension contacts besides `mail.google.com` (see ADR-012 in
-[DECISIONS.md](../DECISIONS.md)).
+server of ours the *running* extension contacts (see ADR-012 in
+[DECISIONS.md](../DECISIONS.md)). The others are `mail.google.com` and, only if a user
+turns on website icons for sender icons, Google's favicon service (see
+[SECURITY.md](../SECURITY.md)).
 
 One other host appears in the extension, and it is worth not confusing with this one: the
 uninstall URL (ADR-014). Chrome opens it after the extension has already been removed, so
 no code of ours runs and nothing is sent; it is a navigation, not a request.
+
+Nor is it the website's contact form. That form, at `/contact/` on the marketing site
+(which the extension's Help button opens), posts to a different Worker,
+`gmail-tabs-contact.palworks.ai`, kept in the website repository's own `worker/` with its
+own Resend key and KV. Nothing here deploys or configures it.
 
 ## What it does
 

@@ -3,7 +3,7 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.0)
 
 ## Documentation index
 
@@ -24,6 +24,7 @@ Last updated: 2026-09-29 (v1.8.0)
 | Where is the marketing site and the published privacy policy? | Another repository: [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). See ADR-016 and [SECURITY.md](SECURITY.md) |
 | What goes in the Web Store listing, and what is still to do? | [STORE_LISTING.md](STORE_LISTING.md) |
 | Where do the store screenshots come from? | [store-assets/README.md](store-assets/README.md) |
+| Where is the product video, and how is it recorded and uploaded? | [store-assets/video/README.md](store-assets/video/README.md) |
 | What happened to InboxSDK? | [DECISIONS.md](DECISIONS.md) ADR-021, [AUDIT.md](AUDIT.md) section 7 |
 | Why does the color palette look like this? | [test/contrast.test.ts](test/contrast.test.ts) |
 | Why can I not put a hex value in a .ts file? | [test/contrast.test.ts](test/contrast.test.ts) |
@@ -97,6 +98,10 @@ Last updated: 2026-09-29 (v1.8.0)
 | MV3 manifest | [manifest.json](manifest.json) |
 | Feedback relay Worker (holds the mail API key) | [worker/](worker/) |
 | Rendered-pixel contrast audit (manual) | [scripts/contrast-audit.mjs](scripts/contrast-audit.mjs) |
+| Store screenshots and tiles, from the real extension | [scripts/store-assets/build.mjs](scripts/store-assets/build.mjs) |
+| Product video recorder, and its title and end cards | [scripts/store-assets/record-video.mjs](scripts/store-assets/record-video.mjs), [scripts/store-assets/cards.html](scripts/store-assets/cards.html) |
+| YouTube uploader for the product video | [scripts/store-assets/youtube-upload.mjs](scripts/store-assets/youtube-upload.mjs) |
+| Draft upload to the Chrome Web Store (dry run unless `--confirm`) | [scripts/cws-upload.mjs](scripts/cws-upload.mjs) |
 | CI, manual dispatch only | [.github/workflows/](.github/workflows/) |
 | Chrome i18n strings | [_locales/en/messages.json](_locales/en/messages.json) |
 

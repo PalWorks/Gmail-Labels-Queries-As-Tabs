@@ -18,6 +18,8 @@ regenerated whenever the UI changes rather than drifting away from the product.
 | `screenshot-6-tour.png` | 1280x800 | The guided tour, open over a real inbox |
 | `raw/` | various | Unframed source captures |
 
+The product video, its thumbnail and its YouTube metadata are in [video/](video/README.md).
+
 The store has no caption field, so each image carries its own headline and subhead. They
 are listed in [STORE_LISTING.md](../STORE_LISTING.md) alongside the upload order.
 

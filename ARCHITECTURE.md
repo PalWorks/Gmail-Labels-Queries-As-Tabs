@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-09-30 (v1.8.0)
 
 ## 1. High-Level Overview
 
@@ -77,7 +77,10 @@ Gmail-Labels-As-Tabs/
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
 ├── scripts/                   # Tooling: rendered-pixel contrast audit, and the daily drift canary
-│                              #   (Google Chat alerts, selector refresh pull requests; ADR-028)
+│                              #   (Google Chat alerts, selector refresh pull requests; ADR-028),
+│                              #   store asset and video generators, the YouTube uploader, and
+│                              #   cws-upload.mjs (a draft upload to the Chrome Web Store)
+├── store-assets/              # Store tiles, screenshots and the product video; never shipped
 ├── _locales/                  # i18n (internationalization) strings
 ├── dist/                      # Build output (loaded into Chrome)
 └── .github/workflows/         # CI only, manual dispatch (the website is another repo)
@@ -379,7 +382,7 @@ options-page link *passed*, because they mocked the call that was failing. See A
 3. Use `chrome.runtime.sendMessage` bridge from `content.ts`
 
 ### Website Changes
-The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) and deploys manually: `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main`. A duplicate copy used to sit here as `website/` and served a second, drifting privacy policy; it was deleted in v1.5.0 and Pages disabled on this repository.
+The marketing site is not in this repository. It lives in [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs) and deploys manually: `gh workflow run deploy.yml --repo PalWorks/Gmail-Labels-As-Tabs --ref main`. It is prerendered to real paths (`/privacy/`, `/contact/` and the rest; old `#/` links redirect), and its contact form posts to its own Cloudflare Worker, not to `worker/` here. A duplicate copy used to sit here as `website/` and served a second, drifting privacy policy; it was deleted in v1.5.0 and Pages disabled on this repository.
 
 ---
 
