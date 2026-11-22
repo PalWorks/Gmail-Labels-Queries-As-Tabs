@@ -826,7 +826,7 @@ something, a single reading is worth nothing.
       and set the Privacy policy URL to `https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/`
       (the field may still hold the old `#/privacy` address, which redirects but is not the
       page reviewers should land on)
-- [ ] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
+- [x] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
       for review from the dashboard or with `node scripts/cws-upload.mjs --submit`, only
       after the two items above
 - [x] 1.8.1 found published at 100% through the Chrome Web Store API on 2026-11-22; the
