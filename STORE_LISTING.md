@@ -829,8 +829,10 @@ something, a single reading is worth nothing.
 - [ ] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
       for review from the dashboard or with `node scripts/cws-upload.mjs --submit`, only
       after the two items above
-- [ ] After approval: bump `LIVE_VERSION` to 1.8.1 in the website's `content/site.ts`,
-      deploy the site, and update `cws-store-state` records
+- [x] 1.8.1 found published at 100% through the Chrome Web Store API on 2026-11-22; the
+      approval date is not recorded here
+- [x] After approval: `LIVE_VERSION` bumped to 1.8.1 in the website's `content/site.ts` and
+      the site deployed, 2026-11-22T12:16:00+00:00; the live homepage and `llms.txt` read 1.8.1
 - [ ] Optional: a seventh screenshot showing sender icons in an inbox of demo data; none of
       the six stills shows them
 
