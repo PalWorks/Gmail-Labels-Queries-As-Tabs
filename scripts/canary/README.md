@@ -142,7 +142,9 @@ It never touches the browser you are using. It copies the cookie and
 preference files out of a signed-in profile (about 1.2 MB, six files, never
 `Login Data`: the saved passwords are not needed, since the session rides on the cookies), runs
 headless Chrome on a private port against the copy, and deletes the copy
-afterwards whatever happens, including on failure and on Ctrl-C.
+afterwards whatever happens, including on failure and on Ctrl-C. Now and then a
+Chrome helper process writes its caches back after that delete, so each run
+also removes `glt-canary-*` folders in the temp directory older than six hours.
 
 ## Running it daily
 

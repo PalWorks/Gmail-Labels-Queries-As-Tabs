@@ -10,33 +10,46 @@ regenerated whenever the UI changes rather than drifting away from the product.
 |---|---|---|
 | `promo-small-440x280.png` | 440x280 | Required small promo tile |
 | `promo-marquee-1400x560.png` | 1400x560 | Marquee tile, for featured placement |
-| `screenshot-1-tabs-in-gmail.png` | 1280x800 | Tabs in Gmail |
-| `screenshot-2-colors.png` | 1280x800 | Colour picker and palette |
-| `screenshot-3-automation.png` | 1280x800 | Rule starter templates |
-| `screenshot-4-dark-mode.png` | 1280x800 | Dark theme |
+| `screenshot-1-tabs-in-gmail.png` | 1280x800 | The tab bar over the inbox |
+| `screenshot-2-sender-icons.png` | 1280x800 | Sender icons |
+| `screenshot-3-label-menu.png` | 1280x800 | "Show as Tabs" in Gmail's own label menu |
+| `screenshot-4-cleanup-rules.png` | 1280x800 | Cleanup rule starter templates |
 | `screenshot-5-privacy.png` | 1280x800 | Privacy page |
-| `screenshot-6-tour.png` | 1280x800 | The guided tour, open over a real inbox |
 | `raw/` | various | Unframed source captures |
 
 The product video, its thumbnail and its YouTube metadata are in [video/](video/README.md).
 
 The store has no caption field, so each image carries its own headline and subhead. They
-are listed in [STORE_LISTING.md](../STORE_LISTING.md) alongside the upload order.
+are listed in [STORE_LISTING.md](../STORE_LISTING.md) section 4 alongside the upload order.
 
 ## Privacy
 
-The Gmail captures are real, which means the page behind the tab bar is a real inbox. The
-generator blurs the message list, the label sidebar and the header before taking the shot,
-and seeds the bar with demo labels (Clients, Invoices, Newsletters), so no subject, sender,
-address or personal label name appears in any asset. The account's own settings are backed
-up before the capture and restored afterwards, including when a capture fails.
+The Gmail captures are the real product in a real Gmail, so the page behind the tab bar is
+a real inbox. Nothing of it reaches an image:
+
+- The extension runs in a throwaway headless copy of a signed-in profile with sync off,
+  deleted afterwards, so the account's own settings and synced storage are never written.
+- The inbox rows and the sidebar's label names are replaced, in the page and only for the
+  shot, with invented senders, subjects and labels. Sublabels and labels beyond the demo
+  list are hidden. The account avatar and side panel stay blurred.
+- Before a shot is kept, every row must read as demo text and nothing else, and every
+  visible label must carry a demo name; otherwise the run stops before writing anything.
+  `GLT_DEBUG=1` says where leftover text sits (element classes and lengths, never the text).
+- The label menu shot also checks that nothing but the sidebar and our menu covers the
+  label column. A pointer crossing the left rail opens Chat's hover panel, which lists real
+  contacts with their photos; a first run on 2026-11-22 caught exactly that in a raw
+  capture (deleted, never committed), which is why the pointer now starts from the message
+  list and the check exists.
+- The options pages show a demo account in the picker, and the run fails if they show any
+  other.
 
 Check any new asset for readable personal content before uploading. It is the one mistake
 in this directory that cannot be taken back once the listing is live.
 
 ## Honesty
 
-The screenshots show the real product. Two choices are worth recording:
+The screenshots show the real product. Choices worth recording, including some about
+earlier sets (the colour, dark mode and tour stills were retired on 2026-11-22):
 
 - The dark-theme screenshot is the options page, not Gmail. Forcing the dark tab bar over
   a light Gmail would show precisely the mismatch that v1.4.0 fixed, so it would be
@@ -66,36 +79,16 @@ The screenshots show the real product. Two choices are worth recording:
 ## Regenerating
 
 ```bash
-google-chrome --remote-debugging-port=9222     # sign in to Gmail in this profile
-# load dist/ as an unpacked extension, copy its id
-NODE_PATH=$(npm root -g) node scripts/store-assets/build.mjs <extension-id> 9222 you@gmail.com
+npm run build
+NODE_PATH=$(npm root -g) node scripts/store-assets/build.mjs [--profile <dir>] [--account <address>]
 ```
 
-Omit the account argument to skip the Gmail captures and recompose from `raw/`. The script
-fails if any output is the wrong size, if a frame would show a blank band, if the colour
-palette is outside the crop, or if the tour does not open.
+`--profile` defaults to the first profile in `CANARY_SOURCE_PROFILE`, and `--account` to the
+first `CANARY_ACCOUNT` in `~/.config/gmail-labels-as-tabs/alerts.env`: the account the drift
+canary watches (scripts/canary/README.md). It must have user labels, or there is no label
+menu to shoot. Gmail is opened with `authuser`, and the run stops if a different account
+opens. Nothing opens on the desktop.
 
-### Shooting without taking over the desktop
-
-The captures open tabs and bring them to the front, which is disruptive if the browser
-being driven is the one somebody is using. A throwaway copy of a signed-in profile avoids
-that entirely:
-
-```bash
-rsync -a --exclude 'OptGuideOnDeviceModel' --exclude 'Default/Service Worker' \
-      --exclude 'Default/IndexedDB' --exclude 'Default/Cache' --exclude 'SingletonLock' \
-      ~/.config/<profile>/ /tmp/shootprof/
-google-chrome --headless=new --remote-debugging-port=9333 \
-      --user-data-dir=/tmp/shootprof --disable-sync
-```
-
-`--disable-sync` matters: the script writes demo tabs into `chrome.storage.sync` before it
-restores the real ones, and a signed-in clone would push those to the account.
-
-**Chrome 137 and later ignore `--load-extension`.** Load it over the protocol instead,
-which returns the same id the path would have produced:
-
-```js
-const session = await browser.newBrowserCDPSession();
-await session.send('Extensions.loadUnpacked', { path: '<repo>/dist' });
-```
+The script fails if any output is the wrong size, if a frame would show a blank band, or if
+any privacy check above refuses a shot. Gmail redraws its own rows now and then, so it
+dresses them again and checks once more just before each shutter.

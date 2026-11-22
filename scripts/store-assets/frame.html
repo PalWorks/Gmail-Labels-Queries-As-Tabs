@@ -1,50 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>Store screenshot frame</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700..800&family=Hanken+Grotesk:wght@400..600&family=Martian+Mono:wght@500&display=swap">
+<!--
+  The frame every store screenshot is composed in, in the website's design:
+  the Gmail canvas, navy ink, and the feature named in a tab like the ones the
+  product draws. build.mjs fills in the kicker, headline, subhead and capture.
+  The capture runs off the bottom edge, so the product reads as a window you
+  are looking into rather than a picture of one.
+-->
 <style>
-  :root {
-    --blue: #1967d2;
-    --blue-deep: #0b3d91;
-    --ink: #10223f;
-    --muted: #4a5a70;
+  :root { --bg: #f2f5fa; --ink: #0e1726; --ink2: #445066; --accent: #1a5fd6; --line: #dde3ec; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 800px; overflow: hidden; background: var(--bg); color: var(--ink); }
+  body { position: relative; font-family: 'Hanken Grotesk', Arial, sans-serif; }
+  header { padding: 52px 72px 0; }
+  .row { display: flex; align-items: center; gap: 14px; }
+  .row img { width: 34px; height: 34px; border-radius: 8px; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 9px; height: 32px; padding: 0 14px;
+    border: 1px solid #c2d7fb; border-radius: 9px; background: #e8f0fe; color: #1967d2;
+    font: 500 14px 'Martian Mono', ui-monospace, monospace; letter-spacing: 0.02em;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    width: 1280px; height: 800px; overflow: hidden;
-    font-family: 'Noto Sans', Ubuntu, 'Liberation Sans', sans-serif;
-    background: linear-gradient(160deg, #eef3fb 0%, #e3ecfa 55%, #dbe7f8 100%);
-    display: flex; flex-direction: column; align-items: center;
+  .tab::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    margin-top: 22px; max-width: 1100px;
+    font: 800 52px/1.04 'Schibsted Grotesk', Arial, sans-serif; letter-spacing: -0.035em;
   }
-  body.dark {
-    background: linear-gradient(160deg, #141a24 0%, #18202e 55%, #1b2432 100%);
-    --ink: #eaf0f8; --muted: #a9b6c9;
-  }
-  header { width: 100%; padding: 52px 72px 0; }
-  .kicker {
-    display: inline-flex; align-items: center; gap: 10px;
-    font-size: 17px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--blue);
-  }
-  body.dark .kicker { color: #8ab4f8; }
-  .kicker img { width: 30px; height: 30px; border-radius: 7px; }
-  h1 { font-size: 50px; line-height: 1.1; color: var(--ink); margin-top: 18px; font-weight: 800; letter-spacing: -0.5px; }
-  p.sub { font-size: 24px; color: var(--muted); margin-top: 14px; font-weight: 500; }
+  h1 em { font-style: normal; color: var(--accent); }
+  p { margin-top: 14px; max-width: 1000px; font-size: 22px; line-height: 1.4; color: var(--ink2); }
   .shot {
-    margin-top: 40px; width: 1136px; height: 470px; border-radius: 16px; overflow: hidden;
-    box-shadow: 0 26px 60px rgba(12, 32, 66, 0.26), 0 2px 0 rgba(255,255,255,0.7) inset;
-    border: 1px solid rgba(12, 32, 66, 0.12); background: #fff;
+    position: absolute; left: 72px; right: 72px; top: 292px; bottom: 0;
+    overflow: hidden; border: 1px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0;
+    background: #fff; box-shadow: 0 -2px 0 rgba(255,255,255,.8) inset, 0 30px 70px -20px rgba(14, 23, 38, 0.35);
   }
-  body.dark .shot { border-color: rgba(255,255,255,0.14); background: #1a1a2e; box-shadow: 0 26px 60px rgba(0,0,0,0.5); }
-  .shot img { width: 1136px; display: block; }
+  .shot img { display: block; width: 1136px; }
 </style>
 </head>
 <body>
   <header>
-    <div class="kicker"><img id="logo"><span>Gmail Labels as Tabs</span></div>
+    <div class="row"><img id="logo" alt=""><span class="tab" id="kicker"></span></div>
     <h1 id="headline"></h1>
-    <p class="sub" id="sub"></p>
+    <p id="sub"></p>
   </header>
-  <div class="shot"><img id="shot"></div>
+  <div class="shot"><img id="shot" alt=""></div>
 </body>
 </html>

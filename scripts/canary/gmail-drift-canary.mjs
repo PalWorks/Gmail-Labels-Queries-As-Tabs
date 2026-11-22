@@ -1120,7 +1120,44 @@ async function runAgainst(chrome, src, target = { account: null, accountIndex: 0
  * was going and found Gmail changed, which is the answer, not a reason to go
  * looking somewhere else.
  */
+/**
+ * Delete profile copies an earlier run left behind.
+ *
+ * cleanupAsync waits for Chrome to exit before deleting its profile, and
+ * still, now and then, a helper process Chrome leaves running writes its
+ * component caches back after the delete: 181 MB each, found twice in /tmp on
+ * 2026-11-22. They held no cookies (those are deleted with the copy), but a
+ * daily job that leaks a folder now and then fills a disk between reboots. So
+ * each run sweeps what earlier runs left: our prefix only, and only folders
+ * older than any run could still be using, so a concurrent run is never
+ * touched.
+ */
+function sweepStaleProfiles(maxAgeMs = 6 * 60 * 60 * 1000) {
+    const dir = os.tmpdir();
+    let removed = 0;
+    let names = [];
+    try {
+        names = fs.readdirSync(dir).filter((n) => n.startsWith('glt-canary-'));
+    } catch {
+        return 0;
+    }
+    for (const n of names) {
+        const p = path.join(dir, n);
+        try {
+            const st = fs.lstatSync(p);
+            if (!st.isDirectory() || st.uid !== process.getuid?.() || Date.now() - st.mtimeMs < maxAgeMs) continue;
+            fs.rmSync(p, { recursive: true, force: true });
+            removed++;
+        } catch {
+            /* not ours to worry about */
+        }
+    }
+    if (removed) say(`note: removed ${removed} profile cop${removed === 1 ? 'y' : 'ies'} left behind by earlier runs`);
+    return removed;
+}
+
 async function main() {
+    if (!KEEP) sweepStaleProfiles();
     const chrome = findChrome();
     if (!chrome) {
         console.error('No Chrome binary found. Set CANARY_CHROME to its path.');

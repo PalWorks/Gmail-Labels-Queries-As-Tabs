@@ -1,82 +1,78 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Noto Sans', Ubuntu, 'Liberation Sans', sans-serif; overflow: hidden; }
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Store promo tiles</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700..800&family=Hanken+Grotesk:wght@400..600&family=Martian+Mono:wght@500&display=swap">
+<!--
+  The two promo tiles, in the website's design on its navy: the marquee
+  (1400x560, featured placement) and the small tile (440x280, shown in store
+  search and lists, often at half size, so it carries only a name, a claim
+  and the tab bar itself). build.mjs sets the logo and the capture.
+-->
+<style>
+  :root { --navy: #0e1726; --navy2: #16223a; --accent: #7fb0ff; --ink-on: #ffffff; --muted-on: #b9c5da; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #333; padding: 20px; font-family: 'Hanken Grotesk', Arial, sans-serif; }
+  .tile { position: relative; overflow: hidden; color: var(--ink-on);
+    background: radial-gradient(120% 140% at 100% 0%, #1d3a6e 0%, var(--navy2) 45%, var(--navy) 100%); }
+  .brand { display: flex; align-items: center; gap: 14px; font: 700 20px 'Schibsted Grotesk', Arial, sans-serif; }
+  .brand img { border-radius: 12px; background: #fff; }
+  h1 { font: 800 60px/1 'Schibsted Grotesk', Arial, sans-serif; letter-spacing: -0.04em; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .bar { display: flex; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 10px;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); font: 500 15px 'Hanken Grotesk', Arial, sans-serif; }
+  .pill.on { background: #e8f0fe; border-color: #e8f0fe; color: #1967d2; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .n { font-size: 12px; font-weight: 700; opacity: .85; }
 
-  /* ── Marquee 1400x560 ─────────────────────────────────────── */
-  .marquee {
-    width: 1400px; height: 560px; display: flex; align-items: center; gap: 56px;
-    padding: 0 72px;
-    background: linear-gradient(135deg, #0b3d91 0%, #1558c0 48%, #1967d2 100%);
-    color: #fff; position: relative; overflow: hidden;
-  }
-  .marquee::after {
-    content: ''; position: absolute; inset: 0;
-    background: radial-gradient(900px 420px at 88% 12%, rgba(255,255,255,0.16), transparent 70%);
-  }
-  .m-copy { width: 560px; position: relative; z-index: 1; }
-  .m-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
-  .m-brand img { width: 52px; height: 52px; border-radius: 12px; background: #fff; padding: 4px; }
-  .m-brand span { font-size: 20px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.92; }
-  .m-copy h1 { font-size: 54px; line-height: 1.08; font-weight: 800; letter-spacing: -0.8px; }
-  .m-copy p { margin-top: 20px; font-size: 24px; line-height: 1.45; opacity: 0.92; font-weight: 500; }
-  .m-points { margin-top: 30px; display: flex; flex-direction: column; gap: 12px; font-size: 19px; opacity: 0.95; }
-  .m-points div { display: flex; align-items: center; gap: 12px; }
-  .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-  /* Crop the real Gmail capture so the tab bar leads, with the blurred list
-     below it for context. */
-  .m-shot {
-    position: relative; z-index: 1; width: 660px; height: 404px; border-radius: 14px; overflow: hidden;
-    box-shadow: 0 30px 70px rgba(0,0,0,0.42); border: 1px solid rgba(255,255,255,0.25); background: #fff;
-  }
-  .m-shot img { width: 1000px; display: block; margin-left: -228px; margin-top: -52px; }
+  /* Marquee */
+  #marquee { width: 1400px; height: 560px; }
+  #marquee .copy { position: absolute; left: 76px; top: 70px; width: 560px; }
+  #marquee .brand img { width: 52px; height: 52px; }
+  #marquee h1 { margin-top: 34px; font-size: 64px; }
+  #marquee p { margin-top: 22px; font-size: 22px; line-height: 1.45; color: var(--muted-on); }
+  #marquee ul { list-style: none; padding: 0; margin-top: 26px; display: grid; gap: 10px; }
+  #marquee li { display: flex; align-items: center; gap: 12px; font: 500 15px 'Martian Mono', monospace; color: #dfe7f5; }
+  #marquee li::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #marquee .window { position: absolute; left: 700px; top: 86px; width: 800px; height: 520px; border-radius: 16px 0 0 0;
+    overflow: hidden; background: #fff; box-shadow: 0 40px 90px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.25); }
+  #marquee .window img { display: block; width: 1000px; }
 
-  /* ── Small tile 440x280 ───────────────────────────────────── */
-  .small {
-    width: 440px; height: 280px; padding: 30px 32px;
-    background: linear-gradient(140deg, #0b3d91 0%, #1558c0 55%, #1967d2 100%);
-    color: #fff; display: flex; flex-direction: column; justify-content: space-between;
-    position: relative; overflow: hidden;
-  }
-  .small::after {
-    content: ''; position: absolute; inset: 0;
-    background: radial-gradient(360px 200px at 90% 6%, rgba(255,255,255,0.18), transparent 70%);
-  }
-  .s-brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
-  .s-brand img { width: 42px; height: 42px; border-radius: 10px; background: #fff; padding: 3px; }
-  .s-brand span { font-size: 17px; font-weight: 700; line-height: 1.2; }
-  .small h2 { position: relative; z-index: 1; font-size: 31px; line-height: 1.15; font-weight: 800; letter-spacing: -0.4px; }
-  .s-foot { position: relative; z-index: 1; font-size: 15px; opacity: 0.92; font-weight: 500; }
-  .s-tabs { position: relative; z-index: 1; display: flex; gap: 8px; }
-  .chip {
-    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35);
-    border-radius: 999px; padding: 5px 13px; font-size: 13px; font-weight: 600;
-    display: flex; align-items: center; gap: 7px;
-  }
-</style></head>
+  /* Small tile */
+  #small { width: 440px; height: 280px; padding: 30px 30px 0; margin-top: 20px; }
+  #small .brand { font-size: 15px; gap: 10px; }
+  #small .brand img { width: 34px; height: 34px; border-radius: 8px; }
+  #small h1 { margin-top: 20px; font-size: 38px; line-height: 1.02; }
+  #small .bar { position: absolute; left: 30px; right: 0; bottom: 30px; }
+  #small .pill { height: 30px; padding: 0 11px; font-size: 14px; }
+</style>
+</head>
 <body>
-  <div class="marquee" id="marquee">
-    <div class="m-copy">
-      <div class="m-brand"><img class="logo"><span>Gmail Labels as Tabs</span></div>
-      <h1>Your Gmail labels, across the top</h1>
-      <p>Labels and saved searches become tabs. One click per view.</p>
-      <div class="m-points">
-        <div><span class="dot" style="background:#5bb974"></span>Live unread counts and custom colours</div>
-        <div><span class="dot" style="background:#fcc934"></span>One-click cleanup rules, run in your account</div>
-        <div><span class="dot" style="background:#8ab4f8"></span>No analytics, no telemetry, no servers</div>
-      </div>
+  <section class="tile" id="marquee">
+    <div class="copy">
+      <div class="brand"><img class="logo" alt=""><span>Gmail Labels and Search Queries as Tabs</span></div>
+      <h1>Your labels and searches, <em>as tabs.</em></h1>
+      <p>A tab bar above your inbox. One click per view, live unread counts, and who each email is from.</p>
+      <ul>
+        <li>Free and open source</li>
+        <li>Never reads your messages</li>
+        <li>No analytics, no account</li>
+      </ul>
     </div>
-    <div class="m-shot"><img class="shot"></div>
-  </div>
+    <div class="window"><img class="shot" alt=""></div>
+  </section>
 
-  <div class="small" id="small">
-    <div class="s-brand"><img class="logo"><span>Gmail Labels<br>as Tabs</span></div>
-    <h2>Labels and searches, as tabs</h2>
-    <div class="s-tabs">
-      <span class="chip"><span class="dot" style="background:#8ab4f8"></span>Clients</span>
-      <span class="chip"><span class="dot" style="background:#5bb974"></span>Invoices</span>
-      <span class="chip"><span class="dot" style="background:#fcc934"></span>Newsletters</span>
+  <section class="tile" id="small">
+    <div class="brand"><img class="logo" alt=""><span>Gmail Labels as Tabs</span></div>
+    <h1>Labels and searches, <em>as tabs.</em></h1>
+    <div class="bar">
+      <span class="pill on">Inbox <span class="n">24</span></span>
+      <span class="pill"><span class="dot" style="background:#6ea8ff"></span>Clients</span>
+      <span class="pill"><span class="dot" style="background:#5cc98a"></span>Invoices</span>
+      <span class="pill"><span class="dot" style="background:#3cc9d4"></span>Travel</span>
     </div>
-    <div class="s-foot">Unread counts · colours · cleanup rules</div>
-  </div>
-</body></html>
+  </section>
+</body>
+</html>

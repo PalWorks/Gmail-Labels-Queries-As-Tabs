@@ -240,7 +240,7 @@ Anyone whose Gmail has more than a handful of labels: support and shared inboxes
 💻 OPEN SOURCE
 ━━━━━━━━━━━━━━━━━━━━
 
-The full source is public and auditable, with 1082 automated tests covering storage, rendering, accessibility and the cleanup script generator.
+The full source is public and auditable, with more than a thousand automated tests covering storage, rendering, accessibility and the cleanup script generator.
 
 🌐 Website: https://palworks.github.io/Gmail-Labels-As-Tabs/
 🔒 Privacy policy: https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/
@@ -442,8 +442,10 @@ addresses (`#/privacy`, `#/contact`) still redirect. Checked on the deployed sit
 
 ## 4. Graphic assets
 
+_Updated 2026-11-22T17:33:28+00:00._
+
 All generated from the real extension by `scripts/store-assets/build.mjs`. Files are in
-[store-assets/](store-assets/).
+[store-assets/](store-assets/). The store takes at most five screenshots.
 
 **Table T6: Asset inventory**
 
@@ -452,53 +454,38 @@ All generated from the real extension by `scripts/store-assets/build.mjs`. Files
 | Small promo tile | 440x280 | `store-assets/promo-small-440x280.png` | Yes |
 | Marquee promo tile | 1400x560 | `store-assets/promo-marquee-1400x560.png` | Featured placement only |
 | Screenshot 1 | 1280x800 | `store-assets/screenshot-1-tabs-in-gmail.png` | At least one required |
-| Screenshot 2 | 1280x800 | `store-assets/screenshot-2-colors.png` | |
-| Screenshot 3 | 1280x800 | `store-assets/screenshot-3-automation.png` | |
-| Screenshot 4 | 1280x800 | `store-assets/screenshot-4-dark-mode.png` | |
+| Screenshot 2 | 1280x800 | `store-assets/screenshot-2-sender-icons.png` | |
+| Screenshot 3 | 1280x800 | `store-assets/screenshot-3-label-menu.png` | |
+| Screenshot 4 | 1280x800 | `store-assets/screenshot-4-cleanup-rules.png` | |
 | Screenshot 5 | 1280x800 | `store-assets/screenshot-5-privacy.png` | |
-| Screenshot 6 | 1280x800 | `store-assets/screenshot-6-tour.png` | |
 | YouTube video | 1:31, 1080p | `https://youtu.be/PtjGAnSIG5o`, from `store-assets/video/` | No, but it is the only moving asset |
 
 **The store has no caption field for screenshots.** Whatever the image has to say must be
 in the image, which is why the generator draws a headline and a subhead onto every one.
 Those strings, in upload order, are:
 
+**Table T7: Screenshot captions**
+
 | # | Headline | Subhead |
 |---|---|---|
-| 1 | Your labels and searches, as tabs | One click per view, with live unread counts. Inbox content blurred for privacy. |
-| 2 | Colour-code the views that matter | An accessible palette that stays readable in light and dark. |
-| 3 | One-click cleanup rules | Starter templates generate a script that runs in your own Google account. |
-| 4 | Light and dark, done properly | System mode follows the Gmail you are looking at, not just your operating system. |
-| 5 | No analytics. No telemetry. | Read the whole policy in the extension: what is stored, and the two things that ever leave. |
-| 6 | A one-minute tour, over your inbox | Six steps that show the bar working, not a description of it. Reopen it any time. |
+| 1 | Your Gmail labels and searches, as tabs. | Every view you use all day, one click away, with live unread counts. |
+| 2 | See who every email is from. | An optional chip names the sender's organisation. Off until you turn it on. |
+| 3 | Add any label from Gmail's own menu. | Its three-dot menu now ends with Show as Tabs. Sublabels work too. |
+| 4 | Cleanup that runs in your own account. | Starter templates write a Google Apps Script you can read, schedule and stop. |
+| 5 | No analytics. No account. No tracking. | Message content is never read, stored or sent. The whole policy is inside the extension. |
 
-All six were re-shot on 2026-09-22, against the build immediately before 1.6.2. Nothing
-1.6.2 changed is visible in a still: both of its fixes are about frames that no longer
-appear, so a screenshot of the fixed build is identical to these. Two things changed
-beyond the version:
+**Shot on 2026-11-22 against the 1.8.1 build**, the version the store serves. They replace
+the six stills of 2026-09-22 (colours, cleanup, dark mode, privacy, tour), none of which
+showed the two features 1.7 and 1.8 lead with: "Show as Tabs" in Gmail's label menu and
+sender icons. The inbox rows and sidebar label names are invented, swapped into the real
+Gmail page for the shot only; the generator refuses a shot if any row or visible label
+still holds anything else, and if anything but the sidebar and our menu covers the label
+column (store-assets/README.md).
 
-- **Screenshot 6 is new**: the tour, open over a real inbox, with the real tab bar visible
-  above the panel. It is a capture of the running product, triggered through the same
-  message the toolbar menu sends, not a mock-up of the tour.
-- **Screenshot 2 was wrong and is fixed.** Its headline promised a colour palette and the
-  crop showed the Theme and Add Tab cards instead: the palette opened below the fold, so
-  the one asset about colour contained no colour picker. The capture now centres the row
-  first and fails loudly if the palette is not inside the frame.
-
-**For 1.8.0, the six stills stand unchanged, and the video is new.** The video, recorded
-from the 1.8.0 build in a real Gmail with inbox content blurred (see
-[store-assets/video/README.md](store-assets/video/README.md)), shows the tab bar, pinning a
-search, colours, reordering, the tour, the cleanup rules and the privacy page. It does not
-show sender icons either.
-
-**For 1.7.4, the six assets stood unchanged.** The releases since 1.6.2 add two visible
-things: the "Show as Tabs" entry at the end of Gmail's label menu, and the Gmail
-integration row on the settings page. Neither is on the shipped assets. 1.7.3 and 1.7.4 are
-invisible in a still by definition: one removes a reload that no longer has to happen, and
-the other removes a second highlight from a bar that should only ever show one. A seventh screenshot of the menu item would show
-the feature the release notes lead with, and it is the one asset that would have to be shot
-against a real signed-in inbox, with the label list blurred the way screenshot 1 is. Until
-that is shot, the release notes carry the feature and the stills do not.
+**Upload with the next version submission, not on their own.** Changing listing images on
+a published item sends the listing back to review, and these describe 1.8.1, which is
+already live and already described by the release notes and the video. A review cycle for
+images alone buys little; the next submission carries them at no extra cost.
 
 ---
 
@@ -819,13 +806,14 @@ something, a single reading is worth nothing.
       Gmail left open (the open tab was taken over each time, one bar, no errors), normal,
       slow 3G and offline loads, and the settings dialog's focus and Escape
 - [x] 1.8.0 was uploaded as a draft on 2026-09-30 and never submitted; 1.8.1 replaces it
-- [ ] Dashboard, Store listing tab: paste 1.3 and 1.4, and put `https://youtu.be/PtjGAnSIG5o`
-      in "YouTube video"
-- [ ] Dashboard, Privacy tab: paste 2.1 and 2.2 (single purpose, storage, host and
-      `scripting` justifications), change "Personal communications" as section 2.4 says,
-      and set the Privacy policy URL to `https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/`
-      (the field may still hold the old `#/privacy` address, which redirects but is not the
-      page reviewers should land on)
+- [x] Dashboard, Store listing tab, checked against the public listing page on 2026-11-22:
+      the summary and description match 1.3 and 1.4 except the test count (965 then; 1.4
+      now says "more than a thousand", so it no longer goes stale each release) and the
+      source code line, and the YouTube video is set. Paste 1.4 again with the next
+      submission
+- [x] Dashboard, Privacy tab: the listing links the privacy policy at
+      `https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/`. The justifications are
+      not public; 1.8.1 passed review with the `scripting` permission they cover
 - [x] Upload the zip as a draft (`node scripts/cws-upload.mjs --confirm`), then submit it
       for review from the dashboard or with `node scripts/cws-upload.mjs --submit`, only
       after the two items above
@@ -833,8 +821,8 @@ something, a single reading is worth nothing.
       approval date is not recorded here
 - [x] After approval: `LIVE_VERSION` bumped to 1.8.1 in the website's `content/site.ts` and
       the site deployed, 2026-11-22T16:44:31+00:00; the live homepage and `llms.txt` read 1.8.1
-- [ ] Optional: a seventh screenshot showing sender icons in an inbox of demo data; none of
-      the six stills shows them
+- [x] Screenshots showing sender icons and the label menu, in an inbox of demo data: shot on
+      2026-11-22 (section 4), to be uploaded with the next submission
 
 ### For 1.7.4, verified on 2026-09-24 against `main` at the 1.7.4 release commit
 

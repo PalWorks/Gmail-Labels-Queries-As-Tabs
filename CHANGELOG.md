@@ -24,6 +24,18 @@ _Updated 2026-11-22T11:37:44+00:00._
   - The account is never printed: output names it by position ("account 1 of 2"), Gmail
     URLs and navigation errors have the address replaced, and `run-canary.sh` removes any
     email address from text bound for a GitHub issue.
+- **The canary no longer leaves profile copies behind.** Now and then a Chrome helper
+  process wrote its caches back after a run deleted its profile copy (181 MB each, no
+  cookies). Each run now deletes `glt-canary-*` folders older than six hours.
+
+### Changed
+
+- **Store screenshots show 1.8.1.** `scripts/store-assets/build.mjs` is rebuilt around demo
+  data: it runs the real extension in a throwaway headless copy of a signed-in profile,
+  swaps invented senders, subjects and label names into the real Gmail page for the shot,
+  and refuses any shot that still holds anything else. The five screenshots are now the
+  tab bar, sender icons, "Show as Tabs" in Gmail's label menu, cleanup rules and privacy;
+  colours, dark mode and the tour make way, since the store takes five.
 
 ## [1.8.1] - 2026-09-30
 
