@@ -832,7 +832,7 @@ something, a single reading is worth nothing.
 - [x] 1.8.1 found published at 100% through the Chrome Web Store API on 2026-11-22; the
       approval date is not recorded here
 - [x] After approval: `LIVE_VERSION` bumped to 1.8.1 in the website's `content/site.ts` and
-      the site deployed, 2026-11-22T12:16:00+00:00; the live homepage and `llms.txt` read 1.8.1
+      the site deployed, 2026-11-22T16:44:31+00:00; the live homepage and `llms.txt` read 1.8.1
 - [ ] Optional: a seventh screenshot showing sender icons in an inbox of demo data; none of
       the six stills shows them
 
