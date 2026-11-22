@@ -56,6 +56,10 @@
  *     --profile <dir>   source Chrome profile (default: $CANARY_SOURCE_PROFILE,
  *                       else auto-detected from a running Chrome, else
  *                       ~/.config/google-chrome)
+ *     --account <a[,b]> the Google account(s) to measure, in order of
+ *                       preference (default: $CANARY_ACCOUNT, else
+ *                       CANARY_ACCOUNT in ~/.config/gmail-labels-as-tabs/alerts.env,
+ *                       else whichever account is /u/0). See accounts.mjs
  *     --dist <dir>      built extension to load (default: ./dist)
  *     --json            print the fingerprint and nothing else
  *     --keep            do not delete the temporary profile (debugging)
@@ -88,6 +92,8 @@ import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { parseAccounts, gmailUrl, candidates as buildCandidates, accountLabel, observedAccount, isExpectedAccount } from './accounts.mjs';
+import { parseEnvFile, CONFIG_FILE } from './notify.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -118,6 +124,10 @@ const KEEP = FLAG('--keep');
 const DIST = path.resolve(arg('--dist', path.join(REPO, 'dist')));
 
 const say = (...a) => { if (!JSON_ONLY) console.log(...a); };
+// The canary's output reaches canary.log and, on a failure, a public GitHub
+// issue. Gmail URLs and Playwright errors carry the authuser address, so it is
+// replaced before anything is printed.
+const hideAccount = (text) => String(text).replace(/authuser=[^&#\s"]*/g, 'authuser=…');
 
 // ---------------------------------------------------------------------------
 // Locating things
@@ -293,6 +303,10 @@ const PROBE = async () => {
 
     const r = {
         gmailBuild: (window.GLOBALS && window.GLOBALS[9]) || null,
+        // Which account opened, so the canary can tell it measured the one it
+        // was asked to. Judged in Node by accounts.mjs, never recorded.
+        pageTitle: document.title || null,
+        globals10: (window.GLOBALS && typeof window.GLOBALS[10] === 'string' && window.GLOBALS[10]) || null,
         signedIn: false,
         // Proof that the extension under test is actually running here. If it
         // is not, an absent menu item says nothing about Gmail.
@@ -682,6 +696,9 @@ function record(result, verdict, failures, probe) {
     const fp = {
         observedAt: new Date().toISOString(),
         verdict,
+        // Which configured account was measured, by position, never by
+        // address: this file is committed to a public repository.
+        account: result.accountLabel ?? null,
         gmailBuild: probe?.gmailBuild ?? null,
         chrome: result.chromeVersion ?? null,
         labelRows: probe?.labelRows ?? null,
@@ -769,6 +786,7 @@ function record(result, verdict, failures, probe) {
             const strip = (o) => {
                 const c = { ...o };
                 delete c.observedAt;
+                delete c.account;
                 delete c.chrome;
                 delete c.menuOpenedAfterMs;
                 delete c.menuOpenedSinceClickMs;
@@ -784,10 +802,19 @@ function record(result, verdict, failures, probe) {
     return { fp, changed };
 }
 
-async function runAgainst(chrome, src) {
+/**
+ * One run against one profile and one account.
+ *
+ * `target.account` is the address to open (null: /u/0). `target.moreToTry`
+ * says whether another candidate follows; only then may a mailbox with no
+ * user labels be passed over as SKIPPED, because on the last candidate there
+ * is nowhere left to look and "no labels" must be reported as what it is.
+ */
+async function runAgainst(chrome, src, target = { account: null, accountIndex: 0, total: 0, moreToTry: false }) {
     tmpProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'glt-canary-'));
     const files = cloneProfile(src, tmpProfile);
-    say(`profile: ${src} (${files} files cloned)`);
+    const label = accountLabel(target.accountIndex, target.total);
+    say(`profile: ${src} (${files} files cloned), ${label}`);
 
     const port = await freePort();
     chromeProc = spawn(
@@ -819,7 +846,7 @@ async function runAgainst(chrome, src) {
         console.error('Chrome did not expose a debugging endpoint.');
         return { code: EXIT.ERROR };
     }
-    const result = { chromeVersion: browser.version?.() ?? null };
+    const result = { chromeVersion: browser.version?.() ?? null, accountLabel: target.account ? label : null };
 
     // Chrome 137 and later ignore --load-extension. This is the supported way.
     let extensionLoaded = false;
@@ -849,10 +876,10 @@ async function runAgainst(chrome, src) {
         // by the second attempt the extension is installed and settled.
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                await page.goto('https://mail.google.com/mail/u/0/#inbox', { waitUntil: 'commit', timeout: 90000 });
+                await page.goto(gmailUrl(target.account), { waitUntil: 'commit', timeout: 90000 });
                 break;
             } catch (err) {
-                say(`note: navigation attempt ${attempt} reported "${err.message.split('\n')[0]}"`);
+                say(`note: navigation attempt ${attempt} reported "${hideAccount(err.message.split('\n')[0])}"`);
                 await page.waitForTimeout(1500);
             }
         }
@@ -883,7 +910,7 @@ async function runAgainst(chrome, src) {
         // The extension installs its menu item after its own settings load,
         // which is not covered by any Gmail signal.
         await page.waitForTimeout(3000);
-        say(`landed on: ${page.url()}`);
+        say(`landed on: ${hideAccount(page.url())}`);
         // Sender icons first, so they draw while the menu checks run.
         senderEnabled = extensionLoaded && extensionId ? await enableSenderIcons(ctx, extensionId) : false;
         probe = await page.evaluate(PROBE);
@@ -896,7 +923,7 @@ async function runAgainst(chrome, src) {
                 });
         }
     } catch (err) {
-        say(`navigation failed: ${err.message.split('\n')[0]}`);
+        say(`navigation failed: ${hideAccount(err.message.split('\n')[0])}`);
     } finally {
         await browser.close().catch(() => {});
     }
@@ -905,6 +932,20 @@ async function runAgainst(chrome, src) {
         const { fp } = record(result, 'SKIPPED', ['not signed in, or Gmail never loaded'], probe);
         if (JSON_ONLY) console.log(JSON.stringify(fp, null, 2));
         else say('SKIPPED: could not reach a signed-in Gmail. Nothing was learned; this is not a failure.');
+        return { code: EXIT.SKIPPED };
+    }
+
+    // The mailbox that opened must be the one asked for. Gmail opens /u/0
+    // when authuser names an account the profile does not hold, and measuring
+    // somebody else's mailbox is exactly how this canary cried wolf for three
+    // weeks (accounts.mjs).
+    const seen = observedAccount(probe.pageTitle, probe.globals10);
+    if (target.account && !seen) say(`note: Gmail did not say which account it opened; assuming ${label}`);
+    if (!isExpectedAccount(target.account, seen)) {
+        const why = `Gmail opened a different account than ${label}`;
+        const { fp } = record(result, 'SKIPPED', [why], probe);
+        if (JSON_ONLY) console.log(JSON.stringify(fp, null, 2));
+        else say(`SKIPPED: ${why}. Nothing was learned; this is not a failure.`);
         return { code: EXIT.SKIPPED };
     }
 
@@ -923,6 +964,19 @@ async function runAgainst(chrome, src) {
         if (JSON_ONLY) console.log(JSON.stringify(fp, null, 2));
         else say('SKIPPED: the extension did not load in the canary browser, so its menu item could not be judged.');
         return { code: EXIT.SKIPPED };
+    }
+
+    // A mailbox with no user labels has no label menu to open, so C1 to
+    // HOVER would all fail and say nothing about Gmail. While another
+    // candidate remains, that is a reason to look there. On the last one it
+    // is reported as the FAIL it is: the account this canary was told to
+    // watch has labels, and Gmail no longer shows any.
+    if (!probe.c1.ok && probe.c1.userLabels === 0 && target.moreToTry) {
+        const why = `${label} shows no user labels, so the label menu cannot be judged here (${probe.labelRows} label rows)`;
+        const { fp } = record(result, 'SKIPPED', [why], probe);
+        if (JSON_ONLY) console.log(JSON.stringify(fp, null, 2));
+        else say(`SKIPPED: ${why}.`);
+        return { code: EXIT.SKIPPED, noLabels: true };
     }
 
     const checks = [
@@ -1060,7 +1114,7 @@ async function runAgainst(chrome, src) {
 }
 
 /**
- * Try each candidate profile until one reaches a signed-in Gmail.
+ * Try each candidate (account, profile) pair until one gives a verdict.
  *
  * Only a SKIPPED moves on to the next: a FAIL means the canary got where it
  * was going and found Gmail changed, which is the answer, not a reason to go
@@ -1077,32 +1131,67 @@ async function main() {
         return EXIT.ERROR;
     }
 
-    const candidates = findSourceProfiles().filter(
+    const profiles = findSourceProfiles().filter(
         (d) =>
             fs.existsSync(path.join(d, 'Default', 'Cookies')) ||
             fs.existsSync(path.join(d, 'Default', 'Network', 'Cookies'))
     );
-    if (candidates.length === 0) {
+    if (profiles.length === 0) {
         console.error('No Chrome profile with a cookie store. Pass --profile <dir> or set CANARY_SOURCE_PROFILE.');
         return EXIT.SKIPPED;
     }
 
-    let last = EXIT.SKIPPED;
-    for (const src of candidates) {
-        let outcome = await runAgainst(chrome, src);
+    let accounts;
+    try {
+        accounts = readAccounts();
+    } catch (err) {
+        console.error(`CANARY_ACCOUNT is not valid: ${err.message}`);
+        return EXIT.ERROR;
+    }
+    const list = buildCandidates(accounts, profiles);
 
+    const attempt = async (c, moreToTry) => {
+        const target = { ...c, total: accounts.length, moreToTry };
+        let outcome = await runAgainst(chrome, c.profile, target);
         if (outcome.retryable) {
             say('the menu never opened; taking a second opinion in a fresh browser before reporting it');
             await cleanupAsync();
-            outcome = await runAgainst(chrome, src);
+            outcome = await runAgainst(chrome, c.profile, target);
         }
+        return outcome;
+    };
 
+    let last = EXIT.SKIPPED;
+    let firstNoLabels = null;
+    for (let i = 0; i < list.length; i++) {
+        const outcome = await attempt(list[i], i < list.length - 1);
         last = outcome.code;
         if (last !== EXIT.SKIPPED) return last;
+        if (outcome.noLabels && !firstNoLabels) firstNoLabels = list[i];
         await cleanupAsync();
-        if (candidates.length > 1) say(`(trying the next profile)`);
+        if (i < list.length - 1) say(`(trying the next candidate)`);
+    }
+    // Nothing gave a verdict, but a signed-in mailbox without labels was
+    // passed over on the way. Reporting SKIPPED now would hide the one case
+    // where "no labels" may be Gmail's doing, so that mailbox is judged.
+    if (firstNoLabels) {
+        say('no candidate could be judged; judging the mailbox that showed no user labels');
+        last = (await attempt(firstNoLabels, false)).code;
     }
     return last;
+}
+
+/** --account, else $CANARY_ACCOUNT, else CANARY_ACCOUNT in alerts.env. */
+function readAccounts() {
+    let value = arg('--account', process.env.CANARY_ACCOUNT);
+    if (!value) {
+        try {
+            value = parseEnvFile(fs.readFileSync(CONFIG_FILE, 'utf8')).CANARY_ACCOUNT;
+        } catch {
+            /* no alerts.env: no account configured */
+        }
+    }
+    return parseAccounts(value);
 }
 
 main()

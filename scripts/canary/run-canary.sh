@@ -79,10 +79,12 @@ write_state() {
         "$1" "$2" "$3" "${5:-0}" "$(stamp)" "$4" > "$STATE"
 }
 
-# Replace the home directory with ~ in text bound for a public place.
+# Replace the home directory with ~, and any email address with <address>,
+# in text bound for a public place. The canary already never prints the
+# account it measures (accounts.mjs); this is the second lock on that door.
 redact() {
     local tilde='~'
-    printf '%s' "${1//"$HOME"/"$tilde"}"
+    printf '%s' "${1//"$HOME"/"$tilde"}" | sed -E 's/[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}/<address>/g'
 }
 
 # The run that crosses the threshold, then weekly. A daily reminder about

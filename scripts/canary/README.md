@@ -90,6 +90,31 @@ observed doing both.
 extension waits (`MENU_WAIT_MS`, read out of the source rather than copied). An
 absent item then is the extension behaving exactly as designed.
 
+## Which account it measures
+
+Set `CANARY_ACCOUNT` in `~/.config/gmail-labels-as-tabs/alerts.env` to one or
+more Google accounts, separated by commas, in order of preference. Each must
+have user labels: a mailbox without them has no label menu to judge.
+
+Without it, the canary measures whichever account is `/u/0` in each profile,
+and that changes the day another account signs in there. It did, on
+2026-10-29: a label-less account became `/u/0` in the first profile and the
+canary reported "a Gmail contract broke" every night for three weeks while
+Gmail had changed nothing.
+
+With it, every (account, profile) pair is tried, the preferred account in
+every profile first. Gmail is opened with `authuser=<address>`, so the
+account's `/u/N` index does not matter. A run that lands on a different
+mailbox (the profile does not hold that account) is SKIPPED. A mailbox with no
+user labels is passed over while another candidate remains; if none gives a
+verdict, it is judged after all, so a Gmail change that hides every label is
+still a FAIL.
+
+The address is never printed. Output says "account 1 of 2", Gmail URLs and
+navigation errors have it replaced with `authuser=…`, and `run-canary.sh`
+replaces any email address with `<address>` before text reaches a GitHub
+issue. The rules are in `accounts.mjs`, tested by `test/canaryAccounts.test.ts`.
+
 ## Running it by hand
 
 ```
@@ -97,7 +122,7 @@ npm run build
 NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs
 ```
 
-Options: `--profile <dir>`, `--dist <dir>`, `--json`, `--keep`,
+Options: `--profile <dir>`, `--account <a[,b]>`, `--dist <dir>`, `--json`, `--keep`,
 `--no-extension` (measure Gmail alone, without loading our build).
 
 Exit codes: `0` PASS, `2` FAIL, `3` SKIPPED, `4` ERROR. **SKIPPED is not
@@ -169,11 +194,12 @@ break (`canary-fail`, `canary-error`, `canary-degraded`, `canary-skipped`) has i
 |---|---|---|
 | `gmail-drift-canary.mjs` | yes | The measurement. Reports; never escalates |
 | `run-canary.sh` | yes | The escalation. Streak counting, notify-send, `gh issue create`, Google Chat |
+| `accounts.mjs` | yes | Which account is measured, and in what order candidates are tried |
 | `notify.mjs` | yes | Delivers one Google Chat alert. Decides nothing |
 | `propose-selectors.mjs` | yes | Turns a selector proposal into a pull request. Never merges |
 | `install-canary.sh` | yes | Writes and enables the systemd user units; creates the alert config |
 | `selector-proposal.json` | no | Written only while a sender fallback has rotted; removed when it no longer has |
-| `~/.config/gmail-labels-as-tabs/alerts.env` | never | The webhook and the auto-PR switch. Outside the repository on purpose |
+| `~/.config/gmail-labels-as-tabs/alerts.env` | never | The webhook, the auto-PR switch and `CANARY_ACCOUNT`. Outside the repository on purpose |
 | `fingerprint.json` | yes | What Gmail looked like on the last run that changed anything |
 | `history.ndjson` | no | One line per run, including skips |
 | `state.json` | no | The streak counters |

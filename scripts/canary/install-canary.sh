@@ -60,6 +60,12 @@ GCHAT_WEBHOOK_URL=
 # 1 lets the canary open a pull request when a sender icon fallback in
 # src/utils/selectors.ts stops matching Gmail. Never merged automatically.
 GLT_CANARY_AUTO_PR=1
+
+# The Google account(s) the canary measures, in order of preference, separated
+# by commas. Each must have user labels, or the label menu cannot be judged.
+# Empty: whichever account is first in the profile, which changes the day
+# another account signs in there. Never printed by the canary.
+CANARY_ACCOUNT=
 CONF
             echo "Created $CONF (mode 600). Paste the webhook URL into it, then run:"
             echo "  $HERE/install-canary.sh --test-alert"

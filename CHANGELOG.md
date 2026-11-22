@@ -4,6 +4,27 @@ All notable changes to **Gmail Labels and Search Queries as Tabs** are documente
 The format follows Keep a Changelog, and the project uses semantic versioning. Keep
 `manifest.json` and `package.json` in sync with the version headings below.
 
+## [Unreleased]
+
+_Updated 2026-11-22T11:37:44+00:00._
+
+### Fixed
+
+- **The drift canary measures the account it is told to, not whichever is first.** From
+  2026-10-29 it reported "a Gmail contract broke" every night, and Gmail had changed
+  nothing: a Google account with no user labels had been added to the first Chrome profile
+  it copies, so `/mail/u/0` opened a mailbox with no label menu and C1 to HOVER failed in a
+  cascade. The extension passed every check against the intended account throughout.
+  - `CANARY_ACCOUNT` (in `alerts.env`, or `--account`) names one or more accounts in order
+    of preference. Gmail is opened with `authuser`, so the account's `/u/N` index no longer
+    matters, and a run that lands on a different mailbox is SKIPPED, not judged.
+  - A mailbox with no user labels is passed over while another profile or account remains.
+    If nothing else gives a verdict, it is judged after all, so a Gmail change that hides
+    every label still reports as a FAIL.
+  - The account is never printed: output names it by position ("account 1 of 2"), Gmail
+    URLs and navigation errors have the address replaced, and `run-canary.sh` removes any
+    email address from text bound for a GitHub issue.
+
 ## [1.8.1] - 2026-09-30
 
 > 1.8.0 was uploaded to the Chrome Web Store as a draft and never submitted. This is 1.8.0
