@@ -75,7 +75,7 @@ raw IP. Rotating it only resets the per-network counters.
 ## Deployed instance
 
 `https://gmail-tabs-feedback.sunmooncal.workers.dev`, Cloudflare account
-`96ec2a31…` (Palaniappan.tn@gmail.com), served on workers.dev with preview URLs off.
+`96ec2a31…` (the PalWorks account), served on workers.dev with preview URLs off.
 KV namespace `FEEDBACK_RATE_LIMIT` = `447448e1…`. The Resend key is a sending-only key
 scoped to the `palworks.ai` domain, stored as the `RESEND_API_KEY` secret and never in
 this repo. Rate-limit binding `BURST`, namespace `2002` (the website's contact worker uses

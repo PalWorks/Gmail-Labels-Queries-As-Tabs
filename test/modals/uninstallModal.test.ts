@@ -74,11 +74,11 @@ describe('showUninstallModal', () => {
         expect(modal).not.toBeNull();
     });
 
-    it('should display "Uninstall Extension?" header', () => {
+    it('should display "Uninstall the extension?" header', () => {
         showUninstallModal();
 
         const h3 = document.querySelector('.gmail-tabs-modal h3');
-        expect(h3?.textContent).toBe('Uninstall Extension?');
+        expect(h3?.textContent).toBe('Uninstall the extension?');
     });
 
     it('should have Yes and No buttons', () => {
@@ -214,7 +214,7 @@ describe('showUninstallModal', () => {
 
             (document.querySelector('#uninstall-no-btn') as HTMLElement).click();
 
-            expect(document.querySelector('.gmail-tabs-modal h3')?.textContent).toBe('Uninstall Extension?');
+            expect(document.querySelector('.gmail-tabs-modal h3')?.textContent).toBe('Uninstall the extension?');
             expect(error).toHaveBeenCalled();
             error.mockRestore();
         });

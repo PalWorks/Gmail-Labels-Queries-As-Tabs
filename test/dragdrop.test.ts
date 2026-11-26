@@ -9,6 +9,7 @@ export {};
  */
 
 import {
+    reorderForDrop,
     handleDragStart,
     handleDragOver,
     handleDragEnter,
@@ -429,9 +430,46 @@ describe('foreign drops and failed reorders', () => {
         storage.updateTabOrder.mockRejectedValueOnce(new Error('boom'));
         const onError = jest.fn();
         const handlers = createModalDragHandlers(document.createElement('ul'), jest.fn(), jest.fn(), onError);
-        handlers.handleModalDragStart.call(Object.assign(document.createElement('li'), {}), createDragEvent('dragstart'));
+        const from = document.createElement('li');
+        from.dataset.tabId = '1';
+        const to = document.createElement('li');
+        to.dataset.tabId = '3';
+        handlers.handleModalDragStart.call(from, createDragEvent('dragstart'));
 
-        await handlers.handleModalDrop.call(document.createElement('li'), createDragEvent('drop'));
+        await handlers.handleModalDrop.call(to, createDragEvent('drop'));
         expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }));
+    });
+});
+
+describe('reorderForDrop', () => {
+    const tabs = [
+        { id: 'a', title: 'A', value: 'A', type: 'label' as const },
+        { id: 'b', title: 'B', value: 'B', type: 'label' as const },
+        { id: 'c', title: 'C', value: 'C', type: 'label' as const },
+    ];
+    const el = (tabId?: string, index?: number) => {
+        const e = document.createElement('div');
+        if (tabId) e.dataset.tabId = tabId;
+        if (index !== undefined) e.dataset.index = String(index);
+        return e;
+    };
+
+    test.each([
+        ['a', 'c', true, 'bca'],
+        ['a', 'c', false, 'bac'],
+        ['c', 'a', false, 'cab'],
+        ['c', 'a', true, 'acb'],
+    ])('moves %s next to %s (after: %s)', (from, to, after, expected) => {
+        expect(reorderForDrop(tabs, el(from), el(to), after)!.map((t) => t.id).join('')).toBe(expected);
+    });
+
+    test('follows the tab by id when the list changed under the drag', () => {
+        // Drawn as [a, b, c]; someone removed "a" before the drop.
+        const now = tabs.slice(1);
+        expect(reorderForDrop(now, el('c', 2), el('b', 1), false)!.map((t) => t.id).join('')).toBe('cb');
+    });
+
+    test('drops the drop when a tab is gone, rather than inserting nothing', () => {
+        expect(reorderForDrop(tabs.slice(1), el('a', 0), el('c', 2), true)).toBeNull();
     });
 });

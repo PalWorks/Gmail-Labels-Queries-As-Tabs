@@ -19,9 +19,10 @@
 // either way the zip may not be what the commit says it is. Run npm run package
 // from a clean tree.
 //
-// Credentials are read from ~/.secrets (the palaniappan.tn2@gmail.com developer
-// account, OAuth client from the Cloud project chrome-web-store-508117) and
-// never printed.
+// Credentials are read from ~/.secrets and never printed. Which files hold
+// them is named in ~/.config/gmail-labels-as-tabs/cws.json, outside this public
+// repository, because the file names carry the developer account's address:
+//   { "client": "<OAuth client JSON>", "refreshToken": "<file>", "publisherId": "<file>" }
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -32,11 +33,20 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ITEM_ID = 'jemjnjlplglfoiipcjhoacneigdgfmde';
 const SECRETS = join(homedir(), '.secrets');
-const SECRET_FILES = {
-  client: 'Chrome Web Store OAuth palaniappan.tn2.json',
-  refreshToken: 'Chrome Web Store Refresh Token (palaniappan.tn2@gmail.com)',
-  publisherId: 'Chrome Web Store Publisher ID (palaniappan.tn2@gmail.com)',
-};
+const SECRET_NAMES_FILE = join(homedir(), '.config', 'gmail-labels-as-tabs', 'cws.json');
+function readSecretNames() {
+  try {
+    const names = JSON.parse(readFileSync(SECRET_NAMES_FILE, 'utf8'));
+    for (const key of ['client', 'refreshToken', 'publisherId']) {
+      if (typeof names[key] !== 'string' || !names[key]) throw new Error(`${key} is missing`);
+    }
+    return names;
+  } catch (e) {
+    console.error(`Stopped: ${SECRET_NAMES_FILE} must name the three credential files in ~/.secrets (${e.message})`);
+    process.exit(1);
+  }
+}
+const SECRET_FILES = readSecretNames();
 const API = 'https://chromewebstore.googleapis.com';
 
 const args = process.argv.slice(2);

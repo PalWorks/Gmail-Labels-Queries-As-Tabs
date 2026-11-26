@@ -167,7 +167,7 @@ function createSettingsModal(): void {
                     <div class="input-group" id="modal-title-group" style="display:none;">
                         <input type="text" id="modal-new-title" placeholder="Tab Title">
                     </div>
-                    <button id="modal-add-btn" class="primary-btn" style="width: 100%; margin-bottom: 16px;" disabled>Add Tab</button>
+                    <button id="modal-add-btn" class="primary-btn" style="width: 100%; margin-bottom: 16px;" disabled>Add tab</button>
                 </div>
                 <div style="border-bottom: 1px solid var(--list-border); margin-bottom: 16px;"></div>
                 <ul id="modal-labels-list"></ul>
@@ -183,10 +183,10 @@ function createSettingsModal(): void {
                     <h4 style="margin: 0 0 12px 0; font-weight: 500; font-size: 14px; color: var(--modal-text);">Data & Sync</h4>
                     <div style="display: flex; gap: 12px; margin-bottom: 16px;">
                         <button id="export-btn" class="secondary-btn" style="flex: 1;">
-                            Export Config
+                            Export settings
                         </button>
                         <button id="import-btn" class="secondary-btn" style="flex: 1;">
-                            Import Config
+                            Import settings
                         </button>
                     </div>
                     
@@ -194,7 +194,7 @@ function createSettingsModal(): void {
                     
                     <h4 style="margin: 0 0 12px 0; font-weight: 500; font-size: 14px; color: var(--modal-text);">Danger Zone</h4>
                     <button id="uninstall-btn" class="secondary-btn" style="width: 100%;">
-                        Uninstall Extension
+                        Uninstall extension
                     </button>
                 </div>
             </div>

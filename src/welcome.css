@@ -67,6 +67,8 @@ body {
 .container {
     max-width: 680px;
     width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 48px 20px 40px;
     display: flex;
     flex-direction: column;

@@ -186,7 +186,7 @@ function buildOptionsDOM(): void {
             <div    id="settings-add-title-group"  class="hidden">
                 <input id="settings-add-title" type="text" placeholder="Tab Title">
             </div>
-            <button id="settings-add-btn" disabled>Add Tab</button>
+            <button id="settings-add-btn" disabled>Add tab</button>
             <div    id="settings-add-error" class="hidden"></div>
 
             <ul id="settings-tab-list"></ul>
@@ -198,9 +198,9 @@ function buildOptionsDOM(): void {
             <span class="health-pill" id="health-label-menu">-</span>
             <button id="health-copy-btn">Copy diagnostics</button>
 
-            <button id="settings-export-btn">Export Config</button>
-            <button id="settings-import-btn">Import Config</button>
-            <button id="settings-uninstall-btn">Uninstall Extension</button>
+            <button id="settings-export-btn">Export settings</button>
+            <button id="settings-import-btn">Import settings</button>
+            <button id="settings-uninstall-btn">Uninstall extension</button>
 
             <button id="sidebar-theme-toggle">Toggle Theme</button>
             <span id="theme-icon-moon"></span>
@@ -209,7 +209,7 @@ function buildOptionsDOM(): void {
 
         <section id="section-rules" class="hidden">
             <div id="rules-list"></div>
-            <button id="generate-script-btn">Generate & Copy Script</button>
+            <button id="generate-script-btn">Generate and copy script</button>
             <input id="sheet-url" type="text" placeholder="Sheet URL">
             <a id="view-guide-link" href="#">View Guide</a>
         </section>
@@ -266,6 +266,8 @@ beforeEach(() => {
     document.body.innerHTML = '';
     document.body.className = '';
     window.location.hash = '';
+    // The page reads and writes ?account=; start every test without one.
+    window.history.replaceState(null, '', '/options.html');
 
     mockGetAllAccounts.mockResolvedValue(['user@gmail.com']);
     mockGetSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
@@ -380,6 +382,42 @@ describe('loadSettings', () => {
 // ---------------------------------------------------------------------------
 // Account Switching
 // ---------------------------------------------------------------------------
+
+describe('opening on the Gmail account it came from', () => {
+    test('?account= selects that account, without regard to case', async () => {
+        mockGetAllAccounts.mockResolvedValue(['first@gmail.com', 'work@company.example']);
+        window.history.replaceState(null, '', '/options.html?account=Work%40Company.example');
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        expect((document.getElementById('account-select') as HTMLSelectElement).value).toBe('work@company.example');
+        expect(mockGetSettings).toHaveBeenCalledWith('work@company.example');
+    });
+
+    test('an account it does not know falls back to the first', async () => {
+        mockGetAllAccounts.mockResolvedValue(['first@gmail.com', 'work@company.example']);
+        window.history.replaceState(null, '', '/options.html?account=stranger%40x.com');
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        expect((document.getElementById('account-select') as HTMLSelectElement).value).toBe('first@gmail.com');
+    });
+
+    test('switching accounts updates the address, so a reload stays on it', async () => {
+        mockGetAllAccounts.mockResolvedValue(['first@gmail.com', 'work@company.example']);
+        window.history.replaceState(null, '', '/options.html?account=first%40gmail.com');
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'work@company.example';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+        await flushAsync();
+
+        expect(new URLSearchParams(window.location.search).get('account')).toBe('work@company.example');
+    });
+});
 
 describe('account switching', () => {
     test('populates account selector with all accounts', async () => {

@@ -33,12 +33,6 @@ export const SIDEBAR_LINK_SELECTORS = ['.aim a[href*="#"]', '[role="navigation"]
 /** Main content area (used for dark mode background detection) */
 export const MAIN_CONTENT_SELECTOR = '.nH';
 
-/** Navigation container candidates (ordered by specificity) */
-export const NAV_SELECTORS = [
-    '[role="navigation"]',
-    '.wT',
-];
-
 /** Links pointing to Gmail label views */
 export const LABEL_LINK_SELECTOR = 'a[href*="#label/"]';
 

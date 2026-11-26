@@ -77,7 +77,9 @@ export function afterRate(state: RatingState): RatingState {
 
 export function afterNotNow(state: RatingState, now: number): RatingState {
     const shows = state.shows + 1;
-    return { ...state, shows, snoozedUntil: now + RATING_SNOOZE_DAYS * DAY_MS, done: shows >= RATING_MAX_SHOWS };
+    // A "Not now" in a tab that had not yet heard of a "Don't ask again" in
+    // another must not undo it.
+    return { ...state, shows, snoozedUntil: now + RATING_SNOOZE_DAYS * DAY_MS, done: state.done || shows >= RATING_MAX_SHOWS };
 }
 
 export function afterNever(state: RatingState): RatingState {
@@ -131,9 +133,28 @@ async function write(state: RatingState): Promise<void> {
  */
 export async function initRatingNudge(redraw: () => void): Promise<void> {
     onDueChange = redraw;
+    listenForOtherTabs();
     const wasDue = cached ? isDue(cached, Date.now()) : false;
     cached = await read();
     if (isDue(cached, Date.now()) !== wasDue) redraw();
+}
+
+let listening = false;
+
+/**
+ * Follow the state as other Gmail tabs change it, so "Don't ask again" in one
+ * tab takes the ask away in all of them, not only after a reload.
+ */
+function listenForOtherTabs(): void {
+    if (listening || !storageAvailable() || !chrome.storage.onChanged) return;
+    listening = true;
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !(RATING_STORAGE_KEY in changes)) return;
+        const now = Date.now();
+        const wasDue = cached ? isDue(cached, now) : false;
+        cached = parseState(changes[RATING_STORAGE_KEY].newValue, now);
+        if (isDue(cached, now) !== wasDue) onDueChange?.();
+    });
 }
 
 /** True when the bar should show the nudge now. Synchronous, for renderTabs. */
@@ -169,6 +190,7 @@ export function resetRatingNudgeForTests(): void {
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = null;
     onDueChange = null;
+    listening = false;
 }
 
 // ---------------------------------------------------------------------------

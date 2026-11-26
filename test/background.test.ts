@@ -110,6 +110,7 @@ function setupChromeMocks(): void {
             onInstalled: { addListener: jest.fn((cb: any) => installedListeners.push(cb)) },
             onStartup: { addListener: jest.fn((cb: any) => startupListeners.push(cb)) },
             setUninstallURL: mockSetUninstallURL,
+            getManifest: () => ({ version: '1.9.0' }),
         },
         downloads: { download: mockDownload },
         management: { uninstallSelf: mockUninstallSelf },
@@ -513,10 +514,45 @@ describe('OPEN_OPTIONS_PAGE handler', () => {
     });
 });
 
+describe('OPEN_OPTIONS_PAGE with an account', () => {
+    beforeEach(() => {
+        (global as any).chrome.runtime.getURL = (p: string) => `chrome-extension://id/${p}`;
+    });
+
+    test('opens on that account, with the address encoded', async () => {
+        messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE', account: 'a+b@x.com' }, {}, jest.fn());
+        await flush();
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'chrome-extension://id/options.html?account=a%2Bb%40x.com' });
+    });
+
+    test('keeps the section hash after the account', async () => {
+        messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE', account: 'me@x.com', hash: '#contact' }, {}, jest.fn());
+        await flush();
+        expect(mockTabsCreate).toHaveBeenCalledWith({ url: 'chrome-extension://id/options.html?account=me%40x.com#contact' });
+    });
+
+    test.each([['not an address'], ['a b@x.com'], [42], ['x'.repeat(70) + '@x.com']])(
+        'ignores an account that is not an address: %p',
+        async (bad) => {
+            (global as any).chrome.runtime.openOptionsPage = jest.fn();
+            messageListeners[0]({ action: 'OPEN_OPTIONS_PAGE', account: bad }, {}, jest.fn());
+            await flush();
+            expect(JSON.stringify(mockTabsCreate.mock.calls)).not.toMatch(/account=/);
+        }
+    );
+});
+
 describe('uninstall URL', () => {
     test('is set, so uninstalling can ask why', () => {
         expect(mockSetUninstallURL).toHaveBeenCalledTimes(1);
         expect(mockSetUninstallURL.mock.calls[0][0]).toMatch(/^https:\/\//);
+    });
+
+    test('is our own page, and names the version and nothing else', () => {
+        const url = new URL(mockSetUninstallURL.mock.calls[0][0]);
+        expect(url.origin + url.pathname).toBe('https://palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/');
+        expect([...url.searchParams.keys()]).toEqual(['v']);
+        expect(url.searchParams.get('v')).toBe('1.9.0');
     });
 
     test('carries no account address, settings or identifier in the URL', () => {

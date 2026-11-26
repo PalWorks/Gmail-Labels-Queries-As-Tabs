@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /**
- * pageWorld.ts
+ * xhrInterceptor.ts
  *
  * This script is injected into the "MAIN" world of the Gmail page.
  * It has access to the same window and global objects as Gmail's own scripts.
@@ -223,4 +223,4 @@ function isKnownLabel(labelId: string): boolean {
 // Start interception, or take over the interception already in place.
 hook.process = processResponse;
 if (!alreadyWrapped) interceptXHR();
-console.log('Gmail Tabs: pageWorld.js loaded and intercepting XHR');
+console.log('Gmail Tabs: xhrInterceptor loaded and intercepting XHR');

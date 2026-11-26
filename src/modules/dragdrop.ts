@@ -6,7 +6,7 @@
  * Manages tab reordering via drag events.
  */
 
-import { updateTabOrder, getSettings } from '../utils/storage';
+import { updateTabOrder, getSettings, Tab } from '../utils/storage';
 import { getAppSettings, getUserEmail, setAppSettings, setAppTabs } from './state';
 import { reportSettingsWriteFailure } from './modals/contextNotice';
 
@@ -96,23 +96,11 @@ export function createHandleDrop(renderTabs: () => void) {
         this.classList.remove('drag-over', 'drop-before', 'drop-after');
 
         if (source !== this) {
-            const oldIndex = parseInt(source.dataset.index || '0');
-            let newIndex = parseInt(this.dataset.index || '0');
-
-            if (dropPosition === 'after') {
-                newIndex++;
-            }
-
-            if (getAppSettings() && getUserEmail()) {
-                const tabs = [...getAppSettings()!.tabs];
-                const [movedTab] = tabs.splice(oldIndex, 1);
-
-                if (oldIndex < newIndex) {
-                    newIndex--;
-                }
-
-                tabs.splice(newIndex, 0, movedTab);
-
+            const tabs =
+                getAppSettings() && getUserEmail()
+                    ? reorderForDrop(getAppSettings()!.tabs, source, this, dropPosition === 'after')
+                    : null;
+            if (tabs) {
                 const previous = getAppSettings()!.tabs;
                 setAppTabs(tabs);
                 // The re-render removes the dragged element, so its dragend
@@ -230,6 +218,38 @@ function handleSmartDragOver(e: DragEvent): void {
     }
 }
 
+/**
+ * The tab list with the dragged tab moved before or after the target.
+ *
+ * By id, not by the indexes drawn into the DOM: another tab or the options
+ * page can change the list between drawing it and the drop, and then an index
+ * names a different tab, or none (found by the 2026-11-26 audit). Null when
+ * either tab is no longer in the list, so the drop is dropped, not guessed.
+ */
+export function reorderForDrop(tabs: Tab[], source: HTMLElement, target: HTMLElement, after: boolean): Tab[] | null {
+    const sourceId = source.dataset.tabId;
+    const targetId = target.dataset.tabId;
+    let from: number;
+    let to: number;
+    if (sourceId && targetId) {
+        from = tabs.findIndex((t) => t.id === sourceId);
+        to = tabs.findIndex((t) => t.id === targetId);
+    } else {
+        from = parseInt(source.dataset.index || '', 10);
+        to = parseInt(target.dataset.index || '', 10);
+    }
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= tabs.length || to >= tabs.length) {
+        return null;
+    }
+    if (from === to) return null;
+    const next = [...tabs];
+    const [moved] = next.splice(from, 1);
+    let insertAt = from < to ? to - 1 : to;
+    if (after) insertAt++;
+    next.splice(insertAt, 0, moved);
+    return next;
+}
+
 function handleSmartDrop(e: DragEvent): void {
     e.preventDefault();
     e.stopPropagation();
@@ -238,12 +258,7 @@ function handleSmartDrop(e: DragEvent): void {
 
     if (targetTab && dragSrcEl && dragSrcEl !== targetTab) {
         const dropPosition = targetTab.classList.contains('drop-before') ? 'before' : 'after';
-        const oldIndex = parseInt(dragSrcEl.dataset.index || '0');
-        let newIndex = parseInt(targetTab.dataset.index || '0');
-
-        if (dropPosition === 'after') {
-            newIndex++;
-        }
+        const source = dragSrcEl;
 
         document.querySelectorAll('.gmail-tab').forEach((item) => {
             item.classList.remove('drag-over', 'dragging', 'drop-before', 'drop-after');
@@ -251,16 +266,10 @@ function handleSmartDrop(e: DragEvent): void {
         document.removeEventListener('dragover', handleSmartDragOver);
         document.removeEventListener('drop', handleSmartDrop);
 
-        if (getAppSettings() && getUserEmail()) {
-            const tabs = [...getAppSettings()!.tabs];
-            const [movedTab] = tabs.splice(oldIndex, 1);
-
-            if (oldIndex < newIndex) {
-                newIndex--;
-            }
-
-            tabs.splice(newIndex, 0, movedTab);
-
+        const tabs = getAppSettings() && getUserEmail()
+            ? reorderForDrop(getAppSettings()!.tabs, source, targetTab, dropPosition === 'after')
+            : null;
+        if (tabs) {
             setAppTabs(tabs);
             // We need to call renderTabs but we don't have a direct reference here.
             // The smart drop handler needs to trigger a re-render.
@@ -359,24 +368,14 @@ export function createModalDragHandlers(
         modalDragSrcEl = null;
 
         if (source !== this) {
-            const oldIndex = parseInt(source.dataset.index || '0');
-            let newIndex = parseInt(this.dataset.index || '0');
-
-            if (dropPosition === 'below') {
-                newIndex++;
-            }
-
             if (getUserEmail()) {
                 try {
                     const settings = await getSettings(getUserEmail()!);
-                    const newTabs = [...settings.tabs];
-                    const [movedTab] = newTabs.splice(oldIndex, 1);
-
-                    if (oldIndex < newIndex) {
-                        newIndex--;
+                    const newTabs = reorderForDrop(settings.tabs, source, this, dropPosition === 'below');
+                    if (!newTabs) {
+                        refreshList();
+                        return false;
                     }
-
-                    newTabs.splice(newIndex, 0, movedTab);
 
                     await updateTabOrder(getUserEmail()!, newTabs);
                     refreshList();

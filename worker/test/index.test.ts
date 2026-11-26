@@ -134,3 +134,41 @@ test('buildEmail escapes HTML', () => {
     const { html } = buildEmail({ category: 'bug', message: '<script>x</script>' } as any);
     assert.doesNotMatch(html, /<script>/);
 });
+
+test('every refusal answers with its own status, and sends nothing', async () => {
+    const cases: Array<[Request, number]> = [
+        [new Request('https://relay.example/feedback', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' }), 415],
+        [
+            new Request('https://relay.example/feedback', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'content-length': String(64 * 1024) },
+                body: '{}',
+            }),
+            413,
+        ],
+        [
+            new Request('https://relay.example/feedback', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ category: 'bug', message: 'x'.repeat(20000) }),
+            }),
+            413,
+        ],
+        [new Request('https://relay.example/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'not json' }), 400],
+        [post({ category: 'bug', message: 'hi' }), 400],
+        [post({ ...good, replyTo: 'not-an-address' }), 400],
+        [new Request('https://relay.example/feedback', { method: 'GET' }), 405],
+        [new Request('https://relay.example/elsewhere', { method: 'POST' }), 404],
+    ];
+    for (const [request, status] of cases) {
+        const res = await worker.fetch(request, env());
+        assert.equal(res.status, status, `${request.method} ${new URL(request.url).pathname} -> ${status}`);
+    }
+    assert.equal(sent.length, 0);
+});
+
+test('a CORS preflight is answered 204', async () => {
+    const res = await worker.fetch(new Request('https://relay.example/feedback', { method: 'OPTIONS' }), env());
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get('access-control-allow-methods'), 'POST, OPTIONS');
+});

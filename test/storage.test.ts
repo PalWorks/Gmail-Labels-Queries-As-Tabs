@@ -148,6 +148,17 @@ describe('getSettings', () => {
         expect(settings.tabs[0].title).toBe('Work');
     });
 
+    test('keeps a plain token a newer version may have added, so this one does not erase it', async () => {
+        mockStorage['account_user@gmail.com'] = {
+            tabs: [{ id: 'tab1', title: 'Work', type: 'label', value: 'Work', color: 'mauve' }],
+            rules: [],
+            theme: 'light',
+            showUnreadCount: true,
+        };
+        const settings = await getSettings('user@gmail.com');
+        expect(settings.tabs[0].color).toBe('mauve');
+    });
+
     test('sender icons are off for a new account, and so are website icons', async () => {
         const settings = await getSettings('user@gmail.com');
         expect(settings.senderIcons).toBe(false);

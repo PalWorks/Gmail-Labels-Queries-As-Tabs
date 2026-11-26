@@ -2,12 +2,16 @@
 /**
  * unread.ts
  *
- * Unread count management for Gmail Labels as Tabs.
- * Handles Atom feed fetching, DOM scraping fallback, label map building,
- * and real-time XHR update processing.
+ * Unread counts for Gmail Labels as Tabs (ADR-030).
+ *
+ * A badge copies the count on the same view's row in Gmail's own sidebar and
+ * follows it as it changes. A user label with no sidebar row falls back to
+ * the Atom feed. Live counts from the page-world interceptor
+ * (xhrInterceptor.ts) are applied only to views the sidebar does not list.
  */
 
 import { Tab } from '../utils/storage';
+import { decodeGmailHashSegment } from '../utils/gmailHash';
 import { TABS_BAR_ID } from './state';
 import {
     UNREAD_COUNT_SELECTOR,
@@ -60,7 +64,7 @@ export function buildLabelMapFromDOM(): Map<string, string> {
         const rawId = href.split('#label/')[1];
         if (!rawId) return;
 
-        const id = decodeURIComponent(rawId).replace(/\+/g, ' ');
+        const id = decodeGmailHashSegment(rawId);
 
         let title = link.getAttribute('title');
 
@@ -92,9 +96,12 @@ export function buildLabelMapFromDOM(): Map<string, string> {
 // Known-label tokens (for the XHR interceptor filter)
 // ---------------------------------------------------------------------------
 
-/** Maps a system hash route to Gmail's internal label id used in sync responses. */
+/**
+ * Maps a system hash route to Gmail's internal label id used in sync
+ * responses. No inbox: `^i` counts every category while Gmail shows Primary
+ * alone, so the inbox badge always comes from the sidebar (ADR-030).
+ */
 const SYSTEM_HASH_TO_ID: Record<string, string> = {
-    '#inbox': '^i',
     '#starred': '^t',
     '#drafts': '^r',
     '#sent': '^f',
@@ -102,6 +109,23 @@ const SYSTEM_HASH_TO_ID: Record<string, string> = {
     '#trash': '^k',
     '#all': '^all',
 };
+
+/**
+ * The id a live sync update names for the view a tab opens, or null when
+ * none can: a search, or the inbox (see SYSTEM_HASH_TO_ID). One place, so the
+ * filter the interceptor is told and the matching done on arrival agree.
+ */
+function liveUpdateId(type: string | undefined, value: string): string | null {
+    if (type === 'label') return value;
+    if (type !== 'hash') return null;
+    if (SYSTEM_HASH_TO_ID[value]) return SYSTEM_HASH_TO_ID[value];
+    if (value.startsWith('#label/')) return decodeGmailHashSegment(value.slice('#label/'.length));
+    if (value.startsWith('#search/label:')) {
+        const query = decodeGmailHashSegment(value.slice('#search/'.length));
+        return query.startsWith('label:') ? query.slice('label:'.length) : null;
+    }
+    return null;
+}
 
 /**
  * Builds the set of label tokens the user's tabs could receive unread updates
@@ -115,20 +139,7 @@ export function computeKnownLabelTokens(tabs: Tab[]): string[] {
         if (s) tokens.add(s);
     };
 
-    for (const tab of tabs) {
-        if (tab.type === 'label') {
-            add(tab.value);
-        } else if (tab.type === 'hash') {
-            if (SYSTEM_HASH_TO_ID[tab.value]) {
-                add(SYSTEM_HASH_TO_ID[tab.value]);
-            } else if (tab.value.startsWith('#label/')) {
-                add(decodeURIComponent(tab.value.replace('#label/', '').replace(/\+/g, ' ')));
-            } else if (tab.value.startsWith('#search/label:')) {
-                const raw = decodeURIComponent(tab.value.replace('#search/', ''));
-                if (raw.startsWith('label:')) add(raw.replace('label:', ''));
-            }
-        }
-    }
+    for (const tab of tabs) add(liveUpdateId(tab.type, tab.value));
 
     try {
         const domMap = buildLabelMapFromDOM();
@@ -158,6 +169,7 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
     updates.forEach((u) => updateMap.set(u.label, u.count));
 
     const domLabelMap = buildLabelMapFromDOM();
+    const sidebar = sidebarLinkIndex();
 
     const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -177,29 +189,11 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
         // same view can mean something else: `^i` is every unread message in
         // the inbox, all categories, while Gmail shows Primary only (measured
         // 2026-11-26: 446 against Gmail's 9).
-        if (findSidebarLink({ id: '', title: '', type: tabType === 'label' ? 'label' : 'hash', value: tabValue })) {
+        if (findSidebarLink({ id: '', title: '', type: tabType === 'label' ? 'label' : 'hash', value: tabValue }, sidebar)) {
             return;
         }
 
-        let labelId = '';
-        if (tabType === 'label') {
-            labelId = tabValue;
-        } else if (tabType === 'hash') {
-            if (tabValue === '#starred') labelId = '^t';
-            else if (tabValue === '#drafts') labelId = '^r';
-            else if (tabValue === '#sent') labelId = '^f';
-            else if (tabValue === '#spam') labelId = '^s';
-            else if (tabValue === '#trash') labelId = '^k';
-            else if (tabValue === '#all') labelId = '^all';
-            else if (tabValue.startsWith('#label/')) {
-                labelId = decodeURIComponent(tabValue.replace('#label/', '').replace(/\+/g, ' '));
-            } else if (tabValue.startsWith('#search/label:')) {
-                const raw = decodeURIComponent(tabValue.replace('#search/', ''));
-                if (raw.startsWith('label:')) {
-                    labelId = raw.replace('label:', '');
-                }
-            }
-        }
+        const labelId = liveUpdateId(tabType, tabValue) ?? '';
 
         let resolvedId = labelId;
         if (domLabelMap.has(labelId.toLowerCase())) {
@@ -286,13 +280,7 @@ export function feedNameForLabel(label: string): string {
  * `Parent%252FChild`, feeds for labels that do not exist.
  */
 function decodeLabelHash(hash: string): string {
-    const raw = hash.slice('#label/'.length).replace(/\+/g, ' ');
-    try {
-        return decodeURIComponent(raw);
-    } catch {
-        // A malformed escape is better sent as it is than not at all.
-        return raw;
-    }
+    return decodeGmailHashSegment(hash.slice('#label/'.length));
 }
 
 // ---------------------------------------------------------------------------
@@ -528,12 +516,7 @@ export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<v
 
 /** A hash fragment as Gmail writes it, decoded: `label/Work+Stuff` is `label/Work Stuff`. */
 function decodeViewFragment(fragment: string): string {
-    const raw = fragment.replace(/\+/g, ' ');
-    try {
-        return decodeURIComponent(raw);
-    } catch {
-        return raw;
-    }
+    return decodeGmailHashSegment(fragment);
 }
 
 /**
@@ -550,18 +533,32 @@ export function sidebarViewKey(tab: Tab): string | null {
     return decodeViewFragment(tab.value.slice(1)).toLowerCase();
 }
 
-/** The sidebar link for the view a tab opens, or null when Gmail shows none. */
-export function findSidebarLink(tab: Tab): HTMLAnchorElement | null {
-    const key = sidebarViewKey(tab);
-    if (!key) return null;
+/**
+ * Every sidebar link, by the view key its hash decodes to. The first link
+ * for a key wins, in selector order, as a single lookup would find it.
+ */
+function sidebarLinkIndex(): Map<string, HTMLAnchorElement> {
+    const index = new Map<string, HTMLAnchorElement>();
     for (const selector of SIDEBAR_LINK_SELECTORS) {
         for (const link of document.querySelectorAll<HTMLAnchorElement>(selector)) {
             const href = link.getAttribute('href') || '';
             const hash = href.indexOf('#');
-            if (hash >= 0 && decodeViewFragment(href.slice(hash + 1)).toLowerCase() === key) return link;
+            if (hash < 0) continue;
+            const key = decodeViewFragment(href.slice(hash + 1)).toLowerCase();
+            if (!index.has(key)) index.set(key, link);
         }
     }
-    return null;
+    return index;
+}
+
+/**
+ * The sidebar link for the view a tab opens, or null when Gmail shows none.
+ * Pass an index from sidebarLinkIndex() when looking up many tabs at once.
+ */
+export function findSidebarLink(tab: Tab, index?: Map<string, HTMLAnchorElement>): HTMLAnchorElement | null {
+    const key = sidebarViewKey(tab);
+    if (!key) return null;
+    return (index ?? sidebarLinkIndex()).get(key) ?? null;
 }
 
 /** Digits with the separators a locale may group them with: `9`, `1,234`, `1.234`. */
@@ -600,12 +597,14 @@ export function readSidebarCount(link: Element): string {
 export function refreshCountsFromSidebar(): void {
     const bar = document.getElementById(TABS_BAR_ID);
     if (!bar) return;
+    // One pass over the sidebar for all tabs, not one per tab.
+    const index = sidebarLinkIndex();
     bar.querySelectorAll<HTMLElement>('.gmail-tab').forEach((tabEl) => {
         const countSpan = tabEl.querySelector('.unread-count');
         const value = tabEl.dataset.value;
         if (!countSpan || !value) return;
         const tab: Tab = { id: '', title: '', type: tabEl.dataset.type === 'label' ? 'label' : 'hash', value };
-        const link = findSidebarLink(tab);
+        const link = findSidebarLink(tab, index);
         if (!link) return;
         const text = readSidebarCount(link);
         if (countSpan.textContent !== text) countSpan.textContent = text;
@@ -625,6 +624,8 @@ function findSidebarRoot(): Element | null {
 }
 
 const SIDEBAR_SETTLE_MS = 250;
+/** Under constant churn the settle never ends; refresh at least this often. */
+const SIDEBAR_MAX_WAIT_MS = 1000;
 const SIDEBAR_FIND_RETRY_MS = 2000;
 
 /**
@@ -639,12 +640,22 @@ export function watchSidebarCounts(onChange: () => void): () => void {
     let settle: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
 
-    const fire = () => {
+    let pendingSince: number | null = null;
+    const run = () => {
         if (settle) clearTimeout(settle);
-        settle = setTimeout(() => {
-            settle = null;
-            if (!stopped) onChange();
-        }, SIDEBAR_SETTLE_MS);
+        settle = null;
+        pendingSince = null;
+        if (!stopped) onChange();
+    };
+    const fire = () => {
+        const now = Date.now();
+        if (pendingSince === null) pendingSince = now;
+        if (now - pendingSince >= SIDEBAR_MAX_WAIT_MS) {
+            run();
+            return;
+        }
+        if (settle) clearTimeout(settle);
+        settle = setTimeout(run, SIDEBAR_SETTLE_MS);
     };
 
     const attach = () => {

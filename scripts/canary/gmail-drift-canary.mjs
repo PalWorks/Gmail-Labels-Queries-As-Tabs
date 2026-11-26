@@ -716,13 +716,15 @@ function record(result, verdict, failures, probe) {
         account: result.accountLabel ?? null,
         gmailBuild: probe?.gmailBuild ?? null,
         chrome: result.chromeVersion ?? null,
-        labelRows: probe?.labelRows ?? null,
+        // Present or not, never how many: this file is public, and a count of
+        // someone's labels is theirs.
+        labelRowsPresent: probe ? (probe.labelRows ?? 0) > 0 : null,
         extensionActive: probe?.extensionActive ?? null,
         // Recorded, not asserted: how long Gmail took to answer is about the
         // canary's environment, not about Gmail's structure.
         menuOpenedAfterMs: probe?.openedAfterMs ?? null,
         menuOpenedSinceClickMs: probe?.openedSinceClickMs ?? null,
-        labelTriggers: probe?.c1?.userLabels ?? null,
+        labelTriggersPresent: probe?.c1 ? (probe.c1.userLabels ?? 0) > 0 : null,
         labelNameSource: probe?.c1?.source ?? null,
         menuClasses: probe?.observed?.menuClasses ?? null,
         menuItemClasses: probe?.observed?.menuItemClasses ?? null,
@@ -990,7 +992,7 @@ async function runAgainst(chrome, src, target = { account: null, accountIndex: 0
     // is reported as the FAIL it is: the account this canary was told to
     // watch has labels, and Gmail no longer shows any.
     if (!probe.c1.ok && probe.c1.userLabels === 0 && target.moreToTry) {
-        const why = `${label} shows no user labels, so the label menu cannot be judged here (${probe.labelRows} label rows)`;
+        const why = `${label} shows no user labels, so the label menu cannot be judged here (${probe.labelRows > 0 ? 'system rows only' : 'no label rows'})`;
         const { fp } = record(result, 'SKIPPED', [why], probe);
         if (JSON_ONLY) console.log(JSON.stringify(fp, null, 2));
         else say(`SKIPPED: ${why}.`);
@@ -998,7 +1000,7 @@ async function runAgainst(chrome, src, target = { account: null, accountIndex: 0
     }
 
     const checks = [
-        ['C1', probe.c1.ok, `label name readable without classes (via ${probe.c1.source}, ${probe.c1.userLabels} user labels)`],
+        ['C1', probe.c1.ok, `label name readable without classes (via ${probe.c1.source}, ${probe.c1.userLabels > 0 ? "user labels found" : "no user labels"})`],
         ['C2', probe.c2.ok, `exactly one [role="menu"] became visible (saw ${probe.c2.visibleMenus})`],
         ['C3', probe.c3.ok, `a plain [role="menuitem"] exists to clone (model: ${probe.c3.modelText})`],
         ['C4', probe.c4.ok, `a clone renders identically (h ${probe.c4.height} vs ${probe.c4.modelHeight}, font ${probe.c4.font}, padding ${probe.c4.padding}, colour ${probe.c4.colour})`],
@@ -1107,7 +1109,7 @@ async function runAgainst(chrome, src, target = { account: null, accountIndex: 0
         for (const [id, ok, why, kind] of checks) say(`  ${ok ? 'ok  ' : kind === 'weak' ? 'WEAK' : 'FAIL'} ${id}  ${why}`);
         say('');
         say(
-            `Gmail build ${probe.gmailBuild}, ${probe.labelRows} label rows, extension ` +
+            `Gmail build ${probe.gmailBuild}, ${probe.labelRows > 0 ? 'label rows present' : 'no label rows'}, extension ` +
                 `${probe.extensionActive ? 'active' : 'NOT active'}, menu opened after ` +
                 `${Math.round((probe.openedAfterMs ?? 0) / 1000)}s on attempt ${probe.openAttempts ?? '?'}`
         );

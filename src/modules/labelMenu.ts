@@ -54,6 +54,7 @@
 
 import { Tab } from '../utils/storage';
 import { recordIntegrationHealth } from './health';
+import { decodeGmailHashSegment } from '../utils/gmailHash';
 
 /** The id our item carries, which is also what the drift canary looks for. */
 export const MENU_ITEM_ID = 'glt-show-as-tabs';
@@ -162,7 +163,7 @@ export function resolveLabelName(target: EventTarget | null): string | null {
         const href = link?.getAttribute('href') ?? '';
         const raw = href.split('#label/')[1];
         if (raw) {
-            const name = decodeURIComponent(raw).replace(/\+/g, ' ');
+            const name = decodeGmailHashSegment(raw);
             if (name && !isInternalLabel(name)) return name;
         }
     }

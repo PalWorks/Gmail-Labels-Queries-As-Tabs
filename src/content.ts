@@ -26,6 +26,7 @@ import {
     migrateThemeToGlobalIfNeeded,
     GLOBAL_THEME_STORAGE_KEY,
     Theme,
+    Settings,
     takePendingOnboarding,
 } from './utils/storage';
 
@@ -163,6 +164,16 @@ function attemptInjection(): void {
     if (standingDown) return;
     const existingBar = document.getElementById(TABS_BAR_ID);
 
+    // The bar already sits under a visible toolbar: nothing to move. This runs
+    // on every Gmail mutation burst, and scanning every toolbar candidate
+    // forces a layout each time; one check of the bar's own neighbour does not.
+    const anchor = existingBar?.previousElementSibling;
+    if (anchor && TOOLBAR_SELECTORS.some((sel) => anchor.matches(sel)) && anchor.getBoundingClientRect().height > 0) {
+        updateActiveTab();
+        injectionRetries = 0;
+        return;
+    }
+
     let injectionPoint: Element | null = null;
     for (const selector of TOOLBAR_SELECTORS) {
         const candidates = document.querySelectorAll(selector);
@@ -201,11 +212,13 @@ function attemptInjection(): void {
 // Email Detection
 // ---------------------------------------------------------------------------
 
+/**
+ * The signed-in account, from the page title or the account button. Called
+ * every second while Gmail loads, so it logs nothing: the title is a mail
+ * subject whenever a thread is open.
+ */
 function extractEmailFromDOM(): string | null {
-    console.log('Gmail Tabs: Extracting email from DOM...');
-
     const title = document.title;
-    console.log('Gmail Tabs: Document Title:', title);
     const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
 
     // The account is the last address in the title: Gmail titles a thread
@@ -213,25 +226,17 @@ function extractEmailFromDOM(): string | null {
     // its own, so the first match could name a stranger's account.
     const titleMatches = title.match(new RegExp(emailRegex.source, 'g'));
     if (titleMatches) {
-        const account = titleMatches[titleMatches.length - 1];
-        console.log('Gmail Tabs: Found email in title:', account);
-        return account;
+        return titleMatches[titleMatches.length - 1];
     }
 
     const accountElement = document.querySelector(
         '[aria-label*="@"][aria-label*="Google Account"], a[aria-label*="@"]'
     );
     if (accountElement) {
-        const label = accountElement.getAttribute('aria-label');
-        console.log('Gmail Tabs: Found account element label:', label);
-        const emailMatch = label?.match(emailRegex);
-        if (emailMatch) {
-            console.log('Gmail Tabs: Found email in aria-label:', emailMatch[1]);
-            return emailMatch[1];
-        }
+        const emailMatch = accountElement.getAttribute('aria-label')?.match(emailRegex);
+        if (emailMatch) return emailMatch[1];
     }
 
-    console.log('Gmail Tabs: Could not extract email from DOM.');
     return null;
 }
 
@@ -356,6 +361,17 @@ function stopAccountPolling(): void {
  * user may have added or removed tabs from the options page or another Gmail
  * tab, either of which would make a captured list wrong.
  */
+/**
+ * Take the settings a write answered with, unless a newer copy has already
+ * arrived through storage.onChanged from another tab while the reply was in
+ * flight: the two are not ordered, and the older one would undo the newer.
+ */
+function adoptIfNotOlder(settings: Settings): void {
+    const current = getAppSettings();
+    if (current && (current.rev ?? 0) > (settings.rev ?? 0)) return;
+    setAppSettings(settings);
+}
+
 function installLabelMenuItem(): void {
     installLabelMenu({
         getAccountId: () => getUserEmail(),
@@ -363,12 +379,12 @@ function installLabelMenuItem(): void {
         addLabelTab: async (title, labelName) => {
             const account = getUserEmail();
             if (!account) return;
-            setAppSettings(await addTab(account, title, labelName, 'label'));
+            adoptIfNotOlder(await addTab(account, title, labelName, 'label'));
         },
         removeLabelTab: async (tabId) => {
             const account = getUserEmail();
             if (!account) return;
-            setAppSettings(await removeTab(account, tabId));
+            adoptIfNotOlder(await removeTab(account, tabId));
         },
         onChanged: () => {
             renderTabs();
@@ -560,9 +576,7 @@ async function init(): Promise<void> {
             toggleSettingsModal();
             // Answered, so a promise-form sender settles instead of reporting
             // a closed port as a failure to reach this tab.
-            // The account rides along, so the popup can open the options
-            // page on this Gmail's account rather than the first one stored.
-            sendResponse(getUserEmail() ? { ok: true, account: getUserEmail() } : { ok: true });
+            sendResponse({ ok: true });
             return false;
         }
         if (message.action === SHOW_ONBOARDING_ACTION) {
@@ -573,8 +587,11 @@ async function init(): Promise<void> {
         if (message.action === PING_ACTION) {
             // The worker asks before injecting. Answering at all is the
             // answer: a tab that replies has a live content script and must
-            // not be given a second one.
-            sendResponse({ ok: true });
+            // not be given a second one. The account rides along, so the
+            // popup can open the options page on this Gmail's account rather
+            // than the first one stored.
+            const account = getUserEmail();
+            sendResponse(account ? { ok: true, account } : { ok: true });
             return false;
         }
         // Returning true for a message we do not answer holds the sender's
@@ -596,13 +613,24 @@ async function init(): Promise<void> {
         })
     );
 
-    // Unread updates from pageWorld.js
+    // Unread updates from the page-world interceptor (xhrInterceptor.ts). Any
+    // script on the page can dispatch this event, so each entry is checked
+    // here as well as at the source.
     listen(document, 'gmailTabs:unreadUpdate', (e: Event) => {
         if (standingDown) return;
-        const updates = (e as CustomEvent).detail;
-        if (updates && Array.isArray(updates)) {
-            handleUnreadUpdates(updates);
-        }
+        const detail = (e as CustomEvent).detail;
+        if (!Array.isArray(detail)) return;
+        const updates = detail.filter(
+            (u): u is { label: string; count: number } =>
+                !!u &&
+                typeof u.label === 'string' &&
+                u.label.length > 0 &&
+                u.label.length <= 80 &&
+                Number.isInteger(u.count) &&
+                u.count >= 0 &&
+                u.count <= 100000
+        );
+        if (updates.length > 0) handleUnreadUpdates(updates);
     });
 
     // Last, deliberately. This is the first run after install, and the tour is

@@ -156,6 +156,11 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
         return json({ error: 'Expected application/json' }, 415);
     }
 
+    // Refuse by the declared size before reading anything, so an oversized
+    // body is never buffered; then check the real size, which a client can
+    // misstate.
+    const declared = Number(request.headers.get('content-length') || '0');
+    if (declared > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
 

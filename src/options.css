@@ -225,6 +225,9 @@ a:hover {
 .content {
     margin-left: 240px;
     flex: 1;
+    /* A flex item never shrinks below its widest unbreakable child without
+       this; at 360px that pushed the whole column 40px off the screen. */
+    min-width: 0;
     padding: 40px 48px;
     max-width: 1100px;
     position: relative;
@@ -740,6 +743,11 @@ body.theme-light .account-selector-bar.is-empty {
     cursor: not-allowed;
 }
 
+/* On the light page the dark theme's grey is about 2.5:1; this is 6.2:1. */
+body.theme-light .account-selector-bar.is-empty .account-select {
+    color: #5f6368;
+}
+
 /* ── Rule Row ───────────────────────────────────────────────── */
 .rule-row {
     display: grid;
@@ -1012,9 +1020,22 @@ kbd {
         padding: 24px;
     }
 
+    /* Out of the corner and into the flow, full width: at 360px a fixed
+       240px chip in the corner covered the heading and ran off the left. */
     .account-selector-bar {
-        top: 24px;
-        right: 24px;
+        position: static;
+        margin-bottom: 16px;
+    }
+
+    .account-select {
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+    }
+
+    .account-chip-body {
+        flex: 1;
+        min-width: 0;
     }
 
     .rule-row {
@@ -1215,20 +1236,6 @@ body.theme-light .card-divider {
 
 body.theme-light .account-selector-label {
     color: #4a5568;
-}
-
-body.theme-light .account-select {
-    background: #f7fafc;
-    border-color: #e2e8f0;
-    color: #2d3748;
-}
-
-body.theme-light .account-select:focus {
-    border-color: var(--text-accent);
-}
-
-body.theme-light .account-select:hover {
-    border-color: rgba(49, 130, 206, 0.4);
 }
 
 /* White label on this gradient must clear 4.5:1 at BOTH ends, so the light
@@ -1612,3 +1619,64 @@ body.theme-light .feedback-status.is-success {
 .health-pill.is-unavailable {
     color: var(--text-danger);
 }
+
+/* ── Tap targets and keyboard focus (2026-11-26 audit) ───────────
+   Every button on this page is at least 40px tall, and every control shows
+   where keyboard focus is: several rules above remove the outline. */
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.theme-btn,
+.sidebar-icon-btn {
+    min-height: 40px;
+}
+
+.sidebar-icon-btn {
+    min-width: 40px;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible,
+.theme-btn:focus-visible,
+.sidebar-icon-btn:focus-visible,
+.nav-item:focus-visible,
+.input-number:focus-visible,
+.input-text:focus-visible,
+.feedback-select:focus-visible,
+.feedback-textarea:focus-visible,
+.feedback-input:focus-visible,
+.color-swatch:focus-visible {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 2px;
+}
+
+/* A 22px swatch, but a 40px place to tap. */
+.color-swatch {
+    position: relative;
+}
+
+.color-swatch::before {
+    content: "";
+    position: absolute;
+    inset: -9px -3px;
+}
+
+/* Phones: the 56px icon rail plus a 16px gutter, and rows that wrap. */
+@media (max-width: 480px) {
+    .content {
+        padding: 20px 16px;
+    }
+
+    .theme-btn-group,
+    .input-group,
+    .button-row,
+    .feedback-actions {
+        flex-wrap: wrap;
+    }
+
+    .card {
+        padding: 20px 16px;
+    }
+}
+

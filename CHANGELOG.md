@@ -8,7 +8,7 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 ## [1.9.0] - 2026-11-26
 
-_Updated 2026-11-26T08:00:54+00:00._
+_Updated 2026-11-26T09:03:25+00:00._
 
 ### Fixed
 
@@ -24,6 +24,36 @@ _Updated 2026-11-26T08:00:54+00:00._
   with a Workspace mailbox and a gmail.com one). The options page always showed the first
   account stored. The Gmail settings dialog and the toolbar menu now say which account they
   came from, and the page opens on it.
+- **Found by a full audit of the repository before release** (2026-11-26, seven specialist
+  reviewers and an adversarial pass), and fixed:
+  - Opening Settings from the toolbar menu did not open on the current account after all:
+    the account rode on the wrong reply. It is now on the reply the menu reads, with a test
+    that fails without it.
+  - A label with a `+` in its name (`C++`) was read back as `C  ` in four places, and a
+    stray `%` in a pinned view's address could throw and stop the badges of every later tab.
+    Every Gmail address fragment is now decoded by one function that cannot throw.
+  - A page script could send the badges a count that was not a number. Counts from the page
+    are now checked on arrival as well as at the source.
+  - Dragging a tab while another window changed the list could move the wrong tab or empty
+    the bar. A drop now follows the tab by its id, and is dropped if the tab is gone.
+  - A tab color set by a newer version was erased when an older one wrote. Unknown plain
+    color names are now kept (and drawn as no color), so the next new color survives.
+  - "Don't ask again" in one Gmail tab did not reach the others, and a "Not now" there could
+    undo it. The rating ask now follows the other tabs.
+  - On Settings, switching accounts now updates the address, so a reload stays on the
+    account, and two quick switches can no longer land on the wrong one.
+  - The Settings and welcome pages scrolled sideways on a 360px phone. The account chip now
+    sits in the page there, every button is at least 40px tall, keyboard focus is visible
+    on every control, and the empty-account text meets contrast in the light theme.
+  - In Gmail, tab borders follow the dark theme, a very long tab name is shortened with the
+    full name on hover, the rating ask drops its question on a narrow window, and the
+    import and delete dialogs fit a small screen.
+  - The account lookup no longer writes Gmail's page title, often a mail subject, to the
+    console every second while Gmail loads, and the tab bar stops measuring every toolbar on
+    every Gmail change once it is in place.
+  - The badges follow Gmail's sidebar at least once a second even while it changes
+    constantly, and read it once per refresh instead of once per tab.
+  - Button labels are in sentence case ("Export settings", "Send feedback").
 
 ### Added
 
@@ -46,6 +76,11 @@ _Updated 2026-11-26T08:00:54+00:00._
 ### Repository and tooling
 
 #### Fixed
+
+- **The feedback relay refuses an oversized body before reading it**, by its declared size.
+- **Public files carry no personal address or mailbox counts.** The Web Store upload script
+  reads its credential file names from `~/.config/gmail-labels-as-tabs/cws.json`, and the
+  canary records and prints whether labels exist, not how many.
 
 - **The drift canary measures the account it is told to, not whichever is first.** From
   2026-10-29 it reported "a Gmail contract broke" every night, and Gmail had changed

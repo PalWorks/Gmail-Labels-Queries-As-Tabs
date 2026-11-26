@@ -23,6 +23,7 @@ import {
     ratingNudgeDue,
     resetRatingNudgeForTests,
     RATING_STORAGE_KEY,
+    recordTabClick,
 } from '../src/modules/ratingNudge';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -52,6 +53,10 @@ describe('isDue', () => {
         const s = afterNotNow(qualified(), now);
         expect(isDue(s, now + (RATING_SNOOZE_DAYS - 1) * DAY)).toBe(false);
         expect(isDue(s, now + RATING_SNOOZE_DAYS * DAY)).toBe(true);
+    });
+
+    test('"Not now" never undoes a "Don\'t ask again" made in another tab', () => {
+        expect(afterNotNow(afterNever(qualified()), T0).done).toBe(true);
     });
 
     test(`stops after ${RATING_MAX_SHOWS} "Not now"s`, () => {
@@ -98,10 +103,12 @@ describe('the element', () => {
 
 describe('initRatingNudge with chrome.storage', () => {
     let store: Record<string, unknown>;
+    let listeners: Array<(changes: any, area: string) => void>;
 
     beforeEach(() => {
         resetRatingNudgeForTests();
         store = {};
+        listeners = [];
         (global as any).chrome = {
             runtime: { id: 'test' },
             storage: {
@@ -109,6 +116,7 @@ describe('initRatingNudge with chrome.storage', () => {
                     get: jest.fn(async (key: string) => (key in store ? { [key]: store[key] } : {})),
                     set: jest.fn(async (items: Record<string, unknown>) => Object.assign(store, items)),
                 },
+                onChanged: { addListener: jest.fn((fn: any) => listeners.push(fn)) },
             },
         };
     });
@@ -129,5 +137,42 @@ describe('initRatingNudge with chrome.storage', () => {
         await initRatingNudge(redraw);
         expect(ratingNudgeDue()).toBe(true);
         expect(redraw).toHaveBeenCalled();
+    });
+
+    test('clicks are counted in one batched write, and the bar is told once it becomes due', async () => {
+        jest.useFakeTimers();
+        try {
+            store[RATING_STORAGE_KEY] = {
+                ...freshState(Date.now() - (RATING_MIN_DAYS + 1) * DAY),
+                tabClicks: RATING_MIN_CLICKS - 2,
+            };
+            const redraw = jest.fn();
+            await initRatingNudge(redraw);
+            expect(ratingNudgeDue()).toBe(false);
+            const writesBefore = (chrome.storage.local.set as jest.Mock).mock.calls.length;
+            recordTabClick();
+            recordTabClick();
+            recordTabClick();
+            jest.advanceTimersByTime(2100);
+            jest.useRealTimers();
+            await new Promise((r) => setTimeout(r, 0));
+            expect((chrome.storage.local.set as jest.Mock).mock.calls.length - writesBefore).toBe(1);
+            expect((store[RATING_STORAGE_KEY] as any).tabClicks).toBe(RATING_MIN_CLICKS + 1);
+            expect(ratingNudgeDue()).toBe(true);
+            expect(redraw).toHaveBeenCalledTimes(1);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test('"Don\'t ask again" in another tab takes the ask away here too', async () => {
+        store[RATING_STORAGE_KEY] = { ...freshState(Date.now() - (RATING_MIN_DAYS + 1) * DAY), tabClicks: RATING_MIN_CLICKS };
+        const redraw = jest.fn();
+        await initRatingNudge(redraw);
+        expect(ratingNudgeDue()).toBe(true);
+        redraw.mockClear();
+        listeners.forEach((fn) => fn({ [RATING_STORAGE_KEY]: { newValue: { ...(store[RATING_STORAGE_KEY] as object), done: true } } }, 'local'));
+        expect(ratingNudgeDue()).toBe(false);
+        expect(redraw).toHaveBeenCalledTimes(1);
     });
 });

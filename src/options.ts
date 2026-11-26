@@ -108,6 +108,20 @@ function handleHashChange(): void {
  */
 let currentAccountId: string | null = requestedAccount();
 
+/**
+ * Keep `?account=` in step with the account shown, so a reload stays on it
+ * instead of going back to the account the page was first opened on.
+ */
+function rememberAccountInAddress(account: string): void {
+    try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('account', account);
+        window.history.replaceState(window.history.state, '', url.toString());
+    } catch {
+        /* a page that cannot rewrite its own address still works */
+    }
+}
+
 function requestedAccount(): string | null {
     try {
         return new URLSearchParams(window.location.search).get('account');
@@ -608,7 +622,7 @@ function setupDataControls(): void {
             if (btn) {
                 btn.textContent = '\u2705 Exported!';
                 setTimeout(() => {
-                    btn.textContent = 'Export Config';
+                    btn.textContent = 'Export settings';
                 }, 2000);
             }
         }
@@ -705,7 +719,7 @@ function showImportDialog(): void {
                     if (btn) {
                         btn.textContent = '\u2705 Imported!';
                         setTimeout(() => {
-                            btn.textContent = 'Import Config';
+                            btn.textContent = 'Import settings';
                         }, 2000);
                     }
                 }
@@ -1004,7 +1018,7 @@ function setupScriptGeneration(): void {
             console.error('Options: could not read the rules to generate the script', e);
             btn.textContent = '\u26a0\ufe0f Could not read your rules. Please try again.';
             setTimeout(() => {
-                btn.textContent = '\ud83d\ude80 Generate & Copy Script';
+                btn.textContent = 'Generate and copy script';
             }, 3000);
             return;
         }
@@ -1016,7 +1030,7 @@ function setupScriptGeneration(): void {
             btn.textContent = '\u26a0\ufe0f No enabled rules. Enable at least one!';
             btn.classList.remove('success');
             setTimeout(() => {
-                btn.textContent = '\ud83d\ude80 Generate & Copy Script';
+                btn.textContent = 'Generate and copy script';
             }, 3000);
             return;
         }
@@ -1032,7 +1046,7 @@ function setupScriptGeneration(): void {
         }
 
         setTimeout(() => {
-            btn.textContent = '\ud83d\ude80 Generate & Copy Script';
+            btn.textContent = 'Generate and copy script';
             btn.classList.remove('success');
         }, 3000);
     });
@@ -1094,8 +1108,12 @@ function setupAccountSwitcher(): void {
         // them to a closed tab, not about where they go.
         await flushPendingRuleWrites();
 
+        // A later switch made while the flush was running has the last word.
+        if (select.value !== newAccountId) return;
+
         currentAccountId = newAccountId;
         setUserEmail(currentAccountId);
+        rememberAccountInAddress(currentAccountId);
 
         try {
             currentSettings = await getSettings(currentAccountId);

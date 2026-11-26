@@ -62,6 +62,7 @@ Last updated: 2026-09-30 (v1.8.0)
 | Tab bar rendering, dropdowns, keyboard/aria | [src/modules/tabs.ts](src/modules/tabs.ts) |
 | Unread counts: Gmail's own sidebar first, the Atom feed for labels it hides | [src/modules/unread.ts](src/modules/unread.ts) |
 | The rating ask at the end of the tab bar, after a week and 30 tab clicks | [src/modules/ratingNudge.ts](src/modules/ratingNudge.ts) |
+| Decoding a Gmail hash segment (`+` before escapes, never throws) | [src/utils/gmailHash.ts](src/utils/gmailHash.ts) |
 | Apps Script generation from rules | [src/modules/rules.ts](src/modules/rules.ts) |
 | Shared add-tab parsing + managed list behavior | [src/modules/tabManager.ts](src/modules/tabManager.ts) |
 | Drag-and-drop reordering | [src/modules/dragdrop.ts](src/modules/dragdrop.ts) |

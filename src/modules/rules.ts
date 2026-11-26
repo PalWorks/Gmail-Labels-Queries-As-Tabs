@@ -7,10 +7,11 @@
  * mark-as-read, move-to-label) using the GmailApp service.
  *
  * This module is consumed by the Options page UI when the user
- * clicks "Generate & Copy Script".
+ * clicks "Generate and copy script".
  */
 
 import { Tab, Rule } from '../utils/storage';
+import { decodeGmailHashSegment } from '../utils/gmailHash';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +74,7 @@ export function tabToGmailLabel(tab: Tab): string | null {
   }
   if (tab.type === 'hash' && tab.value.startsWith('#label/')) {
     const raw = tab.value.slice('#label/'.length);
-    const decoded = decodeURIComponent(raw.replace(/\+/g, ' ')).trim();
+    const decoded = decodeGmailHashSegment(raw).trim();
     return decoded || null;
   }
   return null;

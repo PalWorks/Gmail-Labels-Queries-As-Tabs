@@ -160,14 +160,20 @@ function sanitizeSenderIconPrefs(settings: Settings): void {
 }
 
 /**
- * Drop a tab's color unless it is a known palette token. Storage is the trust
- * boundary: sanitizing on read means no render path has to reason about a junk
- * token (which would otherwise become a dead CSS class, or worse, be
- * interpolated into markup).
+ * Keep a tab's color only if it is a plain lowercase token. Storage is the
+ * trust boundary: nothing that could become markup or a selector survives
+ * a read.
+ *
+ * A token this version does not know is kept, not dropped. Every write
+ * spreads the settings it read, so dropping unknown tokens meant a device on
+ * an older version quietly erased colors a newer one had set (1.8.1 does
+ * this to the four colors 1.9.0 added). Render paths draw only known
+ * tokens (`isValidTabColor`), so an unknown one simply shows no color here.
  */
 function sanitizeTabColor(tab: Tab): Tab {
     const color = normalizeTabColor(tab.color);
     if (color) return { ...tab, color };
+    if (typeof tab.color === 'string' && /^[a-z]{1,16}$/.test(tab.color)) return { ...tab };
     const cleaned = { ...tab };
     delete cleaned.color;
     return cleaned;
@@ -238,7 +244,7 @@ export async function getSettings(accountId: string): Promise<Settings> {
                 if (!Array.isArray(settings.rules)) settings.rules = [];
                 if (typeof settings.rev !== 'number' || !Number.isFinite(settings.rev)) settings.rev = 0;
                 // Storage is the trust boundary for colors: anything that is
-                // not a known palette token becomes "no color" here, so no
+                // that is not a plain lowercase token is dropped here, so no
                 // render path ever has to reason about a junk token.
                 settings.tabs = settings.tabs.map(sanitizeTabColor);
                 sanitizeSenderIconPrefs(settings);

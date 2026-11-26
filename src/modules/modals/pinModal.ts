@@ -11,6 +11,7 @@ import { getUserEmail, setAppSettings } from '../state';
 import { getRenderCallback } from './index';
 import { guardModalAction } from './contextNotice';
 import { makeDialog } from './dialogA11y';
+import { decodeGmailHashSegment } from '../../utils/gmailHash';
 
 export function showPinModal(): void {
     const currentHash = window.location.hash;
@@ -24,9 +25,9 @@ export function showPinModal(): void {
 
     let suggestedTitle = 'New Tab';
     if (currentHash.startsWith('#label/')) {
-        suggestedTitle = decodeURIComponent(currentHash.replace('#label/', '')).replace(/\+/g, ' ');
+        suggestedTitle = decodeGmailHashSegment(currentHash.replace('#label/', ''));
     } else if (currentHash.startsWith('#search/')) {
-        suggestedTitle = 'Search: ' + decodeURIComponent(currentHash.replace('#search/', '')).replace(/\+/g, ' ');
+        suggestedTitle = 'Search: ' + decodeGmailHashSegment(currentHash.replace('#search/', ''));
     } else if (currentHash.startsWith('#advanced-search/')) {
         suggestedTitle = 'Advanced Search';
     }

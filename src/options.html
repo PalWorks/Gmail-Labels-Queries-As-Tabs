@@ -74,7 +74,7 @@
 
             <div class="sidebar-footer">
                 <div class="sidebar-footer-icons">
-                    <button id="sidebar-theme-toggle" class="sidebar-icon-btn" title="Toggle theme"
+                    <button type="button" id="sidebar-theme-toggle" class="sidebar-icon-btn" title="Toggle theme"
                         aria-label="Toggle theme">
                         <svg viewBox="0 0 24 24" class="icon-moon" id="theme-icon-moon" aria-hidden="true">
                             <path
@@ -119,22 +119,22 @@
                     <h3>New here?</h3>
                     <p class="muted">A one-minute tour of tabs, unread counts, colours, reordering and automation
                         rules. It opens over Gmail so you can see the real tab bar change as you go.</p>
-                    <button id="settings-tour-btn" class="btn-secondary">Show me around</button>
+                    <button type="button" id="settings-tour-btn" class="btn-secondary">Show me around</button>
                 </div>
 
                 <!-- Theme -->
                 <div class="card">
                     <h3>Theme</h3>
                     <div class="theme-btn-group" id="settings-theme-group">
-                        <button class="theme-btn" data-theme="system">System</button>
-                        <button class="theme-btn" data-theme="light">Light</button>
-                        <button class="theme-btn" data-theme="dark">Dark</button>
+                        <button type="button" class="theme-btn" data-theme="system">System</button>
+                        <button type="button" class="theme-btn" data-theme="light">Light</button>
+                        <button type="button" class="theme-btn" data-theme="dark">Dark</button>
                     </div>
                 </div>
 
                 <!-- Add Tab -->
                 <div class="card">
-                    <h3>Add Tab</h3>
+                    <h3>Add tab</h3>
                     <p class="muted">Type a Gmail label name or paste a Gmail view URL (e.g. #search/...). The extension
                         will detect the type automatically.</p>
                     <div class="add-tab-controls">
@@ -145,7 +145,7 @@
                                 placeholder="Tab Title">
                         </div>
                         <div id="settings-add-error" class="input-error hidden"></div>
-                        <button id="settings-add-btn" class="btn-primary full-width" disabled>Add Tab</button>
+                        <button type="button" id="settings-add-btn" class="btn-primary full-width" disabled>Add tab</button>
                     </div>
                 </div>
 
@@ -231,19 +231,19 @@
                         <span id="health-sender-icons-name">Sender icons</span>
                         <span class="health-pill" id="health-sender-icons" aria-labelledby="health-sender-icons-name">&ndash;</span>
                     </div>
-                    <button id="health-copy-btn" class="btn-secondary full-width">Copy diagnostics</button>
+                    <button type="button" id="health-copy-btn" class="btn-secondary full-width">Copy diagnostics</button>
                 </div>
 
                 <!-- Data & Sync -->
                 <div class="card">
                     <h3>Data & Sync</h3>
                     <div class="btn-row">
-                        <button id="settings-export-btn" class="btn-secondary">Export Config</button>
-                        <button id="settings-import-btn" class="btn-secondary">Import Config</button>
+                        <button type="button" id="settings-export-btn" class="btn-secondary">Export settings</button>
+                        <button type="button" id="settings-import-btn" class="btn-secondary">Import settings</button>
                     </div>
                     <hr class="card-divider">
                     <h4>Danger Zone</h4>
-                    <button id="settings-uninstall-btn" class="btn-danger">Uninstall Extension</button>
+                    <button type="button" id="settings-uninstall-btn" class="btn-danger">Uninstall extension</button>
                 </div>
 
             </section>
@@ -271,7 +271,7 @@
                         <input type="url" id="sheet-url" class="input-text"
                             placeholder="https://docs.google.com/spreadsheets/d/...">
                     </div>
-                    <button id="generate-script-btn" class="btn-primary full-width">🚀 Generate & Copy Script</button>
+                    <button type="button" id="generate-script-btn" class="btn-primary full-width">Generate and copy script</button>
                     <a href="#guide" class="link-subtle" id="view-guide-link" style="text-align:center;">📖 View Setup
                         Guide →</a>
                 </div>
@@ -292,7 +292,7 @@
                         </li>
                         <li>
                             <strong>Generate the script</strong>
-                            <p>Click <strong>"Generate & Copy Script"</strong>. The Apps Script code is copied to your
+                            <p>Click <strong>"Generate and copy script"</strong>. The Apps Script code is copied to your
                                 clipboard.</p>
                         </li>
                         <li>
@@ -338,7 +338,7 @@
                     </div>
                     <div class="faq-item">
                         <strong>What if I change a rule?</strong>
-                        <p>Update your rules here → click "Generate & Copy Script" again → paste over the old script in
+                        <p>Update your rules here → click "Generate and copy script" again → paste over the old script in
                             Apps Script → Save. Takes 15 seconds.</p>
                     </div>
                 </div>
@@ -418,7 +418,7 @@
 
                 <div class="contact-grid">
                     <div class="card contact-support-card">
-                        <h3>Send Feedback</h3>
+                        <h3>Send feedback</h3>
                         <p>Bug, feature request, or question? Tell us right here and we will get back to you.</p>
 
                         <form id="feedback-form" novalidate>
@@ -465,7 +465,7 @@
                             </div>
 
                             <div class="feedback-actions">
-                                <button type="submit" class="btn-primary" id="feedback-submit">Send Feedback</button>
+                                <button type="submit" class="btn-primary" id="feedback-submit">Send feedback</button>
                                 <span class="feedback-status" id="feedback-status" role="status" aria-live="polite"></span>
                             </div>
                         </form>

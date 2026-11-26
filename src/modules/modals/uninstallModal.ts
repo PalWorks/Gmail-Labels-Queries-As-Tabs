@@ -23,7 +23,7 @@ export function showUninstallModal(): void {
                 <div class="delete-icon-wrapper">
                     <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
                 </div>
-                <h3 style="margin: 16px 0 8px 0; font-size: 20px; font-weight: 500;">Uninstall Extension?</h3>
+                <h3 style="margin: 16px 0 8px 0; font-size: 20px; font-weight: 500;">Uninstall the extension?</h3>
                 <p style="color: var(--gmail-tab-text); margin-bottom: 24px; font-size: 14px; line-height: 1.5;">
                     Do you want to export your tab details, so that you can import them again when you reinstall?
                 </p>
@@ -32,7 +32,7 @@ export function showUninstallModal(): void {
                     <button id="uninstall-yes-btn" class="primary-btn">Yes</button>
                 </div>
                 <div style="margin-top: 12px;">
-                    <button class="secondary-btn close-btn-action" style="background: transparent; border: none; color: var(--modal-text); font-size: 12px;">Cancel</button>
+                    <button type="button" class="uninstall-cancel close-btn-action">Cancel</button>
                 </div>
             </div>
         </div>

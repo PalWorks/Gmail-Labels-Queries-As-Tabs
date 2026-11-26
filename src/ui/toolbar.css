@@ -4,6 +4,7 @@
     /* Light Mode Defaults */
     --gmail-tabs-bg: #fff;
     --gmail-tabs-border: rgba(0, 0, 0, 0.1);
+    --gmail-tab-border: #dadce0;
     --gmail-tab-text: #5f6368;
     --gmail-tab-hover-bg: #f1f3f4;
     --gmail-tab-hover-text: #202124;
@@ -42,6 +43,7 @@
         /* Dark Mode Overrides */
         --gmail-tabs-bg: #202124;
         --gmail-tabs-border: rgba(255, 255, 255, 0.1);
+        --gmail-tab-border: #5f6368;
         --gmail-tab-text: #9aa0a6;
         --gmail-tab-hover-bg: #303134;
         --gmail-tab-hover-text: #e8eaed;
@@ -80,6 +82,7 @@
 body.force-dark {
     --gmail-tabs-bg: #202124;
     --gmail-tabs-border: rgba(255, 255, 255, 0.1);
+    --gmail-tab-border: #5f6368;
     --gmail-tab-text: #9aa0a6;
     --gmail-tab-hover-bg: #303134;
     --gmail-tab-hover-text: #e8eaed;
@@ -114,6 +117,7 @@ body.force-dark {
 body.force-light {
     --gmail-tabs-bg: #fff;
     --gmail-tabs-border: rgba(0, 0, 0, 0.1);
+    --gmail-tab-border: #dadce0;
     --gmail-tab-text: #5f6368;
     --gmail-tab-hover-bg: #f1f3f4;
     --gmail-tab-hover-text: #202124;
@@ -230,11 +234,11 @@ body.theme-unresolved .gmail-tabs-bar {
     cursor: pointer;
     text-decoration: none;
     transition: background-color 0.2s;
-    border: 1px solid #dadce0;
-    /* Visible border */
+    /* A visible outline in both themes: the light grey read as a glowing
+       edge on the dark bar. */
+    border: 1px solid var(--gmail-tab-border);
     position: relative;
     padding-right: 8px;
-    /* Removed max-width to allow full text expansion */
     white-space: nowrap;
     /* Prevent text wrapping */
 }
@@ -899,6 +903,7 @@ body.theme-unresolved .gmail-tabs-bar {
 /* Delete Modal Specifics */
 .delete-tab-modal {
     width: 320px !important;
+    max-width: calc(100vw - 32px);
     /* Override default width */
     border-radius: 12px !important;
 }
@@ -965,6 +970,7 @@ body.theme-unresolved .gmail-tabs-bar {
 /* Import Modal */
 .import-modal {
     width: 500px !important;
+    max-width: calc(100vw - 32px);
 }
 
 .import-textarea {
@@ -994,7 +1000,7 @@ body.theme-unresolved .gmail-tabs-bar {
 #gmail-labels-as-tabs-bar .gmail-tab-menu-btn:focus-visible,
 #gmail-labels-as-tabs-bar .gmail-tab-btn:focus-visible,
 .gmail-tab-dropdown-item:focus-visible {
-    outline: 2px solid #4285f4;
+    outline: 2px solid var(--primary-btn-bg);
     outline-offset: 2px;
     border-radius: 4px;
 }
@@ -1283,6 +1289,37 @@ body.force-dark {
 }
 
 #gmail-labels-as-tabs-bar .rating-nudge button:focus-visible {
-    outline: 2px solid #4285f4;
+    outline: 2px solid var(--primary-btn-bg);
     outline-offset: 2px;
 }
+
+/* A very long label name: show the start, keep the whole name in the
+   tooltip, and keep one tab from pushing the rest of the bar out of view. */
+#gmail-labels-as-tabs-bar .tab-name {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* On a narrow Gmail, the rating ask keeps its buttons and drops its question. */
+@media (max-width: 1100px) {
+    #gmail-labels-as-tabs-bar .rating-nudge .rating-nudge-text {
+        display: none;
+    }
+
+    #gmail-labels-as-tabs-bar .rating-nudge {
+        padding-left: 4px;
+    }
+}
+
+/* The uninstall dialog's Cancel, a full-size target like every other button. */
+.gmail-tabs-modal .uninstall-cancel {
+    min-height: 40px;
+    padding: 0 16px;
+    background: transparent;
+    border: none;
+    color: var(--modal-text);
+    font-size: 13px;
+    cursor: pointer;
+}
+

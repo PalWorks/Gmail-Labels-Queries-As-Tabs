@@ -15,6 +15,7 @@ import { Tab, removeTab, updateTab, updateTabOrder } from '../utils/storage';
 import { renderTabListItems, TabListCallbacks, TabListOptions } from '../utils/tabListRenderer';
 import { openColorPopover } from './colorPicker';
 import { createModalDragHandlers, ModalDragHandlers } from './dragdrop';
+import { decodeGmailHashSegment } from '../utils/gmailHash';
 
 // ---------------------------------------------------------------------------
 // Add-tab input parsing (pure)
@@ -28,10 +29,10 @@ export function isUrlLikeInput(raw: string): boolean {
 /** Derive a human title from a Gmail search/label hash, or '' when none applies. */
 export function deriveTitleFromUrl(raw: string): string {
     if (raw.includes('#search/')) {
-        return decodeURIComponent(raw.split('#search/')[1] || '').replace(/\+/g, ' ');
+        return decodeGmailHashSegment(raw.split('#search/')[1] || '');
     }
     if (raw.includes('#label/')) {
-        return decodeURIComponent(raw.split('#label/')[1] || '').replace(/\+/g, ' ');
+        return decodeGmailHashSegment(raw.split('#label/')[1] || '');
     }
     return '';
 }

@@ -612,12 +612,15 @@ describe('unread counts on a bad network', () => {
 describe('computeKnownLabelTokens', () => {
     test('maps system hash tabs to internal ids and includes label names', () => {
         const tabs: Tab[] = [
-            { id: '1', title: 'Inbox', type: 'hash', value: '#inbox' },
+            { id: '1', title: 'Starred', type: 'hash', value: '#starred' },
             { id: '2', title: 'Work', type: 'label', value: 'Work' },
             { id: '3', title: 'Team', type: 'hash', value: '#label/Team+Updates' },
+            { id: '4', title: 'Inbox', type: 'hash', value: '#inbox' },
         ];
         const tokens = computeKnownLabelTokens(tabs);
-        expect(tokens).toContain('^i');
+        expect(tokens).toContain('^t');
+        // The inbox badge comes from the sidebar only (ADR-030).
+        expect(tokens).not.toContain('^i');
         expect(tokens).toContain('Work');
         expect(tokens).toContain('Team Updates');
     });
@@ -749,5 +752,67 @@ describe('the Atom feed fallback', () => {
         await updateUnreadCount({ id: 't', title: 'Work', type: 'label', value: 'Work' }, el);
         expect((global as any).fetch).not.toHaveBeenCalled();
         expect(el.textContent).toBe('5');
+    });
+});
+
+describe('hash decoding never throws and keeps a literal plus', () => {
+    test('a malformed escape does not stop live updates for the other tabs', () => {
+        createMockTabBar([
+            { value: '#label/100%', type: 'hash' },
+            { value: 'Work', type: 'label' },
+        ]);
+        expect(() => handleUnreadUpdates([{ label: 'Work', count: 4 }])).not.toThrow();
+        const spans = document.querySelectorAll('#gmail-labels-as-tabs-bar .unread-count');
+        expect(spans[1].textContent).toBe('4');
+        expect(() => computeKnownLabelTokens([{ id: 'x', title: 'x', type: 'hash', value: '#search/label:100%' }])).not.toThrow();
+    });
+
+    test('C++ is read back as C++, not as two spaces', () => {
+        document.body.innerHTML = gmailRow('label/C%2B%2B', '3', 'C++ 3 unread');
+        expect(readSidebarCount(findSidebarLink({ id: 't', title: 'x', type: 'label', value: 'C++' })!)).toBe('3');
+        expect(buildLabelMapFromDOM().has('c++')).toBe(true);
+    });
+});
+
+
+describe('the sidebar watcher under constant churn', () => {
+    test('still refreshes at least once a second', async () => {
+        jest.useFakeTimers();
+        try {
+            document.body.innerHTML = gmailRow('inbox', '9');
+            const onChange = jest.fn();
+            const stop = watchSidebarCounts(onChange);
+            jest.advanceTimersByTime(300);
+            onChange.mockClear();
+            for (let i = 0; i < 12; i++) {
+                document.querySelector('.bsU')!.textContent = String(10 + i);
+                await Promise.resolve();
+                jest.advanceTimersByTime(200);
+            }
+            expect(onChange.mock.calls.length).toBeGreaterThanOrEqual(2);
+            stop();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test('finds the sidebar again after Gmail redraws it', async () => {
+        jest.useFakeTimers();
+        try {
+            document.body.innerHTML = gmailRow('inbox', '9');
+            const onChange = jest.fn();
+            const stop = watchSidebarCounts(onChange);
+            jest.advanceTimersByTime(300);
+            document.body.innerHTML = gmailRow('inbox', '12');
+            jest.advanceTimersByTime(2300);
+            const calls = onChange.mock.calls.length;
+            document.querySelector('.bsU')!.textContent = '13';
+            await Promise.resolve();
+            jest.advanceTimersByTime(300);
+            expect(onChange.mock.calls.length).toBeGreaterThan(calls);
+            stop();
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });

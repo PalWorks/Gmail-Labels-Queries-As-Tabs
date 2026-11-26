@@ -22,6 +22,7 @@ import {
     createHandleDrop,
     handleDragEnd,
 } from './dragdrop';
+import { decodeGmailHashSegment } from '../utils/gmailHash';
 
 // ---------------------------------------------------------------------------
 // Module State
@@ -136,6 +137,7 @@ export function renderTabs(): void {
         if (isValidTabColor(tab.color)) tabEl.classList.add(tabColorClass(tab.color));
         tabEl.setAttribute('draggable', isMoveMode ? 'true' : 'false');
         tabEl.dataset.index = index.toString();
+        tabEl.dataset.tabId = tab.id;
         tabEl.dataset.value = tab.value;
         tabEl.dataset.type = tab.type;
 
@@ -150,6 +152,8 @@ export function renderTabs(): void {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tab-name';
         nameSpan.textContent = tab.title;
+        // The whole name, for when a long one is cut short with an ellipsis.
+        nameSpan.title = tab.title;
         // Make the tab name the keyboard-focusable activation target.
         nameSpan.setAttribute('role', 'button');
         nameSpan.setAttribute('tabindex', '0');
@@ -417,13 +421,7 @@ function closeDropdownOutside(e: MouseEvent): void {
  */
 function currentLabelPath(hash: string): string | null {
     if (!hash.startsWith('#label/')) return null;
-    const raw = hash.slice('#label/'.length).replace(/\+/g, ' ');
-    try {
-        return decodeURIComponent(raw);
-    } catch {
-        // A malformed escape sequence is not worth losing the highlight over.
-        return raw;
-    }
+    return decodeGmailHashSegment(hash.slice('#label/'.length));
 }
 
 /**

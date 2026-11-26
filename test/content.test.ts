@@ -556,7 +556,7 @@ describe('handover between two copies in one page', () => {
                     listenForSystemThemeChanges: mockListenForSystemThemeChanges,
                 }));
                 jest.doMock('../src/modules/unread', () => ({
-                    handleUnreadUpdates: jest.fn(),
+                    handleUnreadUpdates: mockHandleUnreadUpdates,
                     refreshCountsFromSidebar: jest.fn(),
                     watchSidebarCounts: jest.fn(() => () => {}),
                     computeKnownLabelTokens: jest.fn(() => []),
@@ -590,6 +590,7 @@ describe('handover between two copies in one page', () => {
     }
 
     const mockToggleSettings = jest.fn();
+    const mockHandleUnreadUpdates = jest.fn();
     /** Opens a stand-in for the tour, so a later stand-down has one to hand on. */
     const mockShowOnboarding = jest.fn(() => {
         if (document.querySelector('.glt-ob-scrim')) return;
@@ -628,6 +629,42 @@ describe('handover between two copies in one page', () => {
         // Answered on the spot: holding the channel open would leave the
         // worker's promise pending and every tab looking unreachable.
         expect(held).toBe(false);
+    });
+
+    test('a forged unread event from the page passes on only well-formed counts', async () => {
+        await importContent();
+        await flush();
+        mockHandleUnreadUpdates.mockClear();
+
+        document.dispatchEvent(
+            new CustomEvent('gmailTabs:unreadUpdate', {
+                detail: [
+                    { label: 'Work', count: 'pwned' },
+                    { label: 'Work', count: -1 },
+                    { label: 'x'.repeat(81), count: 1 },
+                    { label: 'Work', count: 3 },
+                ],
+            })
+        );
+        expect(mockHandleUnreadUpdates).toHaveBeenCalledWith([{ label: 'Work', count: 3 }]);
+
+        mockHandleUnreadUpdates.mockClear();
+        document.dispatchEvent(new CustomEvent('gmailTabs:unreadUpdate', { detail: [{ label: 'Work', count: 1.5 }] }));
+        expect(mockHandleUnreadUpdates).not.toHaveBeenCalled();
+    });
+
+    test("the ping names this Gmail's account, so the popup opens Settings on it", async () => {
+        await importContent();
+        await flush();
+        mockState.currentUserEmail = 'work@company.example';
+        const sendResponse = jest.fn();
+
+        messageListeners[0]({ action: 'PING' }, {}, sendResponse);
+
+        // The popup reads the account from this reply (popup.ts openOptions).
+        // In 1.9.0 as first submitted it rode on TOGGLE_SETTINGS instead, so
+        // the popup never saw it.
+        expect(sendResponse).toHaveBeenCalledWith({ ok: true, account: 'work@company.example' });
     });
 
     test('clears a previous copy tab bar off the page as it starts', async () => {
