@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-11-26T08:00:54+00:00 (v1.9.0)
+Last updated: 2026-11-26T09:53:28+00:00 (v1.9.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -1164,4 +1164,19 @@ which few people open, and it asked for "a 5-star review".
 anything the user says: the Chrome Web Store forbids steering ratings, and the options-page
 card's wording changed to match. It never shows during the tour or while moving tabs, and
 nothing about it leaves the browser.
+
+## ADR-033: Three calls from the 1.9.0 audit, left as they are on purpose
+
+Decided by the owner on 2026-11-26, after the full pre-release audit.
+
+**Table A33: Accepted findings**
+
+| Finding | Decision | Why |
+|---|---|---|
+| The developer account's address is in older commits of this public repository (the Chrome Web Store upload script named its credential files after it) | Leave the history as it is. The script now reads those names from `~/.config/gmail-labels-as-tabs/cws.json`, outside the repository | Only an address was exposed, never a credential. Rewriting history would break the two forks, every clone and the release tags |
+| The feedback relay's rate-limit counters in Workers KV are read, then written, so parallel requests can slip past a cap | Keep them as best-effort counters | The per-network burst limit and both daily caps still bound the worst case. A Durable Object would make them exact, at the cost of a new component, which this traffic does not justify yet |
+| A dashboard of unanswered feedback across PalWorks products | Build it in the ops dashboard repository after 1.9.0 is approved, from `HANDOVER-feedback-inbox.md` there | It belongs to that repository, not this one |
+
+**Consequences.** Revisit the counters if the relay ever sees abuse, and do not put a personal address
+or a credential file name in this repository again (AGENTS.md says so).
 

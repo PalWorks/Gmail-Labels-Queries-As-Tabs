@@ -837,10 +837,12 @@ something, a single reading is worth nothing.
       [1.9.0], "Found by a full audit").
 - [x] Resubmitted 1.9.0 with the audit fixes: the first submission's review cancelled in the
       dashboard, the zip rebuilt from a clean tree, uploaded as a draft, the description
-      re-pasted ("Edit tab"), and submitted; PENDING_REVIEW at 2026-11-26T09:24:29+00:00.
+      re-pasted ("Edit tab"), and submitted; PENDING_REVIEW at 2026-11-26T09:24:29+00:00, confirmed still in review at 2026-11-26T09:53:28+00:00.
 - [x] The website describes 1.9.0: `LIVE_VERSION` is 1.9.0 in its `content/site.ts` and
       `content/features.ts` says "Twelve colours" (read from the website repository on
-      2026-11-26).
+      2026-11-26), deployed and live.
+- [ ] After approval: confirm 1.9.0 is live with `node scripts/cws-upload.mjs`, and post the
+      update on GitHub issue #2.
 
 ### For 1.8.1, verified on 2026-09-30
 
