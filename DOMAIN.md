@@ -3,7 +3,7 @@
 Business logic, terminology, and rules for **Gmail Labels and Search Queries as Tabs**.
 Understanding these concepts is required for correct changes.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## The problem it solves
 
@@ -32,8 +32,14 @@ away, and it can automate routine cleanup of those labels.
   when Gmail has not painted yet, and an answer that came from the desktop is treated as a
   guess rather than a fact: nothing paints a background until the guess is resolved or
   abandoned. See ADR-019 and ADR-020.
-- **Unread count.** The number of unread messages for a tab's target, shown as a badge
-  when the account's `showUnreadCount` preference is on.
+- **Unread count.** The number Gmail itself shows for a tab's target, shown as a badge when
+  the account's `showUnreadCount` preference is on. It is Gmail's number, not one the
+  extension computes: for the inbox with categories on, that is Primary only.
+- **Tab colour.** An optional palette token on a tab, one of twelve. Decorative only, never
+  the sole way to tell tabs apart.
+- **Rating ask.** One line at the end of the tab bar, after a week and 30 tab clicks on a
+  device, asking for a rating on the Chrome Web Store. "Not now" waits 30 days, at most three
+  times; "Rate it" and "Don't ask again" end it. See ADR-032.
 - **Rule.** A per-tab automation instruction that becomes Google Apps Script. It targets
   a tab's label and applies an action to messages older than a threshold.
 - **Rule action.** One of `trash`, `archive`, `markRead`, `moveToLabel`. `moveToLabel`
@@ -50,9 +56,10 @@ away, and it can automate routine cleanup of those labels.
 
 ## Key domain rules
 
-1. **Labels vs hashes drive everything.** Only `label` tabs can have automation rules,
-   because Apps Script operates on Gmail labels, not on arbitrary view hashes. The rules
-   UI and generator skip tabs that have no resolvable Gmail label.
+1. **Labels vs hashes drive everything.** Only `label` tabs, and since 1.8.1 Gmail category
+   tabs (`#category/promotions` and the like), can have automation rules, because Apps
+   Script searches by label or category, not by arbitrary view hashes. The rules UI and
+   generator skip every other tab.
 2. **Delete always means Trash.** Generated Apps Script never permanently deletes. The
    `trash` action moves threads to Trash, where Gmail keeps them recoverable for 30 days.
    Three further limits apply because the script runs unattended: the label is quoted in
@@ -62,15 +69,21 @@ away, and it can automate routine cleanup of those labels.
 3. **Automation runs under the user's own account.** The extension generates a script the
    user pastes into their own Google Apps Script project and authorizes themselves. The
    extension holds no OAuth tokens and has no server-side access to anyone's Gmail.
-4. **Unread counting is a best-effort waterfall.** The extension tries three sources in
-   order and uses the first that yields a trustworthy number:
-   1. Gmail Atom feed (`/feed/atom/<label>`), cached for about 30 seconds, at most four
-      requests in flight at once. A failed fetch is recorded as a failure rather than as a
-      count of zero: the last known number stays on screen and the retry backs off from 5
-      seconds to a 5 minute ceiling.
-   2. Interception of Gmail's own XHR responses (MAIN world), filtered against the set of
-      known rendered labels to avoid false positives.
-   3. DOM scraping of Gmail's own unread indicators.
+4. **A badge shows the number Gmail shows (ADR-030).** The source depends on where Gmail
+   shows the view:
+   1. A view with a row in Gmail's left sidebar takes that row's count, digit for digit, and
+      shows nothing when the row shows nothing. A `MutationObserver` re-reads it whenever
+      Gmail changes a count. The count is read as a number, not from English text, so it
+      works in every Gmail language.
+   2. A user label with no sidebar row (hidden, or under a collapsed parent) falls back to
+      Gmail's Atom feed, under the name the feed uses: every `/` and space becomes `-`. It is
+      cached for about 30 seconds, at most four requests in flight at once. A failed fetch
+      is recorded as a failure rather than as a count of zero: the last known number stays
+      on screen and the retry backs off from 5 seconds to a 5 minute ceiling.
+   3. Gmail's own XHR responses (MAIN world), filtered against the set of known labels,
+      update only views the sidebar does not list. The inbox never takes one: Gmail's sync
+      count for it covers every category.
+   Searches show no count: Gmail does not count them and there is no feed for a search.
 5. **Theme applies to the whole window, not one account.** Changing the theme in any
    account (or the options page or onboarding) propagates to every open Gmail tab in the
    profile via a `chrome.storage.local` change event. An extension page opened afterwards
@@ -120,4 +133,5 @@ away, and it can automate routine cleanup of those labels.
   a concurrent change and to tell one's own write apart from someone else's.
 - **Hash view.** Gmail encodes the current view in the URL fragment (for example
   `#inbox`, `#label/Work`, `#search/from%3Aboss`). The extension reads and sets this hash
-  to navigate.
+  to navigate. Gmail writes a space as `+` and escapes a literal `+`, so a fragment is
+  decoded only by `decodeGmailHashSegment` in `src/utils/gmailHash.ts`.

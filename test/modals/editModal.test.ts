@@ -76,11 +76,11 @@ describe('showEditModal', () => {
         expect(document.body.contains(modal)).toBe(true);
     });
 
-    it('should display "Edit Tab" header', () => {
+    it('should display "Edit tab" header', () => {
         showEditModal(sampleTab);
 
         const h3 = document.querySelector('.gmail-tabs-modal h3');
-        expect(h3?.textContent).toBe('Edit Tab');
+        expect(h3?.textContent).toBe('Edit tab');
     });
 
     it('should populate value field with tab value (disabled)', () => {

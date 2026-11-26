@@ -3,11 +3,13 @@
 Storage schema and data shapes for **Gmail Labels and Search Queries as Tabs**. The
 source of truth is [src/utils/storage.ts](src/utils/storage.ts); this file explains it.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Storage areas
 
 The extension uses two Chrome storage areas deliberately, plus one browser-local cache:
+
+**Table D1: Storage areas and keys**
 
 | Area | Holds | Why |
 |------|-------|-----|
@@ -17,6 +19,7 @@ The extension uses two Chrome storage areas deliberately, plus one browser-local
 | `chrome.storage.local` | A pending first-run tour, key `pendingOnboarding` | Set on install, read and cleared by the first Gmail tab to finish initialising |
 | `chrome.storage.local` | Whether the Gmail integrations are working, one key per component: `integrationHealth.labelMenu`, `integrationHealth.senderIcons` | The options page has no Gmail DOM to test against, and the drift canary only ever sees one account in one A/B bucket. A Gmail tab records its verdict here; the options page shows it. Written only when the verdict changes, and never transmitted. Before v1.8.0 this was one shared object under `integrationHealth`, which is still read but no longer written |
 | `chrome.storage.local` | What Gmail called its inbox rows and subject containers the last time sender icons found them by ARIA, key `senderIconsLearned` | A fresher fallback than the one a release shipped with, for the day an ARIA attribute goes missing. Two class tokens and a timestamp, written only on change, never transmitted. See ADR-028 |
+| `chrome.storage.local` | The rating ask's progress, key `ratingNudge`: `{ firstSeen, tabClicks, done, snoozedUntil, shows }` | Per device, never synced and never transmitted. A malformed record starts over rather than throws. Every Gmail tab follows changes to it, so "Don't ask again" in one tab ends the ask in all of them. See ADR-032 and [src/modules/ratingNudge.ts](src/modules/ratingNudge.ts) |
 | `localStorage` (extension origin) | The theme this browser last painted, key `glt.resolvedTheme` | The only storage a page can read **without yielding**. See below |
 
 There is no server and no other persistence. Exported config is a JSON blob the user
@@ -105,14 +108,19 @@ interface Tab {
 
 type TabColor =
   | 'red' | 'orange' | 'yellow' | 'green'
-  | 'teal' | 'blue' | 'purple' | 'pink';
+  | 'teal' | 'blue' | 'purple' | 'pink'
+  | 'brown' | 'gray' | 'indigo' | 'lime';   // the last four since 1.9.0
 ```
 
 `color` stores a named palette **token**, never a raw hex value, so the rendered
 color is owned by CSS and stays theme-safe and accessible in light and dark. It is
 always decorative (never the sole indicator of a tab). Absent means default styling.
-On import, an unknown token is stripped (falls back to default) rather than rejected.
-See [src/utils/colors.ts](src/utils/colors.ts).
+A color name this version does not know is kept, not dropped, as long as it is a plain
+lowercase word (`isPlainColorToken`): on read in `getSettings` and on import alike. Anything
+else is dropped (default styling) rather than rejected. Render paths draw only known tokens,
+so an unknown name shows as no color. Before 1.9.0 an older version erased a color a newer
+one had set the next time it wrote (1.8.1 does this to the four colors 1.9.0 added).
+See [src/utils/colors.ts](src/utils/colors.ts) and [src/utils/storage.ts](src/utils/storage.ts).
 
 ### Rule
 

@@ -3,7 +3,7 @@
 Operational procedures for **Gmail Labels and Search Queries as Tabs**. Step-by-step
 recipes for building, testing, releasing, rolling back, and troubleshooting.
 
-Last updated: 2026-09-30 (v1.8.1)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Local setup
 
@@ -73,7 +73,9 @@ Confirm `manifest.json` and `package.json` carry the same version.
    node scripts/cws-upload.mjs              # dry run: checks the zip and the store, sends nothing
    node scripts/cws-upload.mjs --confirm    # uploads the zip as a draft
    ```
-   It uses the Chrome Web Store API v2 with the credentials in `~/.secrets`. It refuses
+   It uses the Chrome Web Store API v2 with the credentials in `~/.secrets`, under the file
+   names listed in `~/.config/gmail-labels-as-tabs/cws.json` (`client`, `refreshToken`,
+   `publisherId`); without that file it stops before doing anything. It refuses
    while another version is in review, when the tree has uncommitted changes, when the zip
    is older than the last commit (run `npm run package` again), and when `--confirm` and
    `--submit` are given together. The listing text, privacy tab, data usage answers
@@ -100,6 +102,8 @@ Four suites assert things about the repository rather than about a function. Rea
 failure message before changing the test: each one names the file and line, and the fix is
 almost always in the code or the document it points at.
 
+**Table P1: Guard failures and their usual fix**
+
 | Failure | Usual fix |
 |---|---|
 | `htmlSinks` | Wrap the value in `escapeHtml`. Do not add user data to its allowlist |
@@ -109,7 +113,7 @@ almost always in the code or the document it points at.
 | `repoConsistency` CONTEXT_MAP | Add the new module to the source map |
 | `repoConsistency` dead CSS | Delete the rule |
 | `repoConsistency` undisclosed host | The service worker or `senderIcons.ts` names an outbound host that SECURITY.md, the privacy page or STORE_LISTING does not. Disclose it, or remove the host |
-| `repoConsistency` test count | Live documents disagree on the total. Set them all to what `npm test` prints |
+| `repoConsistency` test count | Live documents (AUDIT, ARCHITECTURE, TESTING, README, STORE_LISTING) disagree on the total. Set them all to what `npm test` prints |
 | `repoConsistency` retired site link | Something links to the Pages site deleted in v1.5.0. Use `https://palworks.github.io/Gmail-Labels-As-Tabs/` |
 | `repoConsistency` `website/` exists | The duplicate marketing site came back. It belongs in the other repository |
 | `repoConsistency` workflow trigger | A `push:` or `pull_request:` trigger reappeared. Actions here are manual only |
@@ -126,6 +130,11 @@ sender icons to work. It runs daily as a systemd user timer and escalates on the
 **second** consecutive failure, to the desktop, a GitHub issue and, once a webhook is
 configured, Google Chat. See [scripts/canary/README.md](scripts/canary/README.md).
 
+Set `CANARY_ACCOUNT` in `~/.config/gmail-labels-as-tabs/alerts.env` to the account, or
+accounts in order of preference, it should measure. Each needs user labels. Without it the
+canary measures whichever account is `/u/0` in each profile, which is how a label-less
+account produced three weeks of false FAILs from 2026-10-29.
+
 To get Google Chat alerts on a machine that runs the canary:
 
 ```
@@ -139,6 +148,8 @@ scripts/canary/install-canary.sh --status     # when it last ran, and what it sa
 tail -40 scripts/canary/canary.log            # the last few runs in full
 NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs   # run it now
 ```
+
+**Table P2: Canary failures**
 
 | Check | What Gmail changed | What to do |
 |---|---|---|
@@ -156,10 +167,13 @@ NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs   # run it n
 **DEGRADED** (exit 5) is not a failure: everything works, but a fallback is doing the work,
 or would not hold next time.
 
+**Table P3: Canary degradations**
+
 | Check | What it means | What to do |
 |---|---|---|
 | W1, W2 | A sender fallback in `src/utils/selectors.ts` no longer matches the elements ARIA found | Nothing by hand, usually: the canary wrote `selector-proposal.json` and, with `GLT_CANARY_AUTO_PR=1`, opened a pull request with the value Gmail uses today. Review the diff and merge it; it ships with the next release |
 | W3 | A favicon provider no longer answers with a real icon | If only the first fails, the second is carrying it. If both fail, users with website icons on see badges, and the options page says so. Check whether Google changed the endpoint before changing `FAVICON_PROVIDERS` in `senderIcons.ts` |
+| U1 | The inbox count is no longer a `.bsU` beside the link in a `.TO` sidebar row, or our inbox badge no longer equals it | Badges still read a count from inside the link or from its aria-label, so users may be fine. Find what Gmail calls the row and the count today, and update `SIDEBAR_ROW_SELECTOR` or `UNREAD_COUNT_SELECTOR` in `src/utils/selectors.ts`; see `readSidebarCount` in `unread.ts` and ADR-030 |
 
 Two verdicts are not failures. **SKIPPED** means the canary could not reach a
 signed-in Gmail and learned nothing. A **note** that Gmail took longer to open
@@ -167,10 +181,13 @@ the menu than the extension waits means our item was correctly absent.
 
 ## Troubleshooting (production symptoms)
 
+**Table P4: Symptoms, causes and where to look**
+
 | Symptom | Likely cause | Where to look |
 |---------|--------------|---------------|
 | Tab bar does not appear | Injection anchor not found or Gmail layout change | [src/content.ts](src/content.ts), [src/utils/selectors.ts](src/utils/selectors.ts) |
-| Unread counts missing or wrong | Waterfall source failing or false-positive filtering | [src/modules/unread.ts](src/modules/unread.ts), [src/xhrInterceptor.ts](src/xhrInterceptor.ts) |
+| Unread counts missing or different from Gmail's | Gmail's sidebar markup changed (`.TO` row, `.bsU` count; the canary's U1 says so), the label is hidden from the sidebar and its feed name is wrong, or a live XHR count was applied to a view the sidebar lists | [src/modules/unread.ts](src/modules/unread.ts) (`findSidebarLink`, `readSidebarCount`, `feedNameForLabel`), [src/utils/selectors.ts](src/utils/selectors.ts), [src/xhrInterceptor.ts](src/xhrInterceptor.ts) |
+| Settings open on the wrong account | The `?account=` in the options page address names an account not stored here, so it falls back to the first | [src/options.ts](src/options.ts) (`requestedAccount`), [src/background.ts](src/background.ts) (`openOptionsPage`) |
 | Theme not propagating across accounts | `storage.local` change listener not firing | [src/content.ts](src/content.ts), [src/utils/storage.ts](src/utils/storage.ts) |
 | Rules missing for a tab | Tab has no resolvable Gmail label (hash tab) | [src/modules/rules.ts](src/modules/rules.ts) |
 | Build ships console output | esbuild `drop` not applied | [build.js](build.js) |

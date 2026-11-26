@@ -4,13 +4,14 @@ Agent behavior contract for the **Gmail Labels and Search Queries as Tabs** repo
 Read this before making any change. It encodes the non-obvious constraints that keep
 the extension correct, private, and shippable to the Chrome Web Store.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## What this project is
 
 A Chrome Manifest V3 extension that injects a configurable tab bar into Gmail. Each tab
 maps to a Gmail label, a search query, or a built-in hash view (Inbox, Sent). It also
-generates Google Apps Script for per-tab automation and shows live unread counts.
+generates Google Apps Script for per-tab automation and shows live unread counts, copied
+from the count Gmail shows on the same view's row in its own sidebar (ADR-030).
 
 Orientation reading order for a new agent:
 
@@ -23,16 +24,19 @@ Orientation reading order for a new agent:
 ## Hard constraints (never violate)
 
 1. **No background network requests, and every outbound host is disclosed.** Unread counts
-   come only from Gmail's own Atom feed, Gmail's XHR responses, or the DOM. No analytics,
-   telemetry, or remote config, ever. Exactly three outbound paths exist, and none happens
-   on its own: the relay in [worker/](worker/), reached from
+   come only from Gmail itself: the count on Gmail's own sidebar row first, then Gmail's Atom
+   feed for a label the sidebar hides, and Gmail's XHR responses for views the sidebar does
+   not list. No analytics, telemetry, or remote config, ever. Exactly three outbound paths
+   exist, and none happens on its own: the relay in [worker/](worker/), reached from
    [src/modules/feedback.ts](src/modules/feedback.ts) when the user presses Send; the
-   uninstall URL, which Chrome opens after the user has already removed the extension
-   (ADR-014); and website icons for sender icons, fetched from `t0.gstatic.com` (then
-   `www.google.com`) only after the user has turned on both sender icons and, separately,
-   "Load website icons" (ADR-027). Both of those settings default to off and must stay off by
+   uninstall URL, a page on our own website that Chrome opens after the user has already
+   removed the extension (ADR-014, ADR-031); and website icons for sender icons, fetched
+   from `t0.gstatic.com` (then `www.google.com`) only after the user has turned on both
+   sender icons and, separately, "Load website icons" (ADR-027). Both of those settings default to off and must stay off by
    default. Any other request to a non `mail.google.com` origin, or any request the user did
-   not explicitly turn on, is a blocking defect.
+   not explicitly turn on, is a blocking defect. The rating ask (ADR-032) is not a request:
+   its state stays in `chrome.storage.local`, and the store page opens only when the user
+   clicks "Rate it".
    Adding a host is not enough on its own: `test/repoConsistency.test.ts` fails the build
    unless every host named in [src/background.ts](src/background.ts) or
    [src/modules/senderIcons.ts](src/modules/senderIcons.ts) also appears in
@@ -126,12 +130,13 @@ Orientation reading order for a new agent:
     hardcoded one is not wrong for some users: it is right until the day it is wrong for
     all of them. Find the element by ARIA role or data attribute and clone one of Gmail's
     own nodes to inherit its styling, as [src/modules/labelMenu.ts](src/modules/labelMenu.ts)
-    does. The seven that remain live in [src/utils/selectors.ts](src/utils/selectors.ts) and
+    does. The eight that remain live in [src/utils/selectors.ts](src/utils/selectors.ts) and
     a guard fails the build if one appears anywhere else in `src/`. Two of them,
     `SENDER_ROW_FALLBACK` and `SENDER_SUBJECT_FALLBACK`, are fallbacks behind ARIA anchors,
     and the drift canary opens a pull request to refresh either one when it stops matching;
     keep them as single quoted string constants so that refresh can find them. See ADR-022
-    and ADR-028.
+    and ADR-028. `SIDEBAR_ROW_SELECTOR` (`.TO`) and `UNREAD_COUNT_SELECTOR` (`.bsU`) are
+    what the unread badges copy (ADR-030); the canary's U1 check watches them.
 
 18. **An integration with Gmail's UI fails closed and says so.** If the structure it needs
     is not there, add nothing: Gmail is left exactly as it was, with no half-drawn item and
@@ -158,6 +163,15 @@ Orientation reading order for a new agent:
 - Add-tab parsing and the managed tab list are shared through
   [src/modules/tabManager.ts](src/modules/tabManager.ts). Do not re-implement that logic
   in the options page or the in-Gmail modal; reuse it.
+- Decode a Gmail address fragment (`#label/...`, `#search/...`) only with
+  `decodeGmailHashSegment` from [src/utils/gmailHash.ts](src/utils/gmailHash.ts). It turns
+  `+` into a space before decoding escapes, so `C++` survives, and it never throws on a stray
+  `%`. Several call sites once did this their own way, and got it wrong.
+- Button labels and headings in the UI are in sentence case ("Export settings", "Add tab",
+  "Send feedback"). Match it in new UI and in any document that quotes a label.
+- Every source file carries `SPDX-License-Identifier: AGPL-3.0-only` at the top (after a
+  jest docblock where the file needs one). Keep it in any file you add. See
+  [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Required checks before you finish (the verification gate)
 
@@ -177,15 +191,19 @@ npm run build             # succeeds; then confirm no console.log in dist/js
 Four of the suites are guards rather than unit tests, and a failure from them is a
 statement about the repository, not about a function:
 
+**Table A1: Guard suites**
+
 | Suite | Fails when |
 |---|---|
 | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value reaches `innerHTML` |
 | [test/contrast.test.ts](test/contrast.test.ts) | A palette value drops below AA, or a colour appears outside a stylesheet |
-| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component; an outbound host goes undisclosed; live documents disagree on the test count; anything links to the retired Pages site; a `website/` folder reappears; a workflow gains an automatic trigger |
+| [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A document contradicts the code, names a path that does not exist, omits a module, or a CSS rule outlives its component; an outbound host goes undisclosed; live documents disagree on the test count; anything links to the retired Pages site; a `website/` folder reappears; a workflow gains an automatic trigger; a module outside the selector registry hardcodes a Gmail class; the content script asks for a resource that is not web-accessible |
 | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | Generated Apps Script mis-escapes any of 1,000 hostile inputs |
 
-Three more exercise the drift canary's tooling as real processes, with stubs where a real
-call would reach the outside: [test/canaryNotify.test.ts](test/canaryNotify.test.ts) (the
+Four more exercise the drift canary's tooling as real processes, with stubs where a real
+call would reach the outside: [test/canaryAccounts.test.ts](test/canaryAccounts.test.ts)
+(which account is measured, and that the address is never printed),
+[test/canaryNotify.test.ts](test/canaryNotify.test.ts) (the
 Google Chat alert, against a local server), [test/canaryRun.test.ts](test/canaryRun.test.ts)
 (the escalation in `run-canary.sh`, in a sandbox with stub `gh` and `notify-send`) and
 [test/canaryPropose.test.ts](test/canaryPropose.test.ts) (what a selector proposal may
@@ -232,7 +250,12 @@ Then verify `manifest.json` and `package.json` versions match. See
 - `scripts/canary/`: runs unattended from a systemd timer. `propose-selectors.mjs` writes into
   the selector registry and opens pull requests; it must stay limited to the two sender
   fallbacks, work only in a throwaway worktree, and never merge. `notify.mjs` handles a
-  credential (the Google Chat webhook) and must never print it.
+  credential (the Google Chat webhook) and must never print it. The canary names its
+  account only by position ("account 1 of 2") and records whether labels exist, never how
+  many, because `fingerprint.json` is committed to this public repository.
+- `scripts/cws-upload.mjs`: reads the Chrome Web Store credentials from `~/.secrets`, under
+  file names listed in `~/.config/gmail-labels-as-tabs/cws.json`. Never write those names,
+  or any personal address, into a file in this repository.
 - [src/background.ts](src/background.ts): the only serialization point for settings writes.
   Do not return `true` from the message listener for a message you do not answer; that holds
   the sender's channel open and a promise-form `sendMessage` never settles.

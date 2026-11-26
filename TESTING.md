@@ -2,7 +2,7 @@
 
 Testing philosophy, commands, and thresholds for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-30 (v1.8.1)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Philosophy
 
@@ -44,9 +44,10 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 49 suites, 1113 tests as of v1.9.0.
+- 50 suites, 1149 tests as of v1.9.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
-  rendering and keyboard/aria, the unread waterfall, XHR interceptor validation, rules and
+  rendering and keyboard/aria, unread counts copied from Gmail's sidebar with the Atom feed
+  fallback, Gmail hash decoding, the rating ask, XHR interceptor validation, rules and
   Apps Script generation, the options page, the onboarding wizard and both of its hosts,
   the toolbar menu, modals, drag-and-drop, state accessors, import/export, the shared tab
   manager, tab colors, rule templates, in-product feedback, the color-contrast palette,
@@ -59,7 +60,14 @@ thresholds; add tests with new behavior.
   several times into one page and counts what one response produces;
   [dialogA11y](test/modals/dialogA11y.test.ts) holds the shared dialog focus trap; and the
   content script suite runs two copies in one page, including a tour handed between them.
-- Three suites run the drift canary's tooling as real processes:
+- Since 1.9.0: [unread](test/unread.test.ts) builds Gmail's sidebar as measured on
+  2026-11-26 (a `.TO` row with the count beside the link) and asserts a badge copies it,
+  including under constant sidebar churn; [gmailHash](test/gmailHash.test.ts) pins the one
+  decoder and that every caller uses it; [ratingNudge](test/ratingNudge.test.ts) covers when
+  the ask is due and that an answer in one Gmail tab reaches the others.
+- Four suites run the drift canary's tooling as real processes:
+  [canaryAccounts](test/canaryAccounts.test.ts) checks which account is measured and that
+  the address is never printed,
   [canaryNotify](test/canaryNotify.test.ts) posts Google Chat alerts to a local server,
   [canaryRun](test/canaryRun.test.ts) runs `run-canary.sh` in a sandbox with a fake canary
   and stub `gh` and `notify-send`, and [canaryPropose](test/canaryPropose.test.ts) holds the
@@ -78,13 +86,15 @@ Four suites assert things about the repository rather than about a function. A f
 statement about the codebase, and the fix is usually in the code they point at, not in the
 test.
 
+**Table T1: Guard suites and why each exists**
+
 | Suite | Fails when | Why it exists |
 |---|---|---|
 | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | An unescaped value is interpolated into `innerHTML` anywhere in `src/` | 22 sites were reviewed by eye and pronounced fine; one was a stored XSS reachable from an imported backup |
 | [test/contrast.test.ts](test/contrast.test.ts) | A palette token drops below AA, or any colour literal appears in a `.ts` or `.html` file | Two failing colours shipped inside TypeScript template strings, invisible to guards that only read `.css` |
 | [test/repoConsistency.test.ts](test/repoConsistency.test.ts) | A live document contradicts the code, names a path that does not exist, omits a module from CONTEXT_MAP, or a CSS rule outlives its component | Five documents once claimed a network behaviour the code had not had for months, including the rule an agent reads first |
 | ... also: an outbound host in `background.ts` or `senderIcons.ts` is missing from SECURITY.md, the privacy page or STORE_LISTING | The uninstall URL opened a third-party form for four versions, disclosed nowhere. Sender icons made the content script a second place that can name a host |
-| ... also: live documents disagree on the test count | Four of them stated four different totals inside one release, each correct when written |
+| ... also: live documents (AUDIT, ARCHITECTURE, TESTING, README, STORE_LISTING) disagree on the test count | Four of them stated four different totals inside one release, each correct when written |
 | ... also: anything links to the Pages site retired in v1.5.0, the shipped Help link names a route that does not exist, the listing names the wrong site, or a `website/` folder reappears | Two sites served two privacy policies, and the one the listing named was the stale one. See ADR-016 |
 | ... also: a workflow gains a `push:`, `pull_request:` or `schedule:` trigger | Actions run on manual dispatch only, in both repositories |
 | ... also: a module reads `prefers-color-scheme` without consulting Gmail's own theme | 'system' means Gmail's theme, not the OS. The 1.6.0 wizard asked the OS and rendered dark over a light Gmail. Twenty theme assertions existed; every one set an explicit Light or Dark, so none could have caught it. See ADR-019 |

@@ -6,7 +6,7 @@ written to be found and to be quoted. Copy each fenced block verbatim.
 **Version this listing describes:** 1.9.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-11-26T08:00:54+00:00
+**Last updated:** 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -173,7 +173,7 @@ Cleanup rules never run on our side. The extension writes a Google Apps Script t
 
 No analytics. No telemetry. No tracking pixels. No remote configuration. Your tabs, labels and settings stay in your browser's own storage, synced by Chrome through your Google account the same way your bookmarks are.
 
-Nothing is sent anywhere on its own. There are two outbound requests, and each happens only because you asked for it. Pressing Send Feedback on the Support page sends your message, your optional reply address, and, if you leave the box ticked, the extension version, your browser build, and how many tabs, rules and accounts you have. Never your label names, tab names, contacts or mail.
+Nothing is sent anywhere on its own. There are two outbound requests, and each happens only because you asked for it. Pressing Send feedback on the Support page sends your message, your optional reply address, and, if you leave the box ticked, the extension version, your browser build, and how many tabs, rules and accounts you have. Never your label names, tab names, contacts or mail.
 
 Sender icons are off until you turn them on, and even then they draw a coloured letter and request nothing. Only if you also turn on "Load website icons" does the extension ask Google's icon service, at t0.gstatic.com or www.google.com, for each sender's website icon. What it sends is the domain alone, such as example.com: never the address, the name, the subject or anything in the message.
 
@@ -201,7 +201,7 @@ Yes, with this extension. Gmail on its own offers only a fixed set of five categ
 Yes. Any Gmail search works, for example is:unread from:boss or has:attachment older_than:30d, and becomes a tab you click like any other.
 
 🔹 How do I pin a Gmail search as a tab?
-Run the search in Gmail as usual, for example from:accounts@ has:attachment newer_than:30d, then press the + button at the end of the tab bar. The search becomes a tab with its unread count, and clicking it runs the search again live. To rename it or give it a colour, open the tab's menu and choose Edit Tab.
+Run the search in Gmail as usual, for example from:accounts@ has:attachment newer_than:30d, then press the + button at the end of the tab bar. The search becomes a tab with its unread count, and clicking it runs the search again live. To rename it or give it a colour, open the tab's menu and choose Edit tab.
 
 🔹 Can I add a label without opening settings?
 Yes. Click the three dots beside any label in Gmail's sidebar and the menu ends with "Show as Tabs", or "Remove from Tabs" if it is already there. Sublabels work the same way.
@@ -297,7 +297,7 @@ content or contacts are stored.
 **`downloads`**
 
 ```
-Used only by the "Export Config" button in Settings, which saves the user's own tab and
+Used only by the "Export settings" button in Settings, which saves the user's own tab and
 rule configuration as a JSON file so they can back it up or move it to another profile.
 The extension never downloads anything the user did not click to export.
 ```
@@ -305,7 +305,7 @@ The extension never downloads anything the user did not click to export.
 **`management`**
 
 ```
-Used only by the "Uninstall Extension" button in Settings, which calls
+Used only by the "Uninstall extension" button in Settings, which calls
 chrome.management.uninstallSelf() so the user can remove the extension from within its own
 options page. The extension does not read, enable or disable any other extension.
 ```
@@ -326,8 +326,9 @@ never any code from anywhere else.
 
 ```
 The extension's entire function is inside Gmail, so it must run on Gmail's own pages to
-inject the tab bar, read the user's label list, read unread counts from Gmail's Atom feed
-and its own network responses, and, if the user turns sender icons on, mark each inbox row
+inject the tab bar, read the user's label list, copy unread counts from Gmail's own sidebar
+(with Gmail's Atom feed and its own network responses for views the sidebar does not show),
+and, if the user turns sender icons on, mark each inbox row
 with its sender's organisation. It requests no other host permission. Website icons for
 sender icons, which are off unless the user turns them on, are ordinary image loads from
 Google's icon service and need no permission.
@@ -345,9 +346,11 @@ runtime.
 Four hosts appear in the source. Naming them here, unprompted, is cheaper than answering a
 rejection.
 
+**Table T8: Outbound hosts**
+
 | Host | When it is reached | What it carries |
 |---|---|---|
-| `gmail-tabs-feedback.sunmooncal.workers.dev` | Only when the user presses Send Feedback | The message, an optional reply address, and optional version and counts |
+| `gmail-tabs-feedback.sunmooncal.workers.dev` | Only when the user presses Send feedback | The message, an optional reply address, and optional version and counts |
 | `palworks.github.io` | Only after uninstall, opened by Chrome, not by the extension | The extension version in the page address. Nothing else |
 | `t0.gstatic.com` | Only with sender icons on **and** "Load website icons" on, both off by default | The domain of a sender shown in the inbox, such as `example.com`, as an image request with no referrer |
 | `www.google.com` (`/s2/favicons`) | As above, only when `t0.gstatic.com` could not be reached | The same domain, the same way |
@@ -747,7 +750,7 @@ repeated.
 store, the website, the GitHub README and a public changelog is a fact, as far as a
 retrieval system is concerned.
 
-**Table T4: Surfaces and their state**
+**Table T4: Surfaces and their state** (updated 2026-11-26T09:09:48+00:00)
 
 Corrected on 2026-09-22 by reading the website repository rather than assuming. An earlier
 draft of this table said the site had no `FAQPage` and no `SoftwareApplication` markup. It
@@ -755,7 +758,7 @@ had both, and had done for months.
 
 | Surface | State |
 |---|---|
-| Store listing | Ready for 1.8.1. Paste sections 1 to 5 |
+| Store listing | Ready for 1.9.0. Paste sections 1 to 5 |
 | Extension README | Done. Heading carries the full product name |
 | Website homepage | Done. Design A, with the extension's own tour under "Take the tour" (vendored by the website's `sync-wizard.mjs`) and the demo video under "Watch it" |
 | Website FAQ | Done. 15 questions for 1.6.2, two more that appear when `LIVE_VERSION` reaches 1.7.0 and 1.8.0, feeding `FAQPage` |
@@ -785,9 +788,11 @@ modules, so the site, its structured data and its `llms.txt` cannot disagree. Re
 | `llms.txt` and `llms-full.txt` | the website repository's `prerender.mjs` | The facts, the live features, features not yet in the store marked as such, the FAQ, the video chapters, and every page as plain text |
 | `sitemap.xml` | The same script | Every page, the video, and its poster |
 
-When 1.8.1 is live, bump `LIVE_VERSION` in the website's `content/site.ts` to `1.8.1` and
-redeploy. That one change moves sender icons, the label menu item and their FAQ answers
-from "coming" to "available" on every surface at once.
+`LIVE_VERSION` in the website's `content/site.ts` decides which version every surface
+describes as available, so one change moves a release's features and FAQ answers from
+"coming" to "available" everywhere at once. It was bumped to 1.8.1 on 2026-11-22, once 1.8.1
+was live, and to 1.9.0 on 2026-11-26, ahead of store approval, so the site describes 1.9.0
+while the store still serves 1.8.1.
 
 A note on crawler policy, which is a decision rather than a task: allowing `GPTBot`,
 `PerplexityBot`, `ClaudeBot` and `Google-Extended` in the website's `robots.txt` is what
@@ -798,7 +803,7 @@ every claim on the site is public marketing copy, and costs the citation.
 
 ## 9. Measuring whether any of this worked
 
-**Table T7: What to watch, and where**
+**Table T9: What to watch, and where** (renumbered 2026-11-26T09:09:48+00:00; T7 is the screenshot captions)
 
 | Signal | Where | Cadence |
 |---|---|---|
@@ -818,7 +823,8 @@ something, a single reading is worth nothing.
 
 ### For 1.9.0, verified on 2026-11-26
 
-- [x] `manifest.json` and `package.json` both read 1.9.0; 1113 tests pass; lint has no errors.
+- [x] `manifest.json` and `package.json` both read 1.9.0; 1149 tests pass after the audit
+      fixes; lint has no errors.
 - [x] Badges checked against Gmail in a live session: 35 of 35 matched, and a sidebar count
       change reached the badge (ADR-030).
 - [x] The uninstall page answered end to end from a headless browser at 360 px, and the
@@ -827,8 +833,13 @@ something, a single reading is worth nothing.
 - [x] Uploaded as a draft through the API, the listing description, both screenshot sets
       (localised and global) and both promo tiles replaced in the dashboard, privacy tab
       checked (no mention of Tally), and submitted: PENDING_REVIEW on 2026-11-26.
-- [ ] After approval: bump `LIVE_VERSION` to 1.9.0 in the website, change "Eight colours"
-      to "Twelve colours" in its `content/features.ts`, and deploy.
+- [x] Full pre-release audit of the repository on 2026-11-26; every finding fixed (CHANGELOG
+      [1.9.0], "Found by a full audit").
+- [ ] Resubmit 1.9.0 with the audit fixes: rebuild the zip from a clean tree, upload it as a
+      draft and submit it.
+- [x] The website describes 1.9.0: `LIVE_VERSION` is 1.9.0 in its `content/site.ts` and
+      `content/features.ts` says "Twelve colours" (read from the website repository on
+      2026-11-26).
 
 ### For 1.8.1, verified on 2026-09-30
 

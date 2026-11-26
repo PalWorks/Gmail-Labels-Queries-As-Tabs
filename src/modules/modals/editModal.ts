@@ -23,7 +23,7 @@ export function showEditModal(tab: Tab): void {
     const header = document.createElement('div');
     header.className = 'modal-header';
     const h3 = document.createElement('h3');
-    h3.textContent = 'Edit Tab';
+    h3.textContent = 'Edit tab';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.textContent = '✕';

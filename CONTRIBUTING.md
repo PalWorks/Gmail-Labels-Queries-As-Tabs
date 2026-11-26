@@ -3,7 +3,7 @@
 Thanks for contributing to **Gmail Labels and Search Queries as Tabs**. This guide covers
 the workflow, standards, and checks.
 
-Last updated: 2026-09-30 (v1.8.1)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Prerequisites
 
@@ -73,6 +73,9 @@ Before opening a pull request, confirm the verification gate passes:
       test passed, and the only evidence was a frame. Sampling the computed style on
       every animation frame, before and after, is what the last person did
 - [ ] No build artifacts committed (`dist/`, `extension.zip`, `dist.zip`, `coverage/`)
+- [ ] Every new source file carries `SPDX-License-Identifier: AGPL-3.0-only` (see below)
+- [ ] No personal address, credential file name or mailbox count in any committed file; this
+      repository is public
 
 CI does **not** run on your push. It is manual dispatch only, so run it yourself once the
 PR is up: `gh workflow run ci.yml --ref <your-branch>`.

@@ -1,5 +1,11 @@
 # Gmail Labels as Tabs: Repository Audit
 
+> **Historical.** Added 2026-11-26T09:09:48+00:00. This file is the v1.2.1 audit with refresh
+> notes up to v1.8.1, kept as a record. It does not describe 1.9.0. For the codebase as it
+> is, read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONTEXT_MAP.md](CONTEXT_MAP.md); for what
+> the full pre-release audit of 1.9.0 found and fixed, read [CHANGELOG.md](CHANGELOG.md)
+> under [1.9.0].
+
 > **Version Analyzed:** 1.2.1 (Manifest V3)
 > **Stack:** TypeScript, esbuild, Chrome Extension APIs (no third-party library in the shipped bundle since InboxSDK was removed after v1.6.2; see section 7)
 > **License:** MIT at the time of this audit; AGPL-3.0 plus a commercial licence from 1.9.0 (see COMMERCIAL-LICENSE.md)

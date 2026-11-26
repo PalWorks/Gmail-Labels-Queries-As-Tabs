@@ -2,16 +2,17 @@
 
 Security and privacy policy for **Gmail Labels and Search Queries as Tabs**.
 
-Last updated: 2026-09-29 (v1.8.0)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Privacy promise
 
 The extension makes **no background network requests**. It never sends browsing data,
 analytics, or telemetry anywhere, and all settings stay in the user's browser storage. For
-everything it does on its own, the only origin it touches is `mail.google.com`, using
-Gmail's own feed, XHR responses, and DOM to compute unread counts.
+everything it does on its own, the only origin it touches is `mail.google.com`: unread
+counts are copied from Gmail's own sidebar on the page, with Gmail's Atom feed and XHR
+responses for the views the sidebar does not show (ADR-030).
 
-One outbound call exists, and only when the user asks for it: pressing **Send Feedback** on
+One outbound call exists, and only when the user asks for it: pressing **Send feedback** on
 the Support & Feedback page posts the message, an optional reply address, and (if the box
 stays ticked) the extension version, browser build and counts of tabs, rules and accounts.
 Never label names, tab titles, contacts or mail. It goes to the relay in [worker/](worker/),
@@ -42,6 +43,11 @@ no identifier), and only you decide whether to answer. An answer goes through th
 own relay to the support mailbox. Until 1.9.0 this was a Tally form at `tally.so`. See
 ADR-014 and ADR-031.
 
+The rating ask (v1.9.0, ADR-032) sends nothing. Its progress, a first-run time, a click
+count and the user's answer, is kept in `chrome.storage.local` under `ratingNudge` on this
+device only, and the Chrome Web Store reviews page opens only when the user clicks
+"Rate it".
+
 v1.7.1 added a record of whether the "Show as Tabs" item is working, in
 `chrome.storage.local`, since 1.8.0 one key per component (`integrationHealth.labelMenu`,
 `integrationHealth.senderIcons`). It is worth being explicit about what it
@@ -61,9 +67,11 @@ amended by ADR-012, ADR-014 and ADR-027.
 
 ## Permissions and why each is needed
 
+**Table S1: Permissions**
+
 | Permission | Purpose |
 |------------|---------|
-| `storage` | Persist per-account tabs, rules and preferences (including the sender icon opt-ins), the global theme, whether the Gmail integrations are currently working, and the Gmail class names sender icons last saw working |
+| `storage` | Persist per-account tabs, rules and preferences (including the sender icon opt-ins), the global theme, whether the Gmail integrations are currently working, the Gmail class names sender icons last saw working, and the rating ask's progress |
 | _(no permission)_ | The extension's own pages also write one value to `localStorage`: the theme they last painted, so the next page opens in it rather than flashing. It holds the string `light` or `dark` and nothing else, never leaves the browser, and needs no permission because a page may always write its own origin's storage |
 | `downloads` | Let the user export their configuration as a JSON file |
 | `management` | Enable self-uninstall from the settings page |
@@ -109,7 +117,14 @@ itself runs. Treat that page as part of the release, not as marketing.
   Gmail's page context. It only reads responses and posts sanitized results back over a
   `CustomEvent` channel; it must not expose extension internals or accept commands from
   the page. Label and count parsing is validated (bounded integer counts, rejection of
-  id/date-looking keys, filtering against the set of known rendered labels).
+  id/date-looking keys, filtering against the set of known rendered labels). Because any
+  script on the page can dispatch the same event, the content script checks every count
+  again on arrival (since 1.9.0): a label must be a short non-empty string and a count a
+  bounded non-negative integer, or the entry is dropped.
+- **Malformed Gmail addresses.** A label or search name read from Gmail's address can hold a
+  `+` or a stray `%`. Every fragment is decoded by `decodeGmailHashSegment`
+  ([src/utils/gmailHash.ts](src/utils/gmailHash.ts)), which cannot throw, so one bad pinned
+  view cannot stop the badges of every later tab (found by the 1.9.0 audit).
 - **Generated Apps Script safety.** [src/modules/rules.ts](src/modules/rules.ts) emits code
   the user runs under their own Google account, unattended, with destructive actions. Four
   separate protections, each for something that has gone wrong:
@@ -143,6 +158,13 @@ through, lives outside the repository in `~/.config/gmail-labels-as-tabs/alerts.
 (created mode 600 by `scripts/canary/install-canary.sh --alerts`). `notify.mjs` never prints
 it, accepts only a `chat.googleapis.com` URL, and its tests run with an empty `HOME` so a
 real one on the machine can never be read by a test. See ADR-028.
+
+The Chrome Web Store upload script, [scripts/cws-upload.mjs](scripts/cws-upload.mjs), reads
+its OAuth client, refresh token and publisher id from files in `~/.secrets`, and never
+prints them. Which files those are is named in `~/.config/gmail-labels-as-tabs/cws.json`,
+outside the repository, because the file names carry the developer account's address and
+this repository is public. The drift canary is held to the same rule: it names its account
+by position, never by address, and records whether labels exist, never how many.
 
 ## Build integrity
 

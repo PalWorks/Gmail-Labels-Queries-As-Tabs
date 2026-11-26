@@ -1,5 +1,7 @@
 # Feedback worker
 
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
+
 Relays the extension's in-product feedback form to email via Resend.
 
 The extension cannot call Resend directly: a published CRX is a zip anyone can unpack, so
@@ -10,8 +12,11 @@ turns on website icons for sender icons, Google's favicon service (see
 [SECURITY.md](../SECURITY.md)).
 
 One other host appears in the extension, and it is worth not confusing with this one: the
-uninstall URL (ADR-014). Chrome opens it after the extension has already been removed, so
-no code of ours runs and nothing is sent; it is a navigation, not a request.
+uninstall URL (ADR-014). Since 1.9.0 it is a one-question page on the marketing site,
+`palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/` (ADR-031). Chrome opens it after the
+extension has already been removed, so no code of the extension runs and nothing is sent; it
+is a navigation, not a request. An answer given there goes to the website's own relay, not
+to this Worker.
 
 Nor is it the website's contact form. That form, at `/contact/` on the marketing site
 (which the extension's Help button opens), posts to a different Worker,
@@ -34,7 +39,9 @@ own Resend key and KV. Nothing here deploys or configures it.
 It validates, rate limits per network, sends one email, and stores no message content.
 `GET /health` returns `{ ok: true }`.
 
-Protections: JSON only, 16KB body cap, 4000-character message cap, plausible-email check,
+Protections: JSON only, a 16KB body cap checked twice (first against the declared
+`Content-Length`, before any of the body is read, then against the body's real size in
+bytes), `411` for a body that declares no length, a 4000-character message cap, plausible-email check,
 honeypot field (`website`) answered with a silent 200, and a generic error on provider
 failure so no account detail leaks to the caller. Errors are always `{ "error": "..." }`,
 which the extension shows as is.

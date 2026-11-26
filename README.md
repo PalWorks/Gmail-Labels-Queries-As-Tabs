@@ -24,6 +24,8 @@
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues">Report Bug</a>
 </p>
 
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -52,26 +54,30 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 
 ### Who Is This For?
 
+**Table R1: Audiences**
+
 | Audience | Why |
 |----------|-----|
 | **Power Gmail users** | Navigate labels and saved searches without the sidebar |
 | **Multi-account users** | Independent tab configurations per Gmail account |
-| **Privacy-focused users** | Client-side tool with no background network requests. Three things can ever leave the browser and none happens on its own: feedback you choose to send, a form Chrome opens after you uninstall, and website icons for sender icons if you turn them on |
+| **Privacy-focused users** | Client-side tool with no background network requests. Three things can ever leave the browser and none happens on its own: feedback you choose to send, a one-question page on our website that Chrome opens after you uninstall, and website icons for sender icons if you turn them on |
 | **Teams** | Exportable configs let you share tab setups across team members |
 
 ## Features
+
+**Table R2: Features**
 
 | Feature | Description |
 |---------|-------------|
 | **Custom Tabs** | Pin tabs for Gmail labels, search queries (`is:unread from:boss`), or hash views (`#starred`, `#sent`) |
 | **"Show as Tabs" in Gmail's own menu** | The three-dot menu beside any label, including sublabels, ends with "Show as Tabs", or "Remove from Tabs" if it already has one. The item hardcodes no Gmail class name: it clones one of Gmail's own menu items, so it inherits Gmail's styling and survives a Gmail rename. It lights up under the pointer like Gmail's own items, using a highlight learned from them at runtime. See ADR-022 and ADR-024 |
 | **Sender icons (opt-in)** | A chip at the start of each inbox row naming the sender's organisation (`email.mashreq.com` shows as `mashreq.com`), with a coloured letter, or the organisation's own icon if you also turn on website icons. Mailbox providers such as gmail.com show the sender's initial instead of the provider's logo, unless you choose otherwise. Found by ARIA roles with a fallback behind every step, no InboxSDK, and applied live without a Gmail reload. See ADR-027 |
-| **Custom Tab Colors** | Assign an optional theme-safe palette color to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
+| **Custom Tab Colors** | Assign one of twelve optional theme-safe palette colors to any tab (accent dot + active underline); editable from the in-Gmail modal and the options page |
 | **Rule Starter Templates** | One-click presets that set up a common cleanup tab + enabled rule (feature-flagged) |
 | **Drag & Drop** | Reorder tabs with full horizontal and multi-row drag and drop |
-| **Real-time Unread Counts** | Live badges via a three-tier strategy: Atom feed, XHR interception, and DOM scraping fallback |
+| **Real-time Unread Counts** | Each badge copies the count Gmail shows on the same view's row in its own sidebar, follows it as it changes, and works in any Gmail language. A label the sidebar hides falls back to Gmail's Atom feed. See ADR-030 |
 | **Theme Support** | Light (default), Dark, and a System theme that follows **Gmail's own theme**, not the desktop's; browser-wide across all accounts. No surface paints a theme it is still guessing at, so nothing flashes on the way in |
-| **Multi-Account** | Per-account tab configurations namespaced by email address |
+| **Multi-Account** | Per-account tab configurations namespaced by email address. Settings opened from Gmail open on that Gmail account |
 | **Automation Rules** | Generate Google Apps Script code for automated email cleanup (trash, archive, mark read, move) |
 | **Export / Import** | Backup and restore configuration as schema-validated JSON |
 | **Cross-Device Sync** | Settings sync across Chrome instances via `chrome.storage.sync` |
@@ -79,6 +85,7 @@ Gmail Labels and Search Queries as Tabs replaces the need to navigate Gmail's si
 | **Guided tour** | Six steps that demonstrate the tab bar in a working miniature inside the panel, not screenshots of it. Opens over Gmail so the theme step retints your real bar; falls back to a standalone page when no Gmail tab is open |
 | **Toolbar menu** | Configure tabs, Show me around, All settings, Help & support, behind the extension icon |
 | **Keyboard Support** | <kbd>Esc</kbd> to close modals and exit move mode |
+| **Rating ask** | After a week and 30 tab clicks, one line at the end of the bar asks for a rating, with "Not now" and "Don't ask again". Its state stays on the device. See ADR-032 |
 | **Integration health** | Rows on the options page saying whether the Gmail menu item and sender icons are working, or working only because a fallback held, with a button that copies a short diagnostic. Nothing is transmitted; the copying is yours to do |
 | **Privacy First** | No background network requests, no telemetry; everything stays local. The one optional request is website icons, which you turn on yourself |
 | **Chromium browsers** | Tested in Chrome, Microsoft Edge, Opera and Chromium |
@@ -99,8 +106,8 @@ The extension operates across three Chrome execution contexts, each with a disti
 │  │  ● Settings modal       │  │  ● Parses Gmail API     │  │
 │  │  ● Theme management     │  │  ● Extracts unread      │  │
 │  │  ● Drag & drop          │  │    label counts         │  │
-│  │  ● Atom feed counts     │  │                         │  │
-│  │  ● DOM scraping counts  │  │  Communicates via       │  │
+│  │  ● Sidebar counts       │  │                         │  │
+│  │  ● Atom feed fallback   │  │  Communicates via       │  │
 │  │  ● Modals (pin, edit,   │◄─┤  CustomEvent dispatch   │  │
 │  │    delete, import)      │  │                         │  │
 │  └──────────┬──────────────┘  └─────────────────────────┘  │
@@ -122,11 +129,13 @@ The extension operates across three Chrome execution contexts, each with a disti
 
 ### Unread Count Strategy
 
-Unread counts use a three-tier waterfall for maximum reliability:
+A badge shows the number Gmail shows (ADR-030):
 
-1. **Atom Feed**: Fetches `mail.google.com/.../feed/atom/{label}` for accurate per-label counts
-2. **XHR Interception**: Intercepts Gmail's internal sync API calls in the Main World for real-time updates
-3. **DOM Scraping**: Parses Gmail sidebar badges as a last resort
+1. **Gmail's sidebar**: the count on the same view's row in Gmail's left sidebar, copied as it is and re-read by a `MutationObserver` whenever Gmail changes it. Gmail has already applied the inbox type, categories and language, so the badge matches what the user sees
+2. **Atom feed**: only for a user label with no sidebar row (hidden, or under a collapsed parent), fetched as `mail.google.com/.../feed/atom/{Parent-Child-Name}`, because the feed names `/` and spaces as `-`
+3. **XHR interception**: Gmail's internal sync responses, read in the Main World, applied only to views the sidebar does not list
+
+Searches show no count: Gmail does not count them, and there is no feed for a search.
 
 ### Key Architectural Patterns
 
@@ -291,7 +300,7 @@ Options page and passed directly to the Apps Script generator.
 
 1. Open Gmail and click the ⚙️ icon on the tab bar (or open the Options page)
 2. Type a Gmail label name (e.g., `Work`, `Personal/Projects`)
-3. Click **Add**
+3. Click **Add tab**
 
 ### Adding a Search Query Tab
 
@@ -314,15 +323,15 @@ Type any Gmail hash route directly:
 
 ### Export / Import
 
-- **Export**: Settings modal or Options page > Export Config > downloads `GmailTabs_<account>_<date>.json`
-- **Import**: Settings modal or Options page > Import Config > select JSON file (schema validated before import)
+- **Export**: Settings modal or Options page > Export settings > downloads `GmailTabs_<account>_<date>.json`
+- **Import**: Settings modal or Options page > Import settings > select JSON file (schema validated before import)
 
 ### Automation Rules
 
 1. Open the Options page > Automation Rules
 2. Configure per-tab actions (trash, archive, mark read, or move to another label)
 3. Set the "older than" threshold in days
-4. Click **Generate & Copy Script**
+4. Click **Generate and copy script**
 5. Paste the generated Google Apps Script into [script.google.com](https://script.google.com)
 6. Set up a daily trigger for automated execution
 
@@ -378,6 +387,7 @@ Gmail-Labels-As-Tabs/
 │   │
 │   ├── utils/                        # Shared utilities
 │   │   ├── storage.ts                # chrome.storage.sync wrapper (CRUD, migration)
+│   │   ├── gmailHash.ts              # Decodes a Gmail address fragment; never throws
 │   │   ├── importExport.ts           # Import/Export logic with schema validation
 │   │   ├── selectors.ts              # DOM selector constants
 │   │   ├── domain.ts                 # Sender address to organisation domain
@@ -390,13 +400,15 @@ Gmail-Labels-As-Tabs/
 │   │
 │   └── icons/                        # Extension icons (16/32/48/128 png)
 │
-├── test/                             # Test suite (47 files; the main ones below)
+├── test/                             # Test suite (50 files; the main ones below)
 │   ├── background.test.ts            # Service worker tests
 │   ├── content.test.ts               # Content script tests
 │   ├── dragdrop.test.ts              # Drag and drop tests
 │   ├── tabs.test.ts                  # Tab rendering tests
 │   ├── theme.test.ts                 # Theme management tests
 │   ├── unread.test.ts                # Unread count tests
+│   ├── ratingNudge.test.ts           # The rating ask
+│   ├── gmailHash.test.ts             # Gmail address fragment decoding
 │   ├── storage.test.ts               # Storage CRUD tests
 │   ├── importExport.test.ts          # Import/Export tests
 │   ├── tabListRenderer.test.ts       # Tab list renderer tests
@@ -421,7 +433,8 @@ Gmail-Labels-As-Tabs/
 │   ├── ci.yml                        # CI pipeline (test, lint, build, verify)
 │
 ├── ARCHITECTURE.md                   # Detailed architecture analysis
-├── AUDIT.md                          # Code quality audit
+├── AUDIT.md                          # Code quality audit (historical)
+├── CLAUDE.md                         # Points Claude at AGENTS.md
 ├── COMMERCIAL-LICENSE.md             # The commercial licence, and how to ask for one
 └── LICENSE                           # GNU AGPL 3.0
 ```
@@ -444,11 +457,15 @@ npx jest test/modals/
 
 ### Test Suite Summary
 
+**Table R3: Test suites by area**
+
 | Area | Files | Focus |
 |------|-------|-------|
 | Storage API | `storage.test.ts` | Full CRUD, migration, multi-account, edge cases |
 | XHR Interceptor | `xhrInterceptor.test.ts` | Gmail JSON parsing, CustomEvent dispatch, error handling |
-| Unread Counts | `unread.test.ts` | Atom feed, XHR strategy, DOM scraping fallback |
+| Unread Counts | `unread.test.ts` | Copying Gmail's sidebar count, the Atom feed fallback and its names, live XHR counts only where the sidebar has no row, a bad network, constant sidebar churn |
+| Hash decoding | `gmailHash.test.ts` | `+` before escapes, a stray `%`, and every caller using the one decoder |
+| Rating ask | `ratingNudge.test.ts` | When it is due, "Not now" and "Don't ask again", malformed stored state, and other tabs following |
 | Drag & Drop | `dragdrop.test.ts` | Horizontal/vertical drag, reorder logic, edge cases |
 | Tab Rendering | `tabs.test.ts` | Tab creation, active state, hash navigation |
 | Theme | `theme.test.ts` | System/Light/Dark, Gmail dark mode detection, and the window where 'system' is still a guess |
@@ -456,7 +473,7 @@ npx jest test/modals/
 | Gmail label menu | `labelMenu.test.ts` | Reading which label was clicked, cloning one of Gmail's items, the toggle, sublabel titles, and every way it gives up |
 | Integration health | `health.test.ts` | Recording only on change, one key per component, surviving an orphaned context, and carrying nothing identifying |
 | Sender icons | `senderIcons.test.ts`, `domain.test.ts` | Every fallback layer, the badge before any request, website icons only on opt-in, slow and blocked networks, the observer not looping |
-| Drift canary tooling | `canaryNotify.test.ts`, `canaryRun.test.ts`, `canaryPropose.test.ts` | Google Chat alerts, escalation streaks and recovery, and what a selector proposal may write, all as real processes against stubs |
+| Drift canary tooling | `canaryAccounts.test.ts`, `canaryNotify.test.ts`, `canaryRun.test.ts`, `canaryPropose.test.ts` | Which account is measured and that its address is never printed, Google Chat alerts, escalation streaks and recovery, and what a selector proposal may write, all as real processes against stubs |
 | Options Page | `options.test.ts` | Account detection, section navigation, rule UI |
 | Import/Export | `importExport.test.ts` | Schema validation, export format, round-trip |
 | Modals | `modals/*.test.ts` | Pin, edit, delete, import, uninstall modal logic |
@@ -471,7 +488,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 47 test files, 1113 test cases.**
+**Total: 50 test files, 1149 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -497,17 +514,19 @@ Dispatch → Install → Type-check → Test + Coverage → Lint → Build → V
 
 ### Pipeline Steps
 
+**Table R4: CI pipeline steps**
+
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 1113 tests across 49 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 1149 tests across 50 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
 | **Package** | Creates `extension.zip` and validates it is under the 5MB CWS limit |
 | **Version Parity** | Verifies `manifest.json` and `package.json` versions match |
 | **@ts-ignore Check** | Ensures zero `@ts-ignore` comments in source |
-| **Dist Verification** | Confirms all 11 required files exist in `dist/` |
+| **Dist Verification** | Confirms all 17 required files exist in `dist/` |
 | **Declared Icons Only** | Fails if `dist/icons/` holds a file the manifest does not name. Two promo tiles, 398 KB, shipped to users this way until v1.5.0 |
 | **Published Privacy Policy** | Fetches <https://palworks.github.io/Gmail-Labels-As-Tabs/privacy/> and fails if it omits an outbound host, a declared permission or the site's own analytics, or if the site bundle carries an API key. The policy lives in another repository and deploys by hand, so nothing else keeps it honest |
 | **Artifacts** | Uploads `dist/`, `extension.zip`, and coverage report (7-day retention) |
@@ -620,7 +639,7 @@ save failures, a clean handover between two copies of the script).
 - Sender icons, off by default, with optional website icons (1.8.0)
 - Canary alerts in Google Chat, with proposed selector refreshes (1.8.0)
 
-### v1.9: Submitted 2026-11-26
+### v1.9: Submitted 2026-11-26, being resubmitted with the audit fixes
 
 Driven by the first user feedback: issue #1 and two messages through the in-product form.
 
@@ -629,6 +648,8 @@ Driven by the first user feedback: issue #1 and two messages through the in-prod
 - Twelve tab colours, up from eight
 - A rating ask after a week and 30 tab clicks, easy to put away (ADR-032)
 - The uninstall page is on our own website, not Tally (ADR-031)
+- Everything a full pre-release audit found, fixed: one hash decoder, drag by tab id, unknown colours kept, page events validated, the phone layout, sentence-case labels
+- Licensed under AGPL-3.0 plus a commercial licence, from MIT
 
 ### Planned
 
@@ -643,9 +664,12 @@ Driven by the first user feedback: issue #1 and two messages through the in-prod
 This repository is documented for both humans and LLM-driven agents. Start with
 [CONTEXT_MAP.md](CONTEXT_MAP.md) to find the right file for a question.
 
+**Table R5: Documentation set**
+
 | Document | Purpose |
 |----------|---------|
 | [AGENTS.md](AGENTS.md) | Agent behavior contract and hard constraints |
+| [CLAUDE.md](CLAUDE.md) | Points Claude at AGENTS.md |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design reference |
 | [CONTEXT_MAP.md](CONTEXT_MAP.md) | Where knowledge lives |
 | [DOMAIN.md](DOMAIN.md) | Concepts, terminology, and domain rules |
@@ -656,7 +680,10 @@ This repository is documented for both humans and LLM-driven agents. Start with
 | [PLAYBOOK.md](PLAYBOOK.md) | Build, release, rollback, troubleshooting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution workflow |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [AUDIT.md](AUDIT.md) | Deep repository audit and risk areas |
+| [AUDIT.md](AUDIT.md) | Historical repository audit (v1.2.1, with refresh notes to v1.8.1) |
+| [STORE_LISTING.md](STORE_LISTING.md) | Chrome Web Store listing text, privacy answers and the release checklist |
+| [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) | The commercial licence, and how to ask for one |
+| [scripts/canary/README.md](scripts/canary/README.md) | The daily Gmail drift canary |
 
 ## Contributing
 
@@ -688,7 +715,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (1113 tests across 49 suites)
+npm test          # Jest (1149 tests across 50 suites)
 npm run build     # Verify production build
 ```
 
@@ -697,7 +724,7 @@ npm run build     # Verify production build
 This extension is designed with privacy as a non-negotiable principle:
 
 - **No background requests**: No analytics, no telemetry, no remote config
-- **One user-initiated exception**: Pressing Send Feedback posts your message, an optional reply address, and diagnostics unless you untick them (version, browser build, and counts of tabs, rules and accounts) to our relay on Cloudflare, which passes it to the email service Resend. Never label names, tab titles, contacts or mail
+- **One user-initiated exception**: Pressing Send feedback posts your message, an optional reply address, and diagnostics unless you untick them (version, browser build, and counts of tabs, rules and accounts) to our relay on Cloudflare, which passes it to the email service Resend. Never label names, tab titles, contacts or mail
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send. It stores no message, only a rate-limit counter named by a keyed hash of the network address, for up to a day
 - **Website icons, only if you turn them on**: sender icons are off by default and draw a coloured letter without any request. With **Load website icons** also on, the sender's domain alone (such as `mashreq.com`) is sent to Google's icon service at `t0.gstatic.com`, or `www.google.com` if that cannot be reached, with no referrer, once per domain (ADR-027)
@@ -705,7 +732,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **Minimal permissions**: Only `storage`, `downloads`, `management` and `scripting`, the last of which injects this extension's own content script into Gmail and nothing else
 - **Open source**: Full codebase available for audit
 
-The Atom feed used for unread counts fetches from `mail.google.com` (same origin). The only cross-origin requests are the ones listed above, each of which you trigger.
+Unread counts are read from Gmail's own sidebar on the page; the Atom feed used for labels the sidebar hides fetches from `mail.google.com` (same origin). The rating ask keeps its state on the device and opens the store page only when you click "Rate it". The only cross-origin requests are the ones listed above, each of which you trigger.
 
 The automation rules feature generates Google Apps Script code that runs entirely under your own Google account. The extension has no access to your Gmail API, no OAuth tokens, and no API keys.
 

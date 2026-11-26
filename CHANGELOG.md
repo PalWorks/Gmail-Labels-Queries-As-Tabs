@@ -8,7 +8,7 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 ## [1.9.0] - 2026-11-26
 
-_Updated 2026-11-26T09:03:25+00:00._
+_Updated 2026-11-26T09:09:48+00:00._
 
 ### Fixed
 
@@ -37,7 +37,8 @@ _Updated 2026-11-26T09:03:25+00:00._
   - Dragging a tab while another window changed the list could move the wrong tab or empty
     the bar. A drop now follows the tab by its id, and is dropped if the tab is gone.
   - A tab color set by a newer version was erased when an older one wrote. Unknown plain
-    color names are now kept (and drawn as no color), so the next new color survives.
+    color names are now kept (and drawn as no color), on read and on import, so the next new
+    color survives.
   - "Don't ask again" in one Gmail tab did not reach the others, and a "Not now" there could
     undo it. The rating ask now follows the other tabs.
   - On Settings, switching accounts now updates the address, so a reload stays on the
@@ -72,12 +73,18 @@ _Updated 2026-11-26T09:03:25+00:00._
 - Development: esbuild 0.28.2 (clears a low-severity advisory in its development server,
   which this project does not use), and the other development tools to their latest
   in-range versions.
+- **Licence: AGPL-3.0 plus a commercial licence, from 1.9.0.** `LICENSE` is the unmodified
+  GNU AGPL 3.0, `COMMERCIAL-LICENSE.md` says when a commercial licence is needed and how to
+  ask, `CONTRIBUTING.md` states the terms a contribution is accepted on, and source files
+  carry `SPDX-License-Identifier: AGPL-3.0-only`. Versions up to 1.8.1 were MIT, and copies
+  of them keep it.
 
 ### Repository and tooling
 
 #### Fixed
 
-- **The feedback relay refuses an oversized body before reading it**, by its declared size.
+- **The feedback relay refuses an oversized body before reading it**, by its declared size,
+  answers `411` to a body that declares no length, and measures the body in bytes.
 - **Public files carry no personal address or mailbox counts.** The Web Store upload script
   reads its credential file names from `~/.config/gmail-labels-as-tabs/cws.json`, and the
   canary records and prints whether labels exist, not how many.
@@ -102,6 +109,10 @@ _Updated 2026-11-26T09:03:25+00:00._
 
 #### Changed
 
+- **The drift canary watches the count the badges copy.** A new weak check, U1: the inbox
+  count sits in a `.TO` row as `.bsU` beside the link, and the extension's inbox badge
+  equals it. A miss is DEGRADED, not FAIL, because the badge still has fallbacks. The count
+  is never printed or recorded; the fingerprint keeps only whether U1 held.
 - **Store screenshots show 1.8.1.** `scripts/store-assets/build.mjs` is rebuilt around demo
   data: it runs the real extension in a throwaway headless copy of a signed-in profile,
   swaps invented senders, subjects and label names into the real Gmail page for the shot,

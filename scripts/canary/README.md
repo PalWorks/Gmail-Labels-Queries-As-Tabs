@@ -1,5 +1,7 @@
 # The Gmail drift canary
 
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
+
 Gmail is a third-party page we do not control. This watches the handful of
 structural facts the label-menu and sender-icons features depend on, and says
 so when one stops being true, including when a fallback is quietly doing the
@@ -22,7 +24,14 @@ when ARIA does not answer. They are never the primary path, so a rename cannot
 break the feature; W1 and W2 watch them so that a rename is noticed, and
 refreshed, before the day the fallback is needed.
 
+And since 1.9.0, the sidebar classes the unread badges copy from: `.TO` (a sidebar row) and
+`.bsU` (its count), as `SIDEBAR_ROW_SELECTOR` and `UNREAD_COUNT_SELECTOR` in the same file.
+U1 watches them. The badge reads a count from inside the link or from its aria-label when
+they stop matching, so a miss is DEGRADED rather than FAIL (ADR-030).
+
 ## The contract
+
+**Table C1: Checks**
 
 | Check | What it asserts | Failure |
 |---|---|---|
@@ -126,7 +135,7 @@ NODE_PATH=$(npm root -g) node scripts/canary/gmail-drift-canary.mjs
 Options: `--profile <dir>`, `--account <a[,b]>`, `--dist <dir>`, `--json`, `--keep`,
 `--no-extension` (measure Gmail alone, without loading our build).
 
-Exit codes: `0` PASS, `2` FAIL, `3` SKIPPED, `4` ERROR. **SKIPPED is not
+Exit codes: `0` PASS, `2` FAIL, `3` SKIPPED, `4` ERROR, `5` DEGRADED. **SKIPPED is not
 FAIL**: it means the canary could not reach a signed-in Gmail and therefore
 learned nothing. A canary that cries wolf when a cookie expires is a canary
 that gets ignored inside a fortnight.
@@ -193,6 +202,8 @@ break (`canary-fail`, `canary-error`, `canary-degraded`, `canary-skipped`) has i
 
 ## The files
 
+**Table C2: Files**
+
 | File | Committed | What it is |
 |---|---|---|
 | `gmail-drift-canary.mjs` | yes | The measurement. Reports; never escalates |
@@ -203,7 +214,7 @@ break (`canary-fail`, `canary-error`, `canary-degraded`, `canary-skipped`) has i
 | `install-canary.sh` | yes | Writes and enables the systemd user units; creates the alert config |
 | `selector-proposal.json` | no | Written only while a sender fallback has rotted; removed when it no longer has |
 | `~/.config/gmail-labels-as-tabs/alerts.env` | never | The webhook, the auto-PR switch and `CANARY_ACCOUNT`. Outside the repository on purpose |
-| `fingerprint.json` | yes | What Gmail looked like on the last run that changed anything |
+| `fingerprint.json` | yes | What Gmail looked like on the last run that changed anything. Public, so it names the account by position and records whether label rows were present, never how many, and no unread count |
 | `history.ndjson` | no | One line per run, including skips |
 | `state.json` | no | The streak counters |
 | `canary.log` | no | Human-readable log of every run |

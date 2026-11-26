@@ -3,15 +3,17 @@
 Where knowledge lives in this repository. Use this to decide which file to read for a
 given question instead of scanning the whole tree.
 
-Last updated: 2026-09-30 (v1.8.0)
+Last updated: 2026-11-26T09:09:48+00:00 (v1.9.0)
 
 ## Documentation index
+
+**Table M1: Which document answers which question**
 
 | Question | Read |
 |----------|------|
 | What is this and how do I run it? | [README.md](README.md) |
 | How is the system designed? | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| How should an agent behave here? | [AGENTS.md](AGENTS.md) |
+| How should an agent behave here? | [AGENTS.md](AGENTS.md) ([CLAUDE.md](CLAUDE.md) points there) |
 | What do the domain terms mean? | [DOMAIN.md](DOMAIN.md) |
 | What is the storage schema? | [DATA_MODEL.md](DATA_MODEL.md) |
 | Why is the code shaped this way? | [DECISIONS.md](DECISIONS.md) |
@@ -20,7 +22,11 @@ Last updated: 2026-09-30 (v1.8.0)
 | What are the privacy and security rules? | [SECURITY.md](SECURITY.md) |
 | How do I contribute? | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | What changed and when? | [CHANGELOG.md](CHANGELOG.md) |
-| Deep repository audit and risk areas | [AUDIT.md](AUDIT.md) |
+| Deep repository audit and risk areas (historical; the 1.9.0 audit's fixes are in CHANGELOG) | [AUDIT.md](AUDIT.md) |
+| Under what licence, and how to get a commercial one? | [LICENSE](LICENSE) (AGPL-3.0), [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md), and the contribution terms in [CONTRIBUTING.md](CONTRIBUTING.md) |
+| How does the daily drift canary work, and which account does it measure? | [scripts/canary/README.md](scripts/canary/README.md) |
+| How does the feedback relay work? | [worker/README.md](worker/README.md) |
+| Why does a badge show Gmail's sidebar count? | [DECISIONS.md](DECISIONS.md) ADR-030 |
 | Where is the marketing site and the published privacy policy? | Another repository: [PalWorks/Gmail-Labels-As-Tabs](https://github.com/PalWorks/Gmail-Labels-As-Tabs). See ADR-016 and [SECURITY.md](SECURITY.md) |
 | What goes in the Web Store listing, and what is still to do? | [STORE_LISTING.md](STORE_LISTING.md) |
 | Where do the store screenshots come from? | [store-assets/README.md](store-assets/README.md) |
@@ -37,6 +43,8 @@ Last updated: 2026-09-30 (v1.8.0)
 | Post-review improvements plan | [.planning/IMPROVEMENTS-PLAN.md](.planning/IMPROVEMENTS-PLAN.md) |
 
 ## Source code map
+
+**Table M2: Where each concern lives in the source**
 
 | Concern | File |
 |---------|------|
@@ -93,9 +101,11 @@ Last updated: 2026-09-30 (v1.8.0)
 
 ## Build and CI map
 
+**Table M3: Build, CI and tooling files**
+
 | Concern | File |
 |---------|------|
-| esbuild build script (5 entry points) | [build.js](build.js) |
+| esbuild build script (7 entry points) | [build.js](build.js) |
 | npm scripts (build, watch, lint, test, package) | [package.json](package.json) |
 | Jest config + coverage thresholds | [jest.config.js](jest.config.js) |
 | TypeScript config | [tsconfig.json](tsconfig.json) |
@@ -106,7 +116,8 @@ Last updated: 2026-09-30 (v1.8.0)
 | Store screenshots and tiles, from the real extension | [scripts/store-assets/build.mjs](scripts/store-assets/build.mjs) |
 | Product video recorder, and its title and end cards | [scripts/store-assets/record-video.mjs](scripts/store-assets/record-video.mjs), [scripts/store-assets/cards.html](scripts/store-assets/cards.html) |
 | YouTube uploader for the product video | [scripts/store-assets/youtube-upload.mjs](scripts/store-assets/youtube-upload.mjs) |
-| Draft upload to the Chrome Web Store (dry run unless `--confirm`) | [scripts/cws-upload.mjs](scripts/cws-upload.mjs) |
+| Draft upload to the Chrome Web Store (dry run unless `--confirm`; `--submit` is a separate run); credential file names come from `~/.config/gmail-labels-as-tabs/cws.json` | [scripts/cws-upload.mjs](scripts/cws-upload.mjs) |
+| Daily Gmail drift canary, its alerts and account choice | [scripts/canary/](scripts/canary/README.md) |
 | CI, manual dispatch only | [.github/workflows/](.github/workflows/) |
 | Chrome i18n strings | [_locales/en/messages.json](_locales/en/messages.json) |
 
