@@ -174,7 +174,8 @@ describe(status);
 const liveVersion = status.publishedItemRevisionStatus?.distributionChannels?.[0]?.crxVersion ?? '0';
 
 if (submit) {
-  if (status.submittedItemRevisionStatus) fail('a version is already in review; withdraw it in the dashboard first');
+  const pending = status.submittedItemRevisionStatus?.state;
+  if (pending && pending !== 'CANCELLED') fail('a version is already in review; withdraw it in the dashboard first');
   const draft = draftVersion(status);
   console.log(draft ? `Submitting the draft: ${draft}` : 'Submitting the draft (fetchStatus does not report its version; check the dashboard)');
   const res = await call(token, 'POST', `${API}/v2/${itemPath()}:publish`, {
@@ -192,7 +193,13 @@ console.log(`Zip:       ${ZIP.replace(ROOT + '/', '')}, version ${manifest.versi
 if (compareVersions(manifest.version, liveVersion) <= 0) {
   fail(`the zip's version ${manifest.version} is not higher than the live ${liveVersion}`);
 }
-if (status.submittedItemRevisionStatus) fail('a version is in review; uploading now would replace what the reviewer sees');
+// A cancelled submission is a draft again (the dashboard says so when you
+// cancel), and the next upload replaces it. Anything else is still with a
+// reviewer.
+const reviewState = status.submittedItemRevisionStatus?.state;
+if (reviewState && reviewState !== 'CANCELLED') {
+  fail('a version is in review; uploading now would replace what the reviewer sees');
+}
 
 if (!confirm) {
   console.log('Dry run: nothing sent. Add --confirm to upload this zip as a draft.');
