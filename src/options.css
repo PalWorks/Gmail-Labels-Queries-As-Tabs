@@ -1670,7 +1670,6 @@ body.theme-light .feedback-status.is-success {
 
     .theme-btn-group,
     .input-group,
-    .button-row,
     .feedback-actions {
         flex-wrap: wrap;
     }
