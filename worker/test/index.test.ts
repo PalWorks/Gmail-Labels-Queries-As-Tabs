@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Worker logic tests, plain Node (node --test strips the types). Resend is
 // never called: global fetch is replaced for each test.
 import { test, beforeEach } from 'node:test';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
     preset: 'ts-jest',

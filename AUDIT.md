@@ -2,7 +2,7 @@
 
 > **Version Analyzed:** 1.2.1 (Manifest V3)
 > **Stack:** TypeScript, esbuild, Chrome Extension APIs (no third-party library in the shipped bundle since InboxSDK was removed after v1.6.2; see section 7)
-> **License:** MIT
+> **License:** MIT at the time of this audit; AGPL-3.0 plus a commercial licence from 1.9.0 (see COMMERCIAL-LICENSE.md)
 >
 > **Refresh note (v1.2.1):** `modals.ts` has been decomposed into `src/modules/modals/*`;
 > `src/utils/` now holds `storage.ts`, `importExport.ts`, `selectors.ts`, and `tabListRenderer.ts`;

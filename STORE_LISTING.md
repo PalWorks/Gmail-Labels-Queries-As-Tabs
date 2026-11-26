@@ -216,7 +216,7 @@ No. It draws one small bar on a page you have already loaded, and it fetches not
 Yes, if you turn on sender icons in Settings. Each inbox row gets a small chip naming the sender's organisation, such as mashreq.com, with a coloured letter or, if you allow it, the organisation's own icon. Mail from gmail.com and similar providers shows the sender's initial instead of the provider's logo.
 
 🔹 Is it free?
-Yes. Free, no account, no upsell, and open source under the MIT license.
+Yes. Free, no account, no upsell, and open source under the GNU AGPL 3.0.
 
 🔹 Does it work with Google Workspace accounts?
 Yes. Workspace Gmail runs on mail.google.com like personal Gmail, so the extension works the same way, unless your organisation's administrator blocks Chrome extensions. Each Workspace and personal account keeps its own tabs.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-only
 // Puts the packaged extension into the Chrome Web Store through the Chrome Web
 // Store API v2, as a draft, and optionally submits that draft for review.
 //

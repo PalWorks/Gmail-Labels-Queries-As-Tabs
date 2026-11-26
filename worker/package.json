@@ -2,6 +2,7 @@
     "name": "gmail-tabs-feedback-worker",
     "version": "1.0.0",
     "private": true,
+    "license": "AGPL-3.0-only",
     "description": "Cloudflare Worker that relays in-extension feedback to email via Resend.",
     "scripts": {
         "dev": "wrangler dev",

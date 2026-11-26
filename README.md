@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml"><img src="https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde"><img src="https://img.shields.io/badge/chrome%20web%20store-published-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%2B%20commercial-blue.svg" alt="License: AGPL-3.0, commercial licence available"></a>
   <img src="https://img.shields.io/badge/manifest-v3-green.svg" alt="Manifest V3">
   <img src="https://img.shields.io/badge/chrome-120%2B-yellow.svg" alt="Chrome 120+">
   <img src="https://img.shields.io/badge/privacy-no%20telemetry-brightgreen.svg" alt="Privacy First">
@@ -422,7 +422,8 @@ Gmail-Labels-As-Tabs/
 │
 ├── ARCHITECTURE.md                   # Detailed architecture analysis
 ├── AUDIT.md                          # Code quality audit
-└── LICENSE                           # MIT License
+├── COMMERCIAL-LICENSE.md             # The commercial licence, and how to ask for one
+└── LICENSE                           # GNU AGPL 3.0
 ```
 
 ## Testing
@@ -710,7 +711,16 @@ The automation rules feature generates Google Apps Script code that runs entirel
 
 ## License
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+Dual-licensed, from 1.9.0:
+
+- **GNU Affero General Public License 3.0** ([LICENSE](LICENSE)): free to use, change and share,
+  provided a modified version you distribute or run as a service is offered as source under the
+  same licence.
+- **A commercial licence from PalWorks** for use without the AGPL's obligations, such as inside
+  a closed-source product. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for how to ask.
+
+Installing the extension from the Chrome Web Store is free for everyone and needs neither.
+Versions up to 1.8.1 were published under MIT, and copies of those keep it.
 
 ## Acknowledgements
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-only
 // Uploads the product video to YouTube through the YouTube Data API, with the
 // title, description and tags from store-assets/video/README.md, then sets the
 // thumbnail. No dependencies: OAuth is a loopback sign-in with PKCE, the upload

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * record-video.mjs: the product video, recorded from the real extension in a
  * real Gmail.

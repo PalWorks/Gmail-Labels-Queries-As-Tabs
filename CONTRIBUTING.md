@@ -82,3 +82,13 @@ PR is up: `gh workflow run ci.yml --ref <your-branch>`.
 Use the Support & Feedback page inside the extension for bug reports and feature requests,
 or open an issue on
 [GitHub](https://github.com/PalWorks/Gmail-Labels-Queries-As-Tabs/issues).
+
+## Licence of contributions
+
+The project is dual-licensed: GNU AGPL 3.0 for everyone, and a commercial licence that PalWorks
+offers to those who need one ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). By opening a pull
+request you confirm that the contribution is your own work, that you license it under the AGPL
+3.0, and that you grant PalWorks a perpetual, worldwide, royalty-free right to also distribute it
+under other licence terms, including the commercial licence. Every source file starts with
+`SPDX-License-Identifier: AGPL-3.0-only`; keep that line in any file you add.
+

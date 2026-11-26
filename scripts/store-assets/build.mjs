@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * build.mjs: the Chrome Web Store screenshots and promo tiles, from the real
  * extension in a real Gmail.
