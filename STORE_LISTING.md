@@ -835,8 +835,9 @@ something, a single reading is worth nothing.
       checked (no mention of Tally), and submitted: PENDING_REVIEW on 2026-11-26.
 - [x] Full pre-release audit of the repository on 2026-11-26; every finding fixed (CHANGELOG
       [1.9.0], "Found by a full audit").
-- [ ] Resubmit 1.9.0 with the audit fixes: rebuild the zip from a clean tree, upload it as a
-      draft and submit it.
+- [x] Resubmitted 1.9.0 with the audit fixes: the first submission's review cancelled in the
+      dashboard, the zip rebuilt from a clean tree, uploaded as a draft, the description
+      re-pasted ("Edit tab"), and submitted; PENDING_REVIEW at 2026-11-26T09:24:29+00:00.
 - [x] The website describes 1.9.0: `LIVE_VERSION` is 1.9.0 in its `content/site.ts` and
       `content/features.ts` says "Twelve colours" (read from the website repository on
       2026-11-26).
