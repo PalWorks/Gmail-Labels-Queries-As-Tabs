@@ -42,7 +42,9 @@ _Updated 2026-11-26T09:09:48+00:00._
   - "Don't ask again" in one Gmail tab did not reach the others, and a "Not now" there could
     undo it. The rating ask now follows the other tabs.
   - On Settings, switching accounts now updates the address, so a reload stays on the
-    account, and two quick switches can no longer land on the wrong one.
+    account; two quick switches can no longer land on the wrong one; and the page commits
+    to the new account only once its settings have loaded, so a failed load leaves it on
+    the account it was showing instead of editing one account under another's name.
   - The Settings and welcome pages scrolled sideways on a 360px phone. The account chip now
     sits in the page there, every button is at least 40px tall, keyboard focus is visible
     on every control, and the empty-account text meets contrast in the light theme.

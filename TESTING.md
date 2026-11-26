@@ -44,7 +44,7 @@ thresholds; add tests with new behavior.
 
 ## Suite shape
 
-- 50 suites, 1149 tests as of v1.9.0.
+- 50 suites, 1150 tests as of v1.9.0.
 - Unit suites cover: storage and migrations, the settings reducer and write path, tab
   rendering and keyboard/aria, unread counts copied from Gmail's sidebar with the Atom feed
   fallback, Gmail hash decoding, the rating ask, XHR interceptor validation, rules and

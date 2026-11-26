@@ -1111,22 +1111,28 @@ function setupAccountSwitcher(): void {
         // A later switch made while the flush was running has the last word.
         if (select.value !== newAccountId) return;
 
-        currentAccountId = newAccountId;
-        setUserEmail(currentAccountId);
-        rememberAccountInAddress(currentAccountId);
-
+        // Load first, commit after. Until the new account's settings are in
+        // hand, everything on the page (rules, preferences, export, the
+        // address) still belongs to the account shown, so an edit made in
+        // the meantime, or after a failed load, cannot land on the wrong one.
         let loaded: Settings;
         try {
             loaded = await getSettings(newAccountId);
         } catch (e) {
+            if (select.value !== newAccountId) return;
             console.error('Options: could not load the selected account', e);
-            showEmptyState('settings-tab-list', 'Failed to load settings. Please try again.');
+            select.value = currentAccountId ?? '';
+            alert('That account\'s settings could not be loaded. Please try again.');
             return;
         }
         // A switch made while this account's settings were loading has the
         // last word; drawing these now would put one account's tabs under
         // another's name.
-        if (currentAccountId !== newAccountId) return;
+        if (select.value !== newAccountId) return;
+
+        currentAccountId = newAccountId;
+        setUserEmail(currentAccountId);
+        rememberAccountInAddress(currentAccountId);
         currentSettings = loaded;
         setAppSettings(currentSettings);
 

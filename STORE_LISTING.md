@@ -823,7 +823,7 @@ something, a single reading is worth nothing.
 
 ### For 1.9.0, verified on 2026-11-26
 
-- [x] `manifest.json` and `package.json` both read 1.9.0; 1149 tests pass after the audit
+- [x] `manifest.json` and `package.json` both read 1.9.0; 1150 tests pass after the audit
       fixes; lint has no errors.
 - [x] Badges checked against Gmail in a live session: 35 of 35 matched, and a sidebar count
       change reached the badge (ADR-030).

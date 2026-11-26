@@ -484,6 +484,26 @@ describe('account switching', () => {
         expect(drawn).not.toContainEqual(bTabs);
     });
 
+    test('a failed account load leaves the page on the account it was showing', async () => {
+        mockGetAllAccounts.mockResolvedValue(['a@gmail.com', 'b@gmail.com']);
+        window.history.replaceState(null, '', '/options.html?account=a%40gmail.com');
+        buildOptionsDOM();
+        await loadOptionsPage();
+        const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+        mockGetSettings.mockRejectedValueOnce(new Error('storage unavailable'));
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'b@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+        await flushAsync();
+
+        expect(select.value).toBe('a@gmail.com');
+        expect(new URLSearchParams(window.location.search).get('account')).toBe('a@gmail.com');
+        expect(alertSpy).toHaveBeenCalled();
+        alertSpy.mockRestore();
+    });
+
     test('does not reload when same account is selected', async () => {
         mockGetAllAccounts.mockResolvedValue(['work@gmail.com']);
         buildOptionsDOM();
