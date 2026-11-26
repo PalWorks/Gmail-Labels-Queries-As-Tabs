@@ -325,6 +325,20 @@ const PROBE = async () => {
     r.signedIn = /mail\.google\.com/.test(location.href) && !/accounts\.google\.com/.test(location.href);
     if (!r.signedIn) return r;
 
+    // --- U1: the count a badge copies (ADR-030) ------------------------------
+    // The badge reads the count beside the inbox link in Gmail's sidebar row.
+    // If the row stops being `.TO`, or the count stops being `.bsU` beside
+    // the link, the badge has only its fallbacks left.
+    {
+        const link = document.querySelector('.aim a[href$="#inbox"], [role="navigation"] a[href$="#inbox"]');
+        const row = link ? link.closest('.TO') : null;
+        const count = row ? [...row.querySelectorAll('.bsU')].find((e) => e.closest('.TO') === row) : null;
+        const gmail = count ? (count.textContent || '').trim() : null;
+        const badgeEl = document.querySelector('#gmail-labels-as-tabs-bar .gmail-tab[data-value="#inbox"] .unread-count');
+        const badge = badgeEl ? (badgeEl.textContent || '').trim() : null;
+        r.unread = { link: Boolean(link), row: Boolean(row), countEl: Boolean(count), gmail, badge, ok: Boolean(row && count) && (badge === null || badge === gmail) };
+    }
+
     // --- C1: read a label name with no class in sight -----------------------
     let triggers = [...document.querySelectorAll('[data-label-name]')];
     let source = 'data-label-name';
@@ -730,6 +744,9 @@ function record(result, verdict, failures, probe) {
             C5: 'recorded, not asserted',
             OURS: probe?.ours?.applicable ? probe.ours.present && probe.ours.styledLikeSibling : 'n/a',
             HOVER: 'recorded, not asserted',
+            // Whether the badge's source is where ADR-030 reads it. Never the
+            // count itself: this file is public.
+            U1: probe?.unread?.ok ?? null,
         },
         ownItemText: probe?.ours?.text ?? null,
         // Sender icons. Structure only: counts change with the inbox every
@@ -1070,6 +1087,12 @@ async function runAgainst(chrome, src, target = { account: null, accountIndex: 0
     if (proposal) fs.writeFileSync(proposalPath, JSON.stringify(proposal, null, 2) + '\n');
     else if (fs.existsSync(proposalPath)) fs.rmSync(proposalPath);
 
+    if (probe.unread) {
+        const u = probe.unread;
+        const u1 = ['U1', u.ok, `the inbox count sits in a .TO row as .bsU beside the link, and our inbox badge copies it (row ${u.row}, count ${u.countEl}, badge matches ${u.badge === null ? 'n/a, no inbox tab' : u.badge === u.gmail})`, 'weak'];
+        checks.push(u1);
+        if (!u.ok) degradations.push(`U1: ${u1[2]}`);
+    }
     const failures = checks.filter(([, ok, , kind]) => !ok && kind !== 'weak').map(([id, , why]) => `${id}: ${why}`);
     const verdict = failures.length ? 'FAIL' : degradations.length ? 'DEGRADED' : 'PASS';
     result.sender = senderProbe;

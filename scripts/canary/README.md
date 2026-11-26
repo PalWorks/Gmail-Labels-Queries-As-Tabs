@@ -39,6 +39,7 @@ refreshed, before the day the fallback is needed.
 | W1 | `SENDER_ROW_FALLBACK` still matches the rows S1 found | The fallback would not hold (DEGRADED) |
 | W2 | `SENDER_SUBJECT_FALLBACK` still matches the containers S3 found | The fallback would not hold (DEGRADED) |
 | W3 | Both favicon providers answer with a real icon for a known domain | Website icons degrade to badges (DEGRADED) |
+| U1 | The inbox count sits in a `.TO` row as `.bsU` beside the link, and the extension's inbox badge copies it (added 2026-11-26T08:00:54+00:00, ADR-030) | Badges fall back to the count inside the link or the aria-label (DEGRADED). The count itself is never printed |
 
 Every one of these fails closed: no model, no item, no row, no chip, and Gmail
 is exactly as it was.

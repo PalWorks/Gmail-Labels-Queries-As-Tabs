@@ -824,8 +824,11 @@ something, a single reading is worth nothing.
 - [x] The uninstall page answered end to end from a headless browser at 360 px, and the
       email reached the support mailbox (ADR-031).
 - [x] The website's privacy policy covers 1.9.0 (the uninstall page) and is deployed.
-- [ ] Upload, the five screenshots from section 4, and submit.
-- [ ] After approval: bump `LIVE_VERSION` to 1.9.0 in the website and deploy.
+- [x] Uploaded as a draft through the API, the listing description, both screenshot sets
+      (localised and global) and both promo tiles replaced in the dashboard, privacy tab
+      checked (no mention of Tally), and submitted: PENDING_REVIEW on 2026-11-26.
+- [ ] After approval: bump `LIVE_VERSION` to 1.9.0 in the website, change "Eight colours"
+      to "Twelve colours" in its `content/features.ts`, and deploy.
 
 ### For 1.8.1, verified on 2026-09-30
 

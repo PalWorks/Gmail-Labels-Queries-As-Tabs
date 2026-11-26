@@ -1,13 +1,13 @@
 {
-  "observedAt": "2026-11-22T11:38:56.392Z",
+  "observedAt": "2026-11-26T08:20:00.036Z",
   "verdict": "PASS",
   "account": "account 1 of 2",
   "gmailBuild": "fbb486d87c",
   "chrome": "158.0.8127.36",
   "labelRows": 42,
   "extensionActive": true,
-  "menuOpenedAfterMs": 362,
-  "menuOpenedSinceClickMs": 362,
+  "menuOpenedAfterMs": 124,
+  "menuOpenedSinceClickMs": 124,
   "labelTriggers": 32,
   "labelNameSource": "data-label-name",
   "menuClasses": "J-M J-M-ayU aka",
@@ -18,7 +18,7 @@
   "separatorClasses": null,
   "triggerClasses": "pM aj0",
   "visibleMenuItems": 4,
-  "menuNodeReused": false,
+  "menuNodeReused": true,
   "hoverAddsClass": true,
   "hoverClasses": "J-N-JT",
   "contract": {
@@ -28,7 +28,8 @@
     "C4": true,
     "C5": "recorded, not asserted",
     "OURS": true,
-    "HOVER": "recorded, not asserted"
+    "HOVER": "recorded, not asserted",
+    "U1": true
   },
   "ownItemText": "Show as Tabs",
   "senderRowClass": "zA",
