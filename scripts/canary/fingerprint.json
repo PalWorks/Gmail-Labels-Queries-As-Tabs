@@ -4,11 +4,11 @@
   "account": "account 1 of 2",
   "gmailBuild": "fbb486d87c",
   "chrome": "158.0.8127.36",
-  "labelRows": 42,
+  "labelRowsPresent": true,
   "extensionActive": true,
   "menuOpenedAfterMs": 124,
   "menuOpenedSinceClickMs": 124,
-  "labelTriggers": 32,
+  "labelTriggersPresent": true,
   "labelNameSource": "data-label-name",
   "menuClasses": "J-M J-M-ayU aka",
   "menuItemClasses": [

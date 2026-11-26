@@ -10,7 +10,7 @@
  */
 
 import { Tab, Rule, RuleAction, Theme, clampDaysOld } from './storage';
-import { isValidTabColor } from './colors';
+import { isValidTabColor, isPlainColorToken } from './colors';
 
 /**
  * The largest backup this accepts. A real one is a few kilobytes, and all of
@@ -140,9 +140,11 @@ export function validateImportData(data: Record<string, unknown>): Tab[] {
         checkLength(t.value as string, `tab at index ${i}`, 'value');
 
         const tab: Tab = { id: t.id as string, title: t.title as string, type: t.type, value: t.value as string };
-        // `color` is optional. An unknown/malformed color silently falls back
-        // to default (dropped) rather than rejecting an otherwise valid backup.
-        if (t.color !== undefined && isValidTabColor(t.color)) tab.color = t.color;
+        // `color` is optional. A malformed color is dropped rather than
+        // rejecting an otherwise valid backup. A plain color name this version
+        // does not know is kept, as storage keeps it, so a backup from a newer
+        // version keeps its colors here.
+        if (isValidTabColor(t.color) || isPlainColorToken(t.color)) tab.color = t.color as Tab['color'];
         tabs.push(tab);
     }
 

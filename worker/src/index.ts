@@ -159,10 +159,13 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
     // Refuse by the declared size before reading anything, so an oversized
     // body is never buffered; then check the real size, which a client can
     // misstate.
-    const declared = Number(request.headers.get('content-length') || '0');
-    if (declared > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
+    const lengthHeader = request.headers.get('content-length');
+    // The extension's form always sends one; a body with no declared length
+    // (chunked) would otherwise be buffered whole before it could be refused.
+    if (lengthHeader === null) return json({ error: 'Length required' }, 411);
+    if (Number(lengthHeader) > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
     const raw = await request.text();
-    if (raw.length > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
+    if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return json({ error: 'Payload too large' }, 413);
 
     let parsed: FeedbackPayload;
     try {

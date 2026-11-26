@@ -1115,13 +1115,19 @@ function setupAccountSwitcher(): void {
         setUserEmail(currentAccountId);
         rememberAccountInAddress(currentAccountId);
 
+        let loaded: Settings;
         try {
-            currentSettings = await getSettings(currentAccountId);
+            loaded = await getSettings(newAccountId);
         } catch (e) {
             console.error('Options: could not load the selected account', e);
             showEmptyState('settings-tab-list', 'Failed to load settings. Please try again.');
             return;
         }
+        // A switch made while this account's settings were loading has the
+        // last word; drawing these now would put one account's tabs under
+        // another's name.
+        if (currentAccountId !== newAccountId) return;
+        currentSettings = loaded;
         setAppSettings(currentSettings);
 
         // Theme is global, so it stays put when switching accounts.

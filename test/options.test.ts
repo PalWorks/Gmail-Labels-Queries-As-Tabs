@@ -453,6 +453,37 @@ describe('account switching', () => {
         expect(mockGetSettings).toHaveBeenCalledWith('personal@gmail.com');
     });
 
+    test("a slow account load does not draw over a later switch", async () => {
+        mockGetAllAccounts.mockResolvedValue(['a@gmail.com', 'b@gmail.com', 'c@gmail.com']);
+        buildOptionsDOM();
+        await loadOptionsPage();
+
+        let releaseB!: (v: unknown) => void;
+        const bTabs = [{ id: 'b1', title: 'From B', value: 'B', type: 'label' as const }];
+        const cTabs = [{ id: 'c1', title: 'From C', value: 'C', type: 'label' as const }];
+        mockGetSettings.mockImplementation((acct: string) =>
+            acct === 'b@gmail.com'
+                ? new Promise((r) => (releaseB = () => r({ ...DEFAULT_SETTINGS, tabs: bTabs })))
+                : Promise.resolve({ ...DEFAULT_SETTINGS, tabs: acct === 'c@gmail.com' ? cTabs : DEFAULT_SETTINGS.tabs })
+        );
+        mockRenderTabListItems.mockClear();
+
+        const select = document.getElementById('account-select') as HTMLSelectElement;
+        select.value = 'b@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+        select.value = 'c@gmail.com';
+        select.dispatchEvent(new Event('change'));
+        await flushAsync();
+        releaseB(undefined);
+        await flushAsync();
+        await flushAsync();
+
+        const drawn = mockRenderTabListItems.mock.calls.map((c) => c[1]);
+        expect(drawn[drawn.length - 1]).toEqual(cTabs);
+        expect(drawn).not.toContainEqual(bTabs);
+    });
+
     test('does not reload when same account is selected', async () => {
         mockGetAllAccounts.mockResolvedValue(['work@gmail.com']);
         buildOptionsDOM();

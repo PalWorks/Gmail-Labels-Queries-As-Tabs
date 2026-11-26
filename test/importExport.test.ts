@@ -184,10 +184,16 @@ describe('validateImportData', () => {
         expect((data.tabs[0] as any).color).toBe('blue');
     });
 
-    it('should strip an invalid tab color, falling back to default', () => {
-        const data = { tabs: [{ id: 't1', title: 'A', type: 'label', value: 'A', color: 'chartreuse' }] };
+    it('should strip a malformed tab color, falling back to default', () => {
+        const data = { tabs: [{ id: 't1', title: 'A', type: 'label', value: 'A', color: 'x" onload="y' }] };
         expect(() => validateImportData(data)).not.toThrow();
         expect('color' in (data.tabs[0] as any)).toBe(false);
+    });
+
+    it('keeps a plain color name a newer version may have added, as storage does', () => {
+        const data = { tabs: [{ id: 't1', title: 'A', type: 'label', value: 'A', color: 'chartreuse' }] };
+        expect(() => validateImportData(data)).not.toThrow();
+        expect((data.tabs[0] as any).color).toBe('chartreuse');
     });
 
     it('should accept valid rules when present', () => {

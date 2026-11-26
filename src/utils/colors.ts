@@ -72,6 +72,16 @@ export function normalizeTabColor(value: unknown): TabColor | undefined {
     return isValidTabColor(value) ? value : undefined;
 }
 
+/**
+ * A color name this version may not know, but that is safe to keep: plain
+ * lowercase letters, so it can never become markup or a selector. Kept on
+ * read and on import, so a color set by a newer version survives an older
+ * one; drawn only when isValidTabColor knows it.
+ */
+export function isPlainColorToken(value: unknown): value is string {
+    return typeof value === 'string' && /^[a-z]{1,16}$/.test(value);
+}
+
 /** CSS class applied to a colored tab/element, e.g. `tab-color-blue`. */
 export function tabColorClass(color: TabColor): string {
     return `tab-color-${color}`;

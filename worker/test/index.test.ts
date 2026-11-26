@@ -33,11 +33,27 @@ function env(overrides: Record<string, unknown> = {}) {
     } as any;
 }
 
+/** A JSON POST as a browser sends it, Content-Length included. */
 function post(body: unknown, ip = '203.0.113.7') {
+    const text = JSON.stringify(body);
     return new Request('https://relay.example/feedback', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip, 'cf-ipcountry': 'AU' },
-        body: JSON.stringify(body),
+        headers: {
+            'content-type': 'application/json',
+            'content-length': String(new TextEncoder().encode(text).length),
+            'cf-connecting-ip': ip,
+            'cf-ipcountry': 'AU',
+        },
+        body: text,
+    });
+}
+
+/** A raw POST with the headers given, and a declared length unless one is given. */
+function raw(body: string, headers: Record<string, string>) {
+    return new Request('https://relay.example/feedback', {
+        method: 'POST',
+        headers: { 'content-length': String(new TextEncoder().encode(body).length), ...headers },
+        body,
     });
 }
 
@@ -137,24 +153,18 @@ test('buildEmail escapes HTML', () => {
 
 test('every refusal answers with its own status, and sends nothing', async () => {
     const cases: Array<[Request, number]> = [
-        [new Request('https://relay.example/feedback', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' }), 415],
-        [
-            new Request('https://relay.example/feedback', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json', 'content-length': String(64 * 1024) },
-                body: '{}',
-            }),
-            413,
-        ],
+        [raw('{}', { 'content-type': 'text/plain' }), 415],
+        [raw('{}', { 'content-type': 'application/json', 'content-length': String(64 * 1024) }), 413],
+        [raw(JSON.stringify({ category: 'bug', message: 'x'.repeat(20000) }), { 'content-type': 'application/json' }), 413],
         [
             new Request('https://relay.example/feedback', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ category: 'bug', message: 'x'.repeat(20000) }),
+                body: JSON.stringify(good),
             }),
-            413,
+            411,
         ],
-        [new Request('https://relay.example/feedback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'not json' }), 400],
+        [raw('not json', { 'content-type': 'application/json' }), 400],
         [post({ category: 'bug', message: 'hi' }), 400],
         [post({ ...good, replyTo: 'not-an-address' }), 400],
         [new Request('https://relay.example/feedback', { method: 'GET' }), 405],

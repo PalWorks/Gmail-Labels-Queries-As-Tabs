@@ -30,7 +30,7 @@
  * ADR-013.
  */
 
-import { TabColor, normalizeTabColor } from './colors';
+import { TabColor, normalizeTabColor, isPlainColorToken } from './colors';
 import { ignoreChromeError } from '../modules/extensionContext';
 
 export interface Tab {
@@ -173,7 +173,7 @@ function sanitizeSenderIconPrefs(settings: Settings): void {
 function sanitizeTabColor(tab: Tab): Tab {
     const color = normalizeTabColor(tab.color);
     if (color) return { ...tab, color };
-    if (typeof tab.color === 'string' && /^[a-z]{1,16}$/.test(tab.color)) return { ...tab };
+    if (isPlainColorToken(tab.color)) return { ...tab };
     const cleaned = { ...tab };
     delete cleaned.color;
     return cleaned;

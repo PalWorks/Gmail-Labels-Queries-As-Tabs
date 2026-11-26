@@ -1659,7 +1659,8 @@ body.theme-light .feedback-status.is-success {
 .color-swatch::before {
     content: "";
     position: absolute;
-    inset: -9px -3px;
+    /* From the border edge: 2px border + 9px makes 40px from 22px. */
+    inset: -11px -3px;
 }
 
 /* Phones: the 56px icon rail plus a 16px gutter, and rows that wrap. */
@@ -1677,5 +1678,10 @@ body.theme-light .feedback-status.is-success {
     .card {
         padding: 20px 16px;
     }
+}
+
+/* Wrapped swatch rows keep their tap areas apart. */
+.color-swatch-row {
+    row-gap: 18px;
 }
 
