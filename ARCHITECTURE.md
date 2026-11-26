@@ -1,6 +1,6 @@
 # Gmail Labels & Queries as Tabs — Complete Repository Analysis
 
-Last updated: 2026-09-30 (v1.8.1)
+Last updated: 2026-11-26T08:00:54+00:00 (v1.9.0)
 
 ## 1. High-Level Overview
 
@@ -40,7 +40,7 @@ Gmail-Labels-As-Tabs/
 │   ├── themeBoot.ts           # ★ Stamps the theme before a page paints anything
 │   ├── modules/               # ★ Feature modules, one concern each
 │   │   ├── tabs.ts            # Tab bar rendering, dropdowns, keyboard and aria
-│   │   ├── unread.ts          # Unread waterfall: Atom feed (cached) → XHR → DOM
+│   │   ├── unread.ts          # Unread counts: Gmail's sidebar, then the Atom feed
 │   │   ├── senderIcons.ts     # ★ Sender chips in the inbox list: ARIA first, fallback behind every step
 │   │   ├── dragdrop.ts        # Drag-and-drop reordering, bar and modal
 │   │   ├── tabManager.ts      # Shared add-tab parsing + managed list behavior
@@ -75,7 +75,7 @@ Gmail-Labels-As-Tabs/
 │   │   └── onboarding.css     # The tour, over Gmail and on the welcome page
 │   ├── icons/                 # Extension icons (16/32/48/128 png)
 │
-├── test/                      # 47 suites: one per module, four repo-wide guards, three for the canary tooling
+├── test/                      # 49 suites: one per module, four repo-wide guards, four for the canary tooling
 │   └── helpers/contrast.ts    # WCAG math + CSS token reader for the palette test
 │
 ├── worker/                    # Cloudflare Worker: feedback relay (holds the mail API key)
@@ -166,10 +166,13 @@ Gmail-Labels-As-Tabs/
        ADR-020
 5. **Tab bar injection**: Finds Gmail's `.G-atb` toolbar → inserts tab bar `afterend`
 6. **`MutationObserver`** watches for Gmail's DOM changes → re-injects if bar goes missing
-7. **Unread counts**: Dual strategy:
-   - **Primary:** Gmail Atom feed (`/feed/atom/{label}`) per-tab
-   - **Real-time:** XHR interceptor dispatches `gmailTabs:unreadUpdate` custom events
-   - **Fallback:** DOM scraping of sidebar `aria-label` attributes
+7. **Unread counts** (ADR-030):
+   - **Primary:** the count on the same view's row in Gmail's own sidebar, re-read by a
+     `MutationObserver` whenever Gmail changes it
+   - **Fallback:** for a user label with no sidebar row, the Atom feed
+     (`/feed/atom/{Parent-Child-Name}`: `/` and spaces become `-`)
+   - **XHR interceptor:** `gmailTabs:unreadUpdate` events, applied only to views the
+     sidebar does not list
 8. **User interactions**: Click→navigate (via `window.location.hash`), dropdown menus, modals (Pin/Edit/Delete/Settings), drag-and-drop reordering
 
 ---
@@ -183,7 +186,7 @@ Gmail-Labels-As-Tabs/
 | **Optimistic UI** | Drag-and-drop | UI updates immediately on drop, storage write happens asynchronously |
 | **Per-Account Namespacing** | `storage.ts` | Settings keyed by `account_{email}` in `chrome.storage.sync`, enabling multi-account support |
 | **CSS Custom Properties** | `toolbar.css` | Full theming via CSS variables with `prefers-color-scheme` media query + force-override classes |
-| **Strategy Pattern (implicit)** | Unread counts | Three strategies tried in order: Atom feed → XHR interception → DOM scraping |
+| **Strategy Pattern (implicit)** | Unread counts | Gmail's sidebar count, then the Atom feed for hidden labels; XHR only for views the sidebar lacks |
 
 ---
 
@@ -265,10 +268,11 @@ Handles privileged Chrome APIs, and is the serialization point for settings:
   fallback rather than the plan. See ADR-025
 - `ADOPT_GMAIL_TABS`, from the welcome page, runs the same adoption on request
 
-It sets an **uninstall URL**, pointing at the Tally feedback form, because uninstall is
-the one moment the in-product feedback form cannot reach. The link carries no address,
-settings or identifier, and its host must appear in SECURITY.md, the in-extension privacy
-page and STORE_LISTING.md or `test/repoConsistency.test.ts` fails the build. See ADR-014.
+It sets an **uninstall URL**, pointing at the one-question page on the website
+(`/uninstalled/`, since 1.9.0; a Tally form before), because uninstall is the one moment
+the in-product feedback form cannot reach. The link carries the version and nothing else,
+and its host must appear in SECURITY.md, the in-extension privacy page and STORE_LISTING.md
+or `test/repoConsistency.test.ts` fails the build. See ADR-014 and ADR-031.
 
 The message listener returns `true` only for the messages it answers asynchronously:
 `MUTATE_SETTINGS`, `OPEN_OPTIONS_PAGE`, `START_TOUR` and `ADOPT_GMAIL_TABS`.
@@ -284,7 +288,7 @@ promise-form `sendMessage` never settles, which is how a stale worker can hang a
 | Per-account settings | `chrome.storage.sync` | Key: `account_{email}`, Value: `Settings` object |
 | Default settings | [storage.ts](src/utils/storage.ts) | Hardcoded `DEFAULT_SETTINGS` constant |
 | Theme | Browser-wide in `chrome.storage.local` under `globalTheme` (default `light`); `Settings.theme` kept only for migration seeding | `'system' \| 'light' \| 'dark'` |
-| Uninstall feedback URL | [background.ts](src/background.ts) | `UNINSTALL_FEEDBACK_URL`, the Tally form |
+| Uninstall feedback URL | [background.ts](src/background.ts) | `UNINSTALL_FEEDBACK_URL`, the website's `/uninstalled/` page |
 | i18n | `_locales/en/` | Chrome i18n message format |
 
 > **No `.env` or secrets** are used by the extension itself. All config is user-controlled via `chrome.storage.sync`.
@@ -327,7 +331,7 @@ welcome.ts ──(standalone, uses chrome.* APIs)──
 
 | Layer | Where | What it covers |
 |---|---|---|
-| Unit suites | `test/*.test.ts`, one per module | 47 suites, 1082 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback, sender icons and their domain rules, and the drift canary's alerting, escalation and selector refresh |
+| Unit suites | `test/*.test.ts`, one per module | 49 suites, 1113 tests: storage and migrations, the settings reducer and write path, tab rendering with keyboard and aria, the unread waterfall, XHR parsing, rules and Apps Script generation and escaping, options page, onboarding, modals, drag-and-drop, state accessors, import/export, tab manager, colors, rule templates, feedback, sender icons and their domain rules, and the drift canary's alerting, escalation and selector refresh |
 | Concurrency | [test/settingsOps.test.ts](test/settingsOps.test.ts) | The reducer's purity and idempotency, serialization under ten interleaved writers, every service-worker fallback path, and the stale-reorder reproduction |
 | Escaping | [test/rulesProperty.test.ts](test/rulesProperty.test.ts) | 1,000 generated hostile inputs through the Apps Script generator, each evaluated and checked for parse failure, lossy round trip, unquoted labels and canary globals |
 | Markup sinks | [test/htmlSinks.test.ts](test/htmlSinks.test.ts) | Walks the AST and fails on any unescaped interpolation into `innerHTML` |

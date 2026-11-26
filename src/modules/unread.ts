@@ -9,9 +9,10 @@
 import { Tab } from '../utils/storage';
 import { TABS_BAR_ID } from './state';
 import {
-    NAV_SELECTORS,
     UNREAD_COUNT_SELECTOR,
     LABEL_LINK_SELECTOR,
+    SIDEBAR_ROW_SELECTOR,
+    SIDEBAR_LINK_SELECTORS,
 } from '../utils/selectors';
 
 // ---------------------------------------------------------------------------
@@ -170,12 +171,20 @@ export function handleUnreadUpdates(updates: { label: string; count: number }[])
 
         if (!tabValue) return;
 
+        // Gmail's own sidebar is the count the user compares a badge with, and
+        // it is read directly (refreshCountsFromSidebar). A sync tuple for the
+        // same view can mean something else: `^i` is every unread message in
+        // the inbox, all categories, while Gmail shows Primary only (measured
+        // 2026-11-26: 446 against Gmail's 9).
+        if (findSidebarLink({ id: '', title: '', type: tabType === 'label' ? 'label' : 'hash', value: tabValue })) {
+            return;
+        }
+
         let labelId = '';
         if (tabType === 'label') {
             labelId = tabValue;
         } else if (tabType === 'hash') {
-            if (tabValue === '#inbox') labelId = '^i';
-            else if (tabValue === '#starred') labelId = '^t';
+            if (tabValue === '#starred') labelId = '^t';
             else if (tabValue === '#drafts') labelId = '^r';
             else if (tabValue === '#sent') labelId = '^f';
             else if (tabValue === '#spam') labelId = '^s';
@@ -239,21 +248,32 @@ function recordLiveCount(tabType: string | undefined, tabValue: string, count: n
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve which Atom feed label a tab maps to.
- * Returns null when the tab has no queryable feed (e.g. #starred, #drafts,
- * #search/...). '' is a real value meaning the Inbox feed; distinguishing it
- * from null prevents non-label hash tabs from wrongly showing the Inbox count.
+ * Resolve which Atom feed label a tab maps to, for when Gmail's sidebar does
+ * not show the label (hidden, or under a collapsed parent).
+ *
+ * Only user labels. Returns null for everything else: searches have no feed,
+ * and the system views are always in the sidebar. The inbox in particular has
+ * no feed that means what Gmail shows: `feed/atom/` counts every category,
+ * while the sidebar shows Primary alone when categories are on.
  */
 export function resolveFeedLabel(tab: Tab): string | null {
     if (tab.type === 'label') {
-        return tab.value.toLowerCase() === 'inbox' ? '' : tab.value;
+        const lower = tab.value.toLowerCase();
+        return lower === 'inbox' || lower === 'sent' ? null : tab.value;
     }
-    if (tab.type === 'hash') {
-        if (tab.value === '#inbox') return '';
-        if (tab.value === '#sent') return '^f';
-        if (tab.value.startsWith('#label/')) return decodeLabelHash(tab.value);
-    }
+    if (tab.type === 'hash' && tab.value.startsWith('#label/')) return decodeLabelHash(tab.value);
     return null;
+}
+
+/**
+ * The name Gmail's Atom feed knows a label by: every `/` and space becomes
+ * `-`. Measured 2026-11-26 on 32 labels: `feed/atom/Parent-Child-Name` matched
+ * the sidebar's count every time, and `feed/atom/Parent%2FChild%20Name` read 0
+ * every time, which is also what the feed answers for a label that does not
+ * exist. Before this, every nested or spaced label read as zero.
+ */
+export function feedNameForLabel(label: string): string {
+    return label.replace(/[/\s]/g, '-');
 }
 
 /**
@@ -391,7 +411,7 @@ async function fetchFeedCount(labelForFeed: string): Promise<number | null> {
         const timeout = setTimeout(() => controller.abort(), FEED_FETCH_TIMEOUT_MS);
 
         try {
-            const encodedLabel = labelForFeed ? encodeURIComponent(labelForFeed) : '';
+            const encodedLabel = labelForFeed ? encodeURIComponent(feedNameForLabel(labelForFeed)) : '';
             const feedUrl = `${location.origin}${location.pathname}feed/atom/${encodedLabel}`;
 
             const response = await fetch(feedUrl, { signal: controller.signal });
@@ -468,135 +488,180 @@ async function getCachedFeedCount(labelForFeed: string): Promise<number | null> 
 }
 
 /**
- * Update unread count for a single tab using the Atom feed (primary, cached)
- * with DOM scraping as fallback.
+ * Update the unread count for one tab.
+ *
+ * Gmail's own sidebar first: when the view has a row there, the badge shows
+ * exactly what that row shows, nothing when it shows nothing. That is the
+ * number the user compares the badge with, and it already follows their inbox
+ * type, categories and language. Only a label with no row (hidden from the
+ * label list, or under a collapsed parent) falls back to the Atom feed.
  */
 export async function updateUnreadCount(tab: Tab, tabEl: HTMLElement): Promise<void> {
     const countSpan = tabEl.querySelector('.unread-count');
     if (!countSpan) return;
 
-    const labelForFeed = resolveFeedLabel(tab);
-
-    if (labelForFeed !== null) {
-        const count = await getCachedFeedCount(labelForFeed);
-        if (count !== null && count > 0) {
-            countSpan.textContent = count.toString();
-            return;
-        }
+    const link = findSidebarLink(tab);
+    if (link) {
+        countSpan.textContent = readSidebarCount(link);
+        return;
     }
 
-    const domCount = getUnreadCountFromDOM(tab);
-    countSpan.textContent = domCount || '';
+    const labelForFeed = resolveFeedLabel(tab);
+    if (labelForFeed === null) {
+        countSpan.textContent = '';
+        return;
+    }
+    const count = await getCachedFeedCount(labelForFeed);
+    // The sidebar may have arrived while the feed was on the wire.
+    const lateLink = findSidebarLink(tab);
+    if (lateLink) {
+        countSpan.textContent = readSidebarCount(lateLink);
+        return;
+    }
+    countSpan.textContent = count !== null && count > 0 ? count.toString() : '';
+}
+
+// ---------------------------------------------------------------------------
+// Gmail's sidebar
+// ---------------------------------------------------------------------------
+
+/** A hash fragment as Gmail writes it, decoded: `label/Work+Stuff` is `label/Work Stuff`. */
+function decodeViewFragment(fragment: string): string {
+    const raw = fragment.replace(/\+/g, ' ');
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        return raw;
+    }
 }
 
 /**
- * Legacy DOM Scraping fallback for unread counts.
+ * The view a tab opens, in the form a sidebar link's hash takes once decoded
+ * and lower-cased: `inbox`, `drafts`, `category/updates`, `label/work/clients`.
+ * Null for a search, which Gmail's sidebar never counts.
  */
-export function getUnreadCountFromDOM(tab: Tab): string {
-    const isInbox =
-        (tab.type === 'hash' && tab.value === '#inbox') ||
-        (tab.type === 'label' && tab.value.toLowerCase() === 'inbox');
-
-    const isSent =
-        (tab.type === 'hash' && tab.value === '#sent') || (tab.type === 'label' && tab.value.toLowerCase() === 'sent');
-
-    if (isInbox || isSent) {
-        const nav = document.querySelector(NAV_SELECTORS[0]) || document.querySelector(NAV_SELECTORS[1]);
-        if (!nav) return '';
-
-        const links = nav.querySelectorAll('a');
-        for (const link of links) {
-            const ariaLabel = link.getAttribute('aria-label') || '';
-            const title = link.getAttribute('title') || '';
-            const text = link.textContent || '';
-
-            let isMatch = false;
-            if (isInbox) {
-                if (link.getAttribute('href')?.endsWith('#inbox')) {
-                    isMatch = true;
-                } else {
-                    isMatch = ariaLabel.startsWith('Inbox') || title.startsWith('Inbox');
-                }
-            } else if (isSent) {
-                isMatch =
-                    ariaLabel.startsWith('Sent') ||
-                    title.startsWith('Sent') ||
-                    (text.includes('Sent') && (link.getAttribute('href')?.endsWith('#sent') ?? false));
-            }
-
-            if (isMatch) {
-                const bsU = link.querySelector(UNREAD_COUNT_SELECTOR);
-                if (bsU && bsU.textContent) return bsU.textContent;
-
-                if (ariaLabel) {
-                    const unreadMatch = ariaLabel.match(/(\d+)\s+unread/i);
-                    if (unreadMatch) return unreadMatch[1];
-                    const parenMatch = ariaLabel.match(/\((\d+)\)/);
-                    if (parenMatch) return parenMatch[1];
-                }
-
-                if (title) {
-                    const match = title.match(/\((\d+)\)/);
-                    if (match) return match[1];
-                }
-
-                const rawText = link.innerText || '';
-                const textMatch = rawText.match(/(\d+)$/m);
-                if (textMatch) return textMatch[1];
-            }
-        }
-        return '';
+export function sidebarViewKey(tab: Tab): string | null {
+    if (tab.type === 'label') {
+        const lower = tab.value.toLowerCase();
+        return lower === 'inbox' || lower === 'sent' ? lower : `label/${lower}`;
     }
+    if (!tab.value.startsWith('#') || tab.value.startsWith('#search/')) return null;
+    return decodeViewFragment(tab.value.slice(1)).toLowerCase();
+}
 
-    // For Labels (and hash labels)
-    let labelName = tab.value;
-    if (tab.type === 'hash' && tab.value.startsWith('#label/')) {
-        // Decoded first: a pinned view keeps Gmail's own encoding, and
-        // encoding that again below would look for an href Gmail never writes.
-        labelName = decodeLabelHash(tab.value);
-    }
-
-    const encodedLabel = encodeURIComponent(labelName).replace(/%20/g, '+');
-    const hrefSuffix = '#' + 'label/' + encodedLabel;
-    let link = document.querySelector('a[href$="' + hrefSuffix + '"]');
-
-    if (!link) {
-        const normalizedTarget = normalizeLabel(labelName);
-        const candidates = document.querySelectorAll(LABEL_LINK_SELECTOR);
-
-        for (const candidate of candidates) {
-            const title = candidate.getAttribute('title');
-            if (title && normalizeLabel(title) === normalizedTarget) {
-                link = candidate;
-                break;
-            }
-
-            const ariaLabel = candidate.getAttribute('aria-label');
-            if (ariaLabel) {
-                const href = candidate.getAttribute('href');
-                if (href) {
-                    const hrefLabel = href.split('#label/')[1];
-                    if (hrefLabel && normalizeLabel(hrefLabel) === normalizedTarget) {
-                        link = candidate;
-                        break;
-                    }
-                }
-            }
+/** The sidebar link for the view a tab opens, or null when Gmail shows none. */
+export function findSidebarLink(tab: Tab): HTMLAnchorElement | null {
+    const key = sidebarViewKey(tab);
+    if (!key) return null;
+    for (const selector of SIDEBAR_LINK_SELECTORS) {
+        for (const link of document.querySelectorAll<HTMLAnchorElement>(selector)) {
+            const href = link.getAttribute('href') || '';
+            const hash = href.indexOf('#');
+            if (hash >= 0 && decodeViewFragment(href.slice(hash + 1)).toLowerCase() === key) return link;
         }
     }
+    return null;
+}
 
-    if (link) {
-        const ariaLabel = link.getAttribute('aria-label');
-        if (ariaLabel) {
-            const match = ariaLabel.match(/(\d+)\s+unread/);
-            return match ? match[1] : '';
-        }
+/** Digits with the separators a locale may group them with: `9`, `1,234`, `1.234`. */
+const DISPLAYED_COUNT = /^[\p{Nd}][\p{Nd}.,'\u00a0\u202f ]*$/u;
 
-        const countEl = link.querySelector(UNREAD_COUNT_SELECTOR);
-        if (countEl) {
-            return countEl.textContent || '';
+/**
+ * The count Gmail shows on a sidebar row, as Gmail writes it, or '' when it
+ * shows none. The visible number is read before the aria-label, because the
+ * aria-label's wording ("9 unread") is in the user's language and the number
+ * is not.
+ */
+export function readSidebarCount(link: Element): string {
+    const row = link.closest(SIDEBAR_ROW_SELECTOR);
+    if (row) {
+        for (const el of row.querySelectorAll(UNREAD_COUNT_SELECTOR)) {
+            // A parent label's row can hold its children's rows; their counts
+            // are theirs, not the parent's.
+            if (el.closest(SIDEBAR_ROW_SELECTOR) !== row) continue;
+            const text = (el.textContent || '').trim();
+            return DISPLAYED_COUNT.test(text) ? text : '';
         }
     }
+    const inner = link.querySelector(UNREAD_COUNT_SELECTOR);
+    if (inner) {
+        const text = (inner.textContent || '').trim();
+        return DISPLAYED_COUNT.test(text) ? text : '';
+    }
+    const match = (link.getAttribute('aria-label') || '').match(/(\d[\d,.]*)\s+unread/i);
+    return match ? match[1] : '';
+}
 
-    return '';
+/**
+ * Re-read every badge whose view has a sidebar row. Called whenever Gmail
+ * changes a count in the sidebar, so a badge follows Gmail as it changes.
+ */
+export function refreshCountsFromSidebar(): void {
+    const bar = document.getElementById(TABS_BAR_ID);
+    if (!bar) return;
+    bar.querySelectorAll<HTMLElement>('.gmail-tab').forEach((tabEl) => {
+        const countSpan = tabEl.querySelector('.unread-count');
+        const value = tabEl.dataset.value;
+        if (!countSpan || !value) return;
+        const tab: Tab = { id: '', title: '', type: tabEl.dataset.type === 'label' ? 'label' : 'hash', value };
+        const link = findSidebarLink(tab);
+        if (!link) return;
+        const text = readSidebarCount(link);
+        if (countSpan.textContent !== text) countSpan.textContent = text;
+    });
+}
+
+/** The smallest element holding every sidebar link, or null before Gmail has drawn them. */
+function findSidebarRoot(): Element | null {
+    const links: Element[] = [];
+    for (const selector of SIDEBAR_LINK_SELECTORS) links.push(...document.querySelectorAll(selector));
+    if (links.length === 0) return null;
+    let root: Element | null = links[0].parentElement;
+    while (root && !links.every((l) => root!.contains(l))) root = root.parentElement;
+    // A count sits beside its link, so the root must hold whole rows.
+    const row = root?.closest(SIDEBAR_ROW_SELECTOR);
+    return row ? row.parentElement ?? row : root;
+}
+
+const SIDEBAR_SETTLE_MS = 250;
+const SIDEBAR_FIND_RETRY_MS = 2000;
+
+/**
+ * Watch Gmail's sidebar and call `onChange` (debounced) when anything in it
+ * changes, and once as soon as it is first found. Gmail redraws the sidebar
+ * now and then, so a root that leaves the page is found again. Returns a
+ * function that stops watching.
+ */
+export function watchSidebarCounts(onChange: () => void): () => void {
+    let observer: MutationObserver | null = null;
+    let observed: Element | null = null;
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+
+    const fire = () => {
+        if (settle) clearTimeout(settle);
+        settle = setTimeout(() => {
+            settle = null;
+            if (!stopped) onChange();
+        }, SIDEBAR_SETTLE_MS);
+    };
+
+    const attach = () => {
+        if (stopped || (observed && observed.isConnected)) return;
+        observer?.disconnect();
+        observed = findSidebarRoot();
+        if (!observed) return;
+        observer = new MutationObserver(fire);
+        observer.observe(observed, { subtree: true, childList: true, characterData: true });
+        fire();
+    };
+
+    attach();
+    const finder = setInterval(attach, SIDEBAR_FIND_RETRY_MS);
+    return () => {
+        stopped = true;
+        clearInterval(finder);
+        if (settle) clearTimeout(settle);
+        observer?.disconnect();
+    };
 }

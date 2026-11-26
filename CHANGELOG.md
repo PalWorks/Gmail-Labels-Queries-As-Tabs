@@ -6,9 +6,46 @@ The format follows Keep a Changelog, and the project uses semantic versioning. K
 
 ## [Unreleased]
 
-_Updated 2026-11-22T11:37:44+00:00._
+## [1.9.0] - 2026-11-26
+
+_Updated 2026-11-26T08:00:54+00:00._
 
 ### Fixed
+
+- **Unread badges show the number Gmail shows** (issue #1 and the owner's own report). A
+  badge now copies the count on the same view's row in Gmail's sidebar, and follows it as it
+  changes. Measured on a 32-label account before the fix: the inbox badge read 446 against
+  Gmail's 9, because it counted every category while Gmail shows Primary; and every nested
+  or spaced label read 0 from the Atom feed, because the feed names `Parent/Child Name` as
+  `Parent-Child-Name`. After: 35 of 35 badges matched. The count is read as a number rather
+  than from English text, so it works in every language. Labels Gmail hides from the sidebar
+  still get a count from the feed, under the right name. ADR-030.
+- **Settings open on the Gmail account you opened them from** (reported 2026-10-20 by a user
+  with a Workspace mailbox and a gmail.com one). The options page always showed the first
+  account stored. The Gmail settings dialog and the toolbar menu now say which account they
+  came from, and the page opens on it.
+
+### Added
+
+- **Four more tab colours**: brown, gray, indigo and lime, twelve in all (asked for
+  2026-10-29).
+- **A rating ask, once the tabs are part of someone's day.** After a week and 30 tab clicks,
+  the bar ends with "Finding these tabs useful?" and three plain buttons: Rate it, Not now
+  (30 days, at most three times), Don't ask again. It asks for a rating, never a particular
+  one. The options page's rating card no longer asks for five stars. ADR-032.
+
+### Changed
+
+- **The uninstall page is our own.** Removing the extension now opens a one-question page on
+  the website instead of a Tally form, and the answer reaches the support mailbox without
+  passing through a third party. The address carries the version and nothing else. ADR-031.
+- Development: esbuild 0.28.2 (clears a low-severity advisory in its development server,
+  which this project does not use), and the other development tools to their latest
+  in-range versions.
+
+### Repository and tooling
+
+#### Fixed
 
 - **The drift canary measures the account it is told to, not whichever is first.** From
   2026-10-29 it reported "a Gmail contract broke" every night, and Gmail had changed
@@ -28,7 +65,7 @@ _Updated 2026-11-22T11:37:44+00:00._
   process wrote its caches back after a run deleted its profile copy (181 MB each, no
   cookies). Each run now deletes `glt-canary-*` folders older than six hours.
 
-### Changed
+#### Changed
 
 - **Store screenshots show 1.8.1.** `scripts/store-assets/build.mjs` is rebuilt around demo
   data: it runs the real extension in a throwaway headless copy of a signed-in profile,

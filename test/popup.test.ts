@@ -114,18 +114,32 @@ describe('anywhere else', () => {
 });
 
 describe('the quiet entries', () => {
-    test('settings asks the worker for the options page', () => {
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+
+    test('settings asks the worker for the options page', async () => {
         loadPopup();
         (document.getElementById('popup-settings') as HTMLElement).click();
+        await settle();
 
         expect(mockSendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE' });
     });
 
-    test('help lands on the contact section rather than wherever it was left', () => {
+    test('help lands on the contact section rather than wherever it was left', async () => {
         loadPopup();
         (document.getElementById('popup-help') as HTMLElement).click();
+        await settle();
 
         expect(mockSendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE', hash: '#contact' });
+    });
+
+    test("settings opens on the account of the Gmail tab underneath, not the first stored", async () => {
+        loadPopup();
+        mockTabsSendMessage.mockResolvedValue({ ok: true, account: 'work@company.example' });
+        (document.getElementById('popup-settings') as HTMLElement).click();
+        await settle();
+
+        expect(mockTabsSendMessage).toHaveBeenCalledWith(5, { action: 'PING' });
+        expect(mockSendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE', account: 'work@company.example' });
     });
 });
 

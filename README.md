@@ -136,7 +136,7 @@ Unread counts use a three-tier waterfall for maximum reliability:
 | **Per-Account Namespacing** | storage.ts | Settings keyed by `account_{email}` in chrome.storage.sync |
 | **CSS Custom Properties** | toolbar.css | Full theming via CSS variables with `prefers-color-scheme` media query and force-override classes |
 | **Optimistic UI** | dragdrop.ts | UI updates immediately on drop; storage write happens asynchronously |
-| **Strategy Pattern** | unread.ts | Three unread count strategies attempted in waterfall order |
+| **Strategy Pattern** | unread.ts | Gmail's own sidebar count first; the Atom feed for labels the sidebar hides |
 
 ### Data Flow
 
@@ -359,7 +359,8 @@ Gmail-Labels-As-Tabs/
 │   │   ├── labelMenu.ts              # "Show as Tabs" inside Gmail's own label menu
 │   │   ├── senderIcons.ts            # Sender chips in the inbox list (opt-in)
 │   │   ├── health.ts                 # Whether the Gmail integrations are working, locally
-│   │   ├── unread.ts                 # Unread count (feed + XHR + DOM strategies)
+│   │   ├── unread.ts                 # Unread count (Gmail's sidebar, then the Atom feed)
+│   │   ├── ratingNudge.ts            # The rating ask at the end of the tab bar
 │   │   ├── rules.ts                  # Automation rules & Apps Script generation
 │   │   ├── ruleTemplates.ts          # One-click rule presets
 │   │   ├── tabManager.ts, colorPicker.ts, feedback.ts, extensionContext.ts, handover.ts, messages.ts
@@ -469,7 +470,7 @@ npx jest test/modals/
 | Onboarding modal | `onboarding/onboardingModal.test.ts` | The tour over Gmail: scrim, dismissal, orphaned context |
 | Settings Modal | `settingsModal.test.ts` | Theme toggling, settings persistence |
 
-**Total: 47 test files, 1082 test cases.**
+**Total: 47 test files, 1113 test cases.**
 
 The test environment uses `jsdom` with manually mocked `chrome.storage.sync`, `chrome.runtime`, and `crypto.randomUUID`.
 
@@ -498,7 +499,7 @@ Dispatch → Install → Type-check → Test + Coverage → Lint → Build → V
 | Step | What It Does |
 |------|-------------|
 | **Install** | `npm ci` with npm cache |
-| **Test** | `npm test --coverage`, then a second serial run (Jest, 1082 tests across 47 suites) |
+| **Test** | `npm test --coverage`, then a second serial run (Jest, 1113 tests across 49 suites) |
 | **Lint** | `npm run lint` (ESLint with @typescript-eslint) |
 | **Build** | `npm run build` (esbuild, minified, console-stripped) |
 | **Console Check** | Asserts zero `console.log` in production bundle |
@@ -618,6 +619,16 @@ save failures, a clean handover between two copies of the script).
 - Sender icons, off by default, with optional website icons (1.8.0)
 - Canary alerts in Google Chat, with proposed selector refreshes (1.8.0)
 
+### v1.9: Submitted 2026-11-26
+
+Driven by the first user feedback: issue #1 and two messages through the in-product form.
+
+- Unread badges show the number Gmail's own sidebar shows, in any language (ADR-030)
+- Settings open on the Gmail account they were opened from
+- Twelve tab colours, up from eight
+- A rating ask after a week and 30 tab clicks, easy to put away (ADR-032)
+- The uninstall page is on our own website, not Tally (ADR-031)
+
 ### Planned
 
 - [ ] Keyboard shortcuts for tab switching (<kbd>Ctrl+1</kbd>, <kbd>Ctrl+2</kbd>, etc.)
@@ -676,7 +687,7 @@ Quick start:
 npm run lint      # ESLint with @typescript-eslint
 npm run lint:fix  # Auto-fix lint issues
 npm run format    # Prettier formatting
-npm test          # Jest (1082 tests across 47 suites)
+npm test          # Jest (1113 tests across 49 suites)
 npm run build     # Verify production build
 ```
 
@@ -689,7 +700,7 @@ This extension is designed with privacy as a non-negotiable principle:
 - **Local storage only**: All data stored in `chrome.storage.sync` (Google's infrastructure, synced via your Google account)
 - **No user data collection**: no database, no tracking, no account. The one server we run is the feedback relay in [worker/](worker/), reached only when someone presses Send. It stores no message, only a rate-limit counter named by a keyed hash of the network address, for up to a day
 - **Website icons, only if you turn them on**: sender icons are off by default and draw a coloured letter without any request. With **Load website icons** also on, the sender's domain alone (such as `mashreq.com`) is sent to Google's icon service at `t0.gstatic.com`, or `www.google.com` if that cannot be reached, with no referrer, once per domain (ADR-027)
-- **One page on uninstall**: removing the extension opens a short feedback form at `tally.so` so we can learn why. The link carries no address, no settings and no identifier, and the extension sends nothing itself (ADR-014)
+- **One page on uninstall**: removing the extension opens a one-question page on our own website (`palworks.github.io`) so we can learn why. The link carries the extension version and nothing else, and the extension sends nothing itself (ADR-014, ADR-031)
 - **Minimal permissions**: Only `storage`, `downloads`, `management` and `scripting`, the last of which injects this extension's own content script into Gmail and nothing else
 - **Open source**: Full codebase available for audit
 

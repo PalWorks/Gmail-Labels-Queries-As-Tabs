@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs). Each entry captures a durable choice, its context,
 and its consequences so agents do not undo deliberate decisions.
 
-Last updated: 2026-09-30 (v1.8.0)
+Last updated: 2026-11-26T08:00:54+00:00 (v1.9.0)
 
 ## ADR-001: Dual-world architecture for unread counts
 
@@ -1096,4 +1096,72 @@ The decisions below are the ones a later change could quietly undo.
   release notes say so. Tabs made from the old category templates are left alone.
 - The relay fails closed with a 500 if `IP_HASH_SECRET` is missing, so a redeploy
   to a fresh account must set it first.
+
+## ADR-030: A badge shows the number Gmail shows
+
+**Decision.** A tab's unread badge copies the count on the same view's row in Gmail's own
+sidebar, digit for digit, and shows nothing when that row shows nothing
+([src/modules/unread.ts](src/modules/unread.ts), `findSidebarLink` and `readSidebarCount`).
+A `MutationObserver` on the sidebar (`watchSidebarCounts`) re-reads the badges whenever Gmail
+changes a count. Only a user label with no sidebar row (hidden, or under a collapsed parent)
+falls back to the Atom feed, under the name the feed uses: every `/` and space becomes `-`.
+The sync-protocol tuple for the inbox (`^i`) is never put on the inbox tab.
+
+**Context.** The owner had long seen badges that disagreed with Gmail, and issue #1
+(2026-01-15) reported the same. Measured on 2026-11-26 against a 32-label account:
+
+- The inbox badge read 446 while Gmail showed 9. `^i` and `feed/atom/` both count every
+  unread message in the inbox across all categories; Gmail's sidebar shows Primary only
+  when categories are on (`^sq_ig_i_personal`, 9).
+- Every nested or spaced label read 0 from the feed: `feed/atom/Parent%2FChild%20Name`
+  answers 0, the same answer as for a label that does not exist, while
+  `feed/atom/Parent-Child-Name` matched the sidebar on every label. Some of those were then
+  rescued by the old DOM fallback, which only worked in English because it parsed the
+  aria-label ("6 unread") and looked for the count inside the link, where Gmail no longer
+  puts it.
+
+After the change, 35 of 35 badges matched Gmail on the same account, and a count changed in
+the sidebar reached the badge within the observer's 250 ms settle.
+
+**Consequences.** The badge follows the user's inbox type, categories and language for
+free, because Gmail has already applied them. It depends on one more Gmail class,
+`SIDEBAR_ROW_SELECTOR` (`.TO`), kept in [src/utils/selectors.ts](src/utils/selectors.ts)
+with the rest; if it changes, `readSidebarCount` still finds a count inside the link or in
+the aria-label. Searches still show no count: Gmail does not count them, and there is no
+feed for a search. The XHR interceptor (ADR-001) stays for the views Gmail's sidebar does not
+list, and no longer overrides any that it does.
+
+## ADR-031: The uninstall page moves to our own website
+
+**Decision.** `chrome.runtime.setUninstallURL` points at
+`https://palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/?v=<version>`, a page on the
+website with one required question (why) and three optional fields. It posts to the
+website's existing relay (`gmail-tabs-contact.palworks.ai`, new route `POST /v1/uninstall`),
+with the same challenge, honeypot and rate limits as the contact form, and the answer is
+emailed to the support mailbox. The page is `noindex` and in no sitemap.
+
+**Context.** ADR-014 recorded the residual objection to the Tally form: a third party we have
+no relationship with saw every answer, and moving the form to our own domain was the
+follow-up. The relay already existed and was already disclosed.
+
+**Consequences.** One fewer third party in the privacy story. The page address carries the
+version, so an answer can be tied to a release, and nothing else. Answers arrive in the same
+inbox as feedback, subject `[Gmail Tabs uninstall] <reason>`. Answers given to Tally before
+1.9.0 stay in Tally.
+
+## ADR-032: A rating ask, once the tabs are part of someone's day
+
+**Decision.** After seven days and 30 tab clicks on a device, the tab bar ends with one line:
+"Finding these tabs useful?", with "Rate it", "Not now" and "Don't ask again"
+([src/modules/ratingNudge.ts](src/modules/ratingNudge.ts)). "Rate it" opens the store's
+reviews page and ends it; "Not now" waits 30 days, at most three times. State is in
+`chrome.storage.local`.
+
+**Context.** 570 users and five ratings. The only rating ask was a card on the options page,
+which few people open, and it asked for "a 5-star review".
+
+**Consequences.** It asks for a rating, never a particular one, and is not conditional on
+anything the user says: the Chrome Web Store forbids steering ratings, and the options-page
+card's wording changed to match. It never shows during the tour or while moving tabs, and
+nothing about it leaves the browser.
 

@@ -1012,6 +1012,10 @@ body.theme-unresolved .gmail-tabs-bar {
 .tab-color-blue { --tab-accent: #1a73e8; }
 .tab-color-purple { --tab-accent: #9334e6; }
 .tab-color-pink { --tab-accent: #d01884; }
+.tab-color-brown { --tab-accent: #a1662f; }
+.tab-color-gray { --tab-accent: #80868b; }
+.tab-color-indigo { --tab-accent: #5c6bc0; }
+.tab-color-lime { --tab-accent: #7cb342; }
 
 /* In-bar tab accent: a small leading dot plus an active underline. */
 .gmail-tab[class*="tab-color-"] .tab-name::before {
@@ -1231,3 +1235,53 @@ body.force-dark {
 .glt-badge-5 { background: var(--glt-badge-5); }
 .glt-badge-6 { background: var(--glt-badge-6); }
 .glt-badge-7 { background: var(--glt-badge-7); }
+
+/* ===================================================================
+   Rating ask: one line at the end of the bar, once the tabs are in use.
+   Plain-text buttons, each saying what it does.
+   =================================================================== */
+#gmail-labels-as-tabs-bar .rating-nudge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    padding: 2px 4px 2px 12px;
+    border: 1px solid var(--gmail-tabs-border);
+    border-radius: 16px;
+    color: var(--gmail-tab-text);
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#gmail-labels-as-tabs-bar .rating-nudge button {
+    font: inherit;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: var(--gmail-tab-text);
+}
+
+#gmail-labels-as-tabs-bar .rating-nudge .rating-nudge-rate {
+    background: var(--primary-btn-bg);
+    color: var(--primary-btn-text);
+    font-weight: 500;
+}
+
+#gmail-labels-as-tabs-bar .rating-nudge .rating-nudge-rate:hover {
+    background: var(--primary-btn-hover-bg);
+}
+
+#gmail-labels-as-tabs-bar .rating-nudge .rating-nudge-later:hover,
+#gmail-labels-as-tabs-bar .rating-nudge .rating-nudge-never:hover {
+    background: var(--gmail-tab-hover-bg);
+    color: var(--gmail-tab-hover-text);
+}
+
+#gmail-labels-as-tabs-bar .rating-nudge button:focus-visible {
+    outline: 2px solid #4285f4;
+    outline-offset: 2px;
+}

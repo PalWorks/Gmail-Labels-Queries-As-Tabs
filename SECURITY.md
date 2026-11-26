@@ -35,10 +35,12 @@ from `google.com`, so the request does not carry the Google account cookies a re
 `www.google.com` would. See ADR-027.
 
 One further outbound page exists, and only after you have already left: uninstalling opens
-a short feedback form at `tally.so`, hosted by Tally. Chrome opens it in a new tab once the
-extension is removed. Nothing is sent from the extension; the URL carries no address, no
-settings and no identifier, so the form host learns only that somebody uninstalled, and
-only you decide whether to answer it. See ADR-014.
+a one-question page on our own website, `palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/`.
+Chrome opens it in a new tab once the extension is removed. Nothing is sent from the
+extension; the URL carries the extension version and nothing else (no address, no settings,
+no identifier), and only you decide whether to answer. An answer goes through the website's
+own relay to the support mailbox. Until 1.9.0 this was a Tally form at `tally.so`. See
+ADR-014 and ADR-031.
 
 v1.7.1 added a record of whether the "Show as Tabs" item is working, in
 `chrome.storage.local`, since 1.8.0 one key per component (`integrationHealth.labelMenu`,

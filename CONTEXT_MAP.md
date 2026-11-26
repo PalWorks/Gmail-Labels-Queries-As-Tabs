@@ -60,7 +60,8 @@ Last updated: 2026-09-30 (v1.8.0)
 | Shared modal dialog accessibility: role, focus trap, focus return, key isolation | [src/modules/modals/dialogA11y.ts](src/modules/modals/dialogA11y.ts) |
 | How the copy of the content script already in a tab stands down when a newer copy arrives (the injection itself is `adoptOpenGmailTabs` in background.ts) | [src/modules/handover.ts](src/modules/handover.ts) |
 | Tab bar rendering, dropdowns, keyboard/aria | [src/modules/tabs.ts](src/modules/tabs.ts) |
-| Unread count waterfall (feed, XHR, DOM) | [src/modules/unread.ts](src/modules/unread.ts) |
+| Unread counts: Gmail's own sidebar first, the Atom feed for labels it hides | [src/modules/unread.ts](src/modules/unread.ts) |
+| The rating ask at the end of the tab bar, after a week and 30 tab clicks | [src/modules/ratingNudge.ts](src/modules/ratingNudge.ts) |
 | Apps Script generation from rules | [src/modules/rules.ts](src/modules/rules.ts) |
 | Shared add-tab parsing + managed list behavior | [src/modules/tabManager.ts](src/modules/tabManager.ts) |
 | Drag-and-drop reordering | [src/modules/dragdrop.ts](src/modules/dragdrop.ts) |

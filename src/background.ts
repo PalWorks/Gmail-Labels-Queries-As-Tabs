@@ -169,12 +169,17 @@ async function startTour(): Promise<void> {
  * Open the options page, preferring Chrome's own opener so an already-open
  * tab is focused rather than duplicated.
  */
-async function openOptionsPage(hash?: string): Promise<void> {
+async function openOptionsPage(hash?: string, account?: string): Promise<void> {
     // A hash targets one section, so "Help & support" in the toolbar menu
     // lands on the contact form rather than on whatever section was last
-    // open. openOptionsPage() cannot carry one, so a hash means a real tab.
-    if (hash) {
-        await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') + hash });
+    // open. An account opens the page on the Gmail account it was opened
+    // from: until 1.9.0 it always showed the first account stored, so someone
+    // with a Workspace mailbox and a gmail.com one saw the wrong account's
+    // tabs (reported 2026-10-20). openOptionsPage() can carry neither, so
+    // either means a real tab.
+    if (hash || account) {
+        const query = account ? `?account=${encodeURIComponent(account)}` : '';
+        await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') + query + (hash || '') });
         return;
     }
     if (chrome.runtime.openOptionsPage) {
@@ -258,7 +263,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Answered asynchronously, and deliberately. Both openers can reject
         // rather than throw, so the synchronous try/catch this replaced would
         // have reported ok: true for an options page that never opened.
-        openOptionsPage(typeof message.hash === 'string' ? message.hash : undefined)
+        const account =
+            typeof message.account === 'string' && /^[^@\s]{1,64}@[^@\s]{1,190}$/.test(message.account)
+                ? message.account
+                : undefined;
+        openOptionsPage(typeof message.hash === 'string' ? message.hash : undefined, account)
             .then(() => sendResponse({ ok: true }))
             .catch((e: unknown) => {
                 console.error('Background: could not open the options page:', e);
@@ -314,17 +323,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 //
 // Chrome opens this page in a new tab after the extension is removed, which
 // is the only chance to ask why. Nothing is sent from here: Chrome navigates
-// to a static form and the user chooses whether to fill it in. No account
-// address, no settings and no identifier is attached to the URL, so the form
-// host learns only that someone, somewhere, uninstalled.
+// to a page on our own website and the user chooses whether to answer. The
+// address carries the extension version and nothing else: no account
+// address, no settings, no identifier.
 //
-// This is a third-party host, so it is disclosed rather than quiet: in
-// SECURITY.md, on the in-extension privacy page (Settings -> Privacy), in
-// STORE_LISTING.md and in the Web Store data declaration. A test in
-// test/repoConsistency.test.ts fails the build if this URL's host is present
-// here and missing from any of those, so it cannot go undisclosed again.
-// See ADR-014.
-const UNINSTALL_FEEDBACK_URL = 'https://tally.so/r/D4BBRR?transparentBackground=1&formEventsForwarding=1';
+// Until 1.9.0 this was a Tally form (tally.so), a third party; ADR-014
+// recorded moving it to our own domain as the follow-up, and ADR-031 did it.
+// The page answers through the website's own relay, so an answer reaches the
+// support mailbox and nobody else.
+//
+// The host is disclosed rather than quiet: in SECURITY.md, on the
+// in-extension privacy page (Settings -> Privacy) and in STORE_LISTING.md. A
+// test in test/repoConsistency.test.ts fails the build if this URL's host is
+// present here and missing from any of those.
+const UNINSTALL_FEEDBACK_URL = `https://palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/?v=${encodeURIComponent(
+    chrome.runtime.getManifest?.().version ?? ''
+)}`;
 if (chrome.runtime.setUninstallURL) {
     chrome.runtime.setUninstallURL(UNINSTALL_FEEDBACK_URL, () => {
         if (chrome.runtime.lastError) {

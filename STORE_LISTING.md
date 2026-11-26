@@ -3,10 +3,10 @@
 Everything the Chrome Web Store Developer Dashboard asks for, in the order it asks for it,
 written to be found and to be quoted. Copy each fenced block verbatim.
 
-**Version this listing describes:** 1.8.1
+**Version this listing describes:** 1.9.0
 **Item ID:** `jemjnjlplglfoiipcjhoacneigdgfmde`
 **Live listing:** https://chromewebstore.google.com/detail/gmail-labels-and-search-q/jemjnjlplglfoiipcjhoacneigdgfmde
-**Last updated:** 2026-09-30
+**Last updated:** 2026-11-26T08:00:54+00:00
 
 Three audiences read this listing, and the copy below is built for all three at once:
 
@@ -144,8 +144,8 @@ Add any label as a tab. Add any Gmail search as a tab too, so "invoices from las
 📑 Tabs for labels, saved searches and Gmail views, in a bar above your inbox
 ➕ Add a label straight from Gmail: its own three-dot menu now offers "Show as Tabs"
 🏷️ Optional sender icons: a small chip in each inbox row showing which organisation the mail is from
-🔢 Live unread counts on every tab, read from Gmail itself
-🎨 Tab colors from an accessible palette, so the views that matter stand out
+🔢 Live unread counts on every tab, the same numbers Gmail shows in its sidebar
+🎨 Twelve tab colors, so the views that matter stand out
 ↕️ Drag to reorder, across as many rows as you need
 🔄 Your tabs sync to every Chrome you sign into
 👤 Multi-account: each Gmail account keeps its own tabs, colors, order and rules
@@ -177,7 +177,7 @@ Nothing is sent anywhere on its own. There are two outbound requests, and each h
 
 Sender icons are off until you turn them on, and even then they draw a coloured letter and request nothing. Only if you also turn on "Load website icons" does the extension ask Google's icon service, at t0.gstatic.com or www.google.com, for each sender's website icon. What it sends is the domain alone, such as example.com: never the address, the name, the subject or anything in the message.
 
-One page opens after you have already left: uninstalling opens a short feedback form at tally.so, so we can learn why. The link carries no address, no settings and no identifier, nothing is sent from the extension, and closing the tab answers nothing.
+One page opens after you have already left: uninstalling opens a one-question page on our own website, so we can learn why. The link carries the extension version and nothing else, nothing is sent from the extension, and closing the tab answers nothing.
 
 🛡️ Four permissions, one use each. Storage saves your tabs. Downloads writes the backup file when you press Export. Management lets the Uninstall button inside Settings remove the extension cleanly. Scripting starts the extension in a Gmail tab you already had open, so installing or updating it does not make you reload Gmail by hand. All four work only on mail.google.com.
 
@@ -348,7 +348,7 @@ rejection.
 | Host | When it is reached | What it carries |
 |---|---|---|
 | `gmail-tabs-feedback.sunmooncal.workers.dev` | Only when the user presses Send Feedback | The message, an optional reply address, and optional version and counts |
-| `tally.so` | Only after uninstall, opened by Chrome, not by the extension | Nothing. A bare form URL with no identifier |
+| `palworks.github.io` | Only after uninstall, opened by Chrome, not by the extension | The extension version in the page address. Nothing else |
 | `t0.gstatic.com` | Only with sender icons on **and** "Load website icons" on, both off by default | The domain of a sender shown in the inbox, such as `example.com`, as an image request with no referrer |
 | `www.google.com` (`/s2/favicons`) | As above, only when `t0.gstatic.com` could not be reached | The same domain, the same way |
 
@@ -391,7 +391,7 @@ purpose the user can see on screen. That use is within the single purpose above 
 the Limited Use certifications. If you would rather keep the answer No, remove the website
 icons switch before submitting; the lettered badges make no request.
 
-The uninstall URL (`tally.so`, ADR-014) does not change any answer above. Chrome navigates
+The uninstall URL (our own `palworks.github.io/Gmail-Labels-As-Tabs/uninstalled/`, ADR-014 and ADR-031; `tally.so` until 1.8.1) does not change any answer above. Chrome navigates
 to it after removal and the extension attaches nothing to it, so no user data is collected
 or transferred by us. It is listed because a reviewer will see
 `chrome.runtime.setUninstallURL` in the service worker and is entitled to an explanation
@@ -482,18 +482,41 @@ Gmail page for the shot only; the generator refuses a shot if any row or visible
 still holds anything else, and if anything but the sidebar and our menu covers the label
 column (store-assets/README.md).
 
-**Upload with the next version submission, not on their own.** Changing listing images on
-a published item sends the listing back to review, and these describe 1.8.1, which is
-already live and already described by the release notes and the video. A review cycle for
-images alone buys little; the next submission carries them at no extra cost.
+**Uploaded with the 1.9.0 submission, not on their own.** Changing listing images on a
+published item sends the listing back to review, so they waited for a version submission.
+1.9.0 changes nothing they show except the inbox count, which now matches Gmail's.
 
 ---
 
-## 5. Release notes for 1.8.1
+## 5. Release notes for 1.9.0
 
-Paste this one. It covers everything since 1.6.2, the version currently live: 1.7.0
-through 1.8.0 were each built and never submitted. 1.8.1 is 1.8.0 plus the fixes from the
-pre-submission audit of 2026-09-30, and the older notes follow below.
+Paste this one. 1.8.1 is live; the older notes follow below.
+
+```
+Fixed: unread counts on your tabs now match the numbers Gmail shows in its own sidebar,
+and follow them as they change. The inbox showed every category's unread mail when Gmail
+shows Primary only, and labels inside other labels, or with spaces in their names, often
+showed nothing. Counts also work now when Gmail is in a language other than English.
+
+Fixed: opening Settings from a Gmail account now opens them on that account, so if you use
+several accounts you see the tabs and rules of the one you came from.
+
+New: four more tab colours, brown, gray, indigo and lime.
+
+New: after you have used the tabs for a while, the tab bar asks once whether you would
+like to rate the extension. Not now puts it away for a month; Don't ask again ends it.
+
+Changed: when you remove the extension, the page that asks why is now on our own website,
+and your answer reaches us without passing through anyone else.
+```
+
+**No new permission and no new data usage answer.** The uninstall page's host changed from
+`tally.so` to our own `palworks.github.io` (sections 2.3 and 2.4).
+
+### Release notes for 1.8.1, kept for the record
+
+It covered everything since 1.6.2: 1.7.0 through 1.8.0 were each built and never
+submitted.
 
 ```
 New: sender icons, off until you turn them on in Settings. Each row in your inbox gets a
@@ -783,7 +806,7 @@ every claim on the site is public marketing copy, and costs the citation.
 | Install conversion rate | Same, impressions against installs | Weekly. A summary rewrite moves this first |
 | Queries reaching the listing | Google Search Console, if the website is verified. The store page itself is not yours to instrument | Monthly |
 | Named recommendation | Ask ChatGPT, Perplexity, Gemini and Claude "best Chrome extension for Gmail labels as tabs" and record whether the product is named | Monthly, same wording each time so the answers are comparable |
-| Uninstall reasons | The tally.so form | As they arrive |
+| Uninstall reasons | The website's `/uninstalled/` page, by email to support (Tally before 1.9.0) | As they arrive |
 
 The AI recommendation check is the only honest way to measure GEO today, and it is noisy.
 Record the date, the exact prompt and the answer; a trend over five months is worth
@@ -793,9 +816,20 @@ something, a single reading is worth nothing.
 
 ## 10. Pre-submission checklist
 
+### For 1.9.0, verified on 2026-11-26
+
+- [x] `manifest.json` and `package.json` both read 1.9.0; 1113 tests pass; lint has no errors.
+- [x] Badges checked against Gmail in a live session: 35 of 35 matched, and a sidebar count
+      change reached the badge (ADR-030).
+- [x] The uninstall page answered end to end from a headless browser at 360 px, and the
+      email reached the support mailbox (ADR-031).
+- [x] The website's privacy policy covers 1.9.0 (the uninstall page) and is deployed.
+- [ ] Upload, the five screenshots from section 4, and submit.
+- [ ] After approval: bump `LIVE_VERSION` to 1.9.0 in the website and deploy.
+
 ### For 1.8.1, verified on 2026-09-30
 
-- [x] `manifest.json` and `package.json` both read 1.8.1 (CI checks parity), 1082 tests pass,
+- [x] `manifest.json` and `package.json` both read 1.8.1 (CI checks parity), the full suite passes,
       and the GitHub CI run on `main` passes
 - [x] The website's privacy policy covers 1.8.1: sender icons, both icon hosts, `scripting`,
       the feedback relay (hashed network counter, Resend), the contact form and the

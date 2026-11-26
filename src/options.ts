@@ -101,7 +101,19 @@ function handleHashChange(): void {
 // State
 // ---------------------------------------------------------------------------
 
-let currentAccountId: string | null = null;
+/**
+ * The account to open on: the Gmail account the page was opened from, named
+ * in `?account=`, when it is one we know. Otherwise the first stored.
+ */
+let currentAccountId: string | null = requestedAccount();
+
+function requestedAccount(): string | null {
+    try {
+        return new URLSearchParams(window.location.search).get('account');
+    } catch {
+        return null;
+    }
+}
 let currentSettings: Settings | null = null;
 // Theme is browser-wide (shared by all accounts), not part of currentSettings.
 let currentTheme: Theme = 'light';
@@ -139,10 +151,12 @@ async function loadSettings(): Promise<void> {
             return;
         }
 
-        // Default to first account, or keep current selection if already set
-        if (!currentAccountId || !accounts.includes(currentAccountId)) {
-            currentAccountId = accounts[0];
-        }
+        // The requested or current account when it is stored (compared
+        // without case, as Gmail is), otherwise the first.
+        const match = currentAccountId
+            ? accounts.find((a) => a.toLowerCase() === currentAccountId!.toLowerCase())
+            : undefined;
+        currentAccountId = match ?? accounts[0];
 
         knownAccountCount = accounts.length;
         populateAccountSelector(accounts);

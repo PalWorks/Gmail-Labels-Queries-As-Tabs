@@ -137,6 +137,8 @@ describe('extractEmailFromDOM (tested via initializeFromDOM)', () => {
 
                 jest.doMock('../src/modules/unread', () => ({
                     handleUnreadUpdates: jest.fn(),
+                    refreshCountsFromSidebar: jest.fn(),
+                    watchSidebarCounts: jest.fn(() => () => {}),
                     computeKnownLabelTokens: jest.fn(() => []),
                 }));
 
@@ -297,6 +299,8 @@ describe('storage change listener', () => {
 
                 jest.doMock('../src/modules/unread', () => ({
                     handleUnreadUpdates: jest.fn(),
+                    refreshCountsFromSidebar: jest.fn(),
+                    watchSidebarCounts: jest.fn(() => () => {}),
                 }));
 
                 jest.doMock('../src/modules/tabs', () => ({
@@ -399,6 +403,8 @@ describe('injection and theme', () => {
                 }));
                 jest.doMock('../src/modules/unread', () => ({
                     handleUnreadUpdates: jest.fn(),
+                    refreshCountsFromSidebar: jest.fn(),
+                    watchSidebarCounts: jest.fn(() => () => {}),
                     computeKnownLabelTokens: jest.fn(() => []),
                 }));
                 jest.doMock('../src/modules/tabs', () => ({
@@ -550,6 +556,8 @@ describe('handover between two copies in one page', () => {
                 }));
                 jest.doMock('../src/modules/unread', () => ({
                     handleUnreadUpdates: jest.fn(),
+                    refreshCountsFromSidebar: jest.fn(),
+                    watchSidebarCounts: jest.fn(() => () => {}),
                     computeKnownLabelTokens: jest.fn(() => []),
                 }));
                 jest.doMock('../src/modules/tabs', () => ({

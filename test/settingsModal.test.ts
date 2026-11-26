@@ -305,7 +305,7 @@ describe('settings modal behavior', () => {
             toggleSettingsModal();
             (document.querySelector(selector) as HTMLElement).click();
 
-            expect(sendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE' });
+            expect(sendMessage).toHaveBeenCalledWith({ action: 'OPEN_OPTIONS_PAGE', account: 'user@gmail.com' });
             // Never directly: Chrome blocks it from a content script.
             expect(openSpy).not.toHaveBeenCalled();
             openSpy.mockRestore();

@@ -16,7 +16,7 @@
 import { catchChromeError } from './modules/extensionContext';
 import { getGlobalTheme } from './utils/storage';
 import { DETECTED_GMAIL_THEME_KEY, ResolvedTheme } from './modules/theme';
-import { START_TOUR_ACTION, OPEN_OPTIONS_PAGE_ACTION, TOGGLE_SETTINGS_ACTION } from './modules/messages';
+import { START_TOUR_ACTION, OPEN_OPTIONS_PAGE_ACTION, TOGGLE_SETTINGS_ACTION, PING_ACTION } from './modules/messages';
 import { writeMirroredTheme } from './modules/themeMirror';
 
 const GMAIL_URL = 'https://mail.google.com/';
@@ -71,6 +71,38 @@ function prefersDarkOS(): boolean {
     }
 }
 
+/** The Gmail tab the popup was opened over, if any. */
+let gmailTabId: number | undefined;
+
+/**
+ * Open the options page on the account of the Gmail tab underneath, when
+ * there is one: the content script answers a ping with its account.
+ */
+function openOptions(hash?: string): void {
+    const go = (account?: string) => {
+        send({ action: OPEN_OPTIONS_PAGE_ACTION, ...(hash ? { hash } : {}), ...(account ? { account } : {}) });
+        window.close();
+    };
+    if (gmailTabId === undefined) {
+        go();
+        return;
+    }
+    let asked: Promise<unknown>;
+    try {
+        asked = Promise.resolve(chrome.tabs.sendMessage(gmailTabId, { action: PING_ACTION }));
+    } catch {
+        go();
+        return;
+    }
+    asked.then(
+        (reply) => {
+            const account = (reply as { account?: unknown } | undefined)?.account;
+            go(typeof account === 'string' ? account : undefined);
+        },
+        () => go()
+    );
+}
+
 function send(message: Record<string, unknown>): void {
     catchChromeError(chrome.runtime.sendMessage(message), (e) =>
         console.error('Popup: the extension did not answer', e)
@@ -95,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = tabs && tabs[0] ? tabs[0].url || '' : '';
         const onGmail = url.startsWith(GMAIL_URL);
         const tabId = tabs && tabs[0] ? tabs[0].id : undefined;
+        if (onGmail) gmailTabId = tabId;
 
         if (!onGmail && note) {
             note.textContent = 'Opens Gmail first';
@@ -119,13 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.close();
     });
 
-    document.getElementById('popup-settings')?.addEventListener('click', () => {
-        send({ action: OPEN_OPTIONS_PAGE_ACTION });
-        window.close();
-    });
+    document.getElementById('popup-settings')?.addEventListener('click', () => openOptions());
 
-    document.getElementById('popup-help')?.addEventListener('click', () => {
-        send({ action: OPEN_OPTIONS_PAGE_ACTION, hash: '#contact' });
-        window.close();
-    });
+    document.getElementById('popup-help')?.addEventListener('click', () => openOptions('#contact'));
 });

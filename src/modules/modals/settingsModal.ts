@@ -54,6 +54,12 @@ export function toggleSettingsModal(): void {
  * in the wild. Nothing useful can be done about that from a page that is
  * already orphaned.
  */
+/** The account this Gmail page is signed in to, so the options page opens on it. */
+function accountField(): { account?: string } {
+    const account = getUserEmail();
+    return account ? { account } : {};
+}
+
 function openOptionsPage(): void {
     if (!isExtensionContextAlive()) {
         showContextInvalidatedNotice();
@@ -61,7 +67,7 @@ function openOptionsPage(): void {
     }
     try {
         // The context can die between the check above and the reply.
-        catchChromeError(chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION }), (e) => {
+        catchChromeError(chrome.runtime.sendMessage({ action: OPEN_OPTIONS_PAGE_ACTION, ...accountField() }), (e) => {
             if (isContextInvalidatedError(e)) {
                 showContextInvalidatedNotice();
                 return;

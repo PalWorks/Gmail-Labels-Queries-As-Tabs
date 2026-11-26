@@ -10,7 +10,19 @@
  * of a color means default styling.
  */
 
-export type TabColor = 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'purple' | 'pink';
+export type TabColor =
+    | 'red'
+    | 'orange'
+    | 'yellow'
+    | 'green'
+    | 'teal'
+    | 'blue'
+    | 'purple'
+    | 'pink'
+    | 'brown'
+    | 'gray'
+    | 'indigo'
+    | 'lime';
 
 /** All selectable color tokens, in swatch display order. */
 export const TAB_COLORS: readonly TabColor[] = [
@@ -22,6 +34,11 @@ export const TAB_COLORS: readonly TabColor[] = [
     'blue',
     'purple',
     'pink',
+    // Added in 1.9.0, after a user asked for more choice (2026-10-29).
+    'brown',
+    'gray',
+    'indigo',
+    'lime',
 ] as const;
 
 /** Human-readable accessible names for each token (used for aria-labels). */
@@ -34,6 +51,10 @@ export const TAB_COLOR_LABELS: Record<TabColor, string> = {
     blue: 'Blue',
     purple: 'Purple',
     pink: 'Pink',
+    brown: 'Brown',
+    gray: 'Gray',
+    indigo: 'Indigo',
+    lime: 'Lime',
 };
 
 /** Type guard: true when `value` is a known palette token. */

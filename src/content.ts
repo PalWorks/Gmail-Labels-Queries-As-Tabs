@@ -32,7 +32,7 @@ import {
 import { TABS_BAR_ID, TOOLBAR_SELECTORS, setAppSettings, setUserEmail, getUserEmail, getAppSettings } from './modules/state';
 import { showOnboarding, SHOW_ONBOARDING_ACTION } from './modules/onboarding/onboardingModal';
 import { applyTheme, listenForSystemThemeChanges, watchGmailTheme } from './modules/theme';
-import { handleUnreadUpdates, computeKnownLabelTokens } from './modules/unread';
+import { handleUnreadUpdates, computeKnownLabelTokens, refreshCountsFromSidebar, watchSidebarCounts } from './modules/unread';
 import { renderTabs, createTabsBar, updateActiveTab, setModalCallbacks } from './modules/tabs';
 import {
     showPinModal,
@@ -45,6 +45,7 @@ import {
 import { installLabelMenu, uninstallLabelMenu } from './modules/labelMenu';
 import { installSenderIcons, refreshSenderIcons, uninstallSenderIcons, SenderIconPrefs } from './modules/senderIcons';
 import { claimPage, removeOurPageFurniture } from './modules/handover';
+import { initRatingNudge } from './modules/ratingNudge';
 import { PING_ACTION, TOGGLE_SETTINGS_ACTION } from './modules/messages';
 
 // ---------------------------------------------------------------------------
@@ -558,7 +559,9 @@ async function init(): Promise<void> {
             toggleSettingsModal();
             // Answered, so a promise-form sender settles instead of reporting
             // a closed port as a failure to reach this tab.
-            sendResponse({ ok: true });
+            // The account rides along, so the popup can open the options
+            // page on this Gmail's account rather than the first one stored.
+            sendResponse(getUserEmail() ? { ok: true, account: getUserEmail() } : { ok: true });
             return false;
         }
         if (message.action === SHOW_ONBOARDING_ACTION) {
@@ -579,6 +582,18 @@ async function init(): Promise<void> {
     };
     chrome.runtime.onMessage.addListener(onMessage);
     disposers.push(() => chrome.runtime.onMessage.removeListener(onMessage));
+
+    // The rating ask is drawn by renderTabs once it is due.
+    initRatingNudge(() => {
+        if (!standingDown) renderTabs();
+    }).catch((e: unknown) => console.warn('Gmail Tabs: could not read the rating state', e));
+
+    // Badges follow Gmail's own sidebar counts as Gmail changes them.
+    disposers.push(
+        watchSidebarCounts(() => {
+            if (!standingDown) refreshCountsFromSidebar();
+        })
+    );
 
     // Unread updates from pageWorld.js
     listen(document, 'gmailTabs:unreadUpdate', (e: Event) => {

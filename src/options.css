@@ -1298,6 +1298,10 @@ body.theme-light .contact-rating-card {
 .tab-color-blue { --tab-accent: #1a73e8; }
 .tab-color-purple { --tab-accent: #9334e6; }
 .tab-color-pink { --tab-accent: #d01884; }
+.tab-color-brown { --tab-accent: #a1662f; }
+.tab-color-gray { --tab-accent: #80868b; }
+.tab-color-indigo { --tab-accent: #5c6bc0; }
+.tab-color-lime { --tab-accent: #7cb342; }
 
 .color-swatch-row {
     display: flex;

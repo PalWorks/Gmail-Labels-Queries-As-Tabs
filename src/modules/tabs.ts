@@ -9,6 +9,8 @@ import { Tab } from '../utils/storage';
 import { isValidTabColor, tabColorClass } from '../utils/colors';
 import { TABS_BAR_ID, getAppSettings } from './state';
 import { updateUnreadCount } from './unread';
+import { createRatingNudge, ratingNudgeDue, recordTabClick } from './ratingNudge';
+import { isOnboardingOpen } from './onboarding/onboardingModal';
 import {
     isMoveMode,
     setMoveMode,
@@ -76,6 +78,7 @@ function activateOnKey(el: HTMLElement, handler: (e: KeyboardEvent) => void): vo
 
 /** Navigate to a tab's target view (shared by mouse click and keyboard). */
 function navigateToTab(tab: Tab): void {
+    recordTabClick();
     if (tab.type === 'label') {
         const encoded = encodeURIComponent(tab.value).replace(/%20/g, '+');
         window.location.hash = `#label/${encoded}`;
@@ -251,6 +254,11 @@ export function renderTabs(): void {
     });
     activateOnKey(manageBtn, () => _toggleSettingsModal());
     bar.appendChild(manageBtn);
+
+    // The rating ask, when it is due; never over the tour or while moving tabs.
+    if (!isMoveMode && ratingNudgeDue() && !isOnboardingOpen()) {
+        bar.appendChild(createRatingNudge());
+    }
 
     // Done Button (Move Mode only)
     if (isMoveMode) {

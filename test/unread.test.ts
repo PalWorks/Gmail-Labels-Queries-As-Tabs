@@ -4,7 +4,7 @@ export {};
  *
  * Unit tests for the unread count module.
  * Covers normalizeLabel(), buildLabelMapFromDOM(), handleUnreadUpdates(),
- * and getUnreadCountFromDOM().
+ * the sidebar reader that badges follow, and the Atom feed fallback.
  */
 
 // ---------------------------------------------------------------------------
@@ -19,7 +19,12 @@ import {
     normalizeLabel,
     buildLabelMapFromDOM,
     handleUnreadUpdates,
-    getUnreadCountFromDOM,
+    findSidebarLink,
+    readSidebarCount,
+    refreshCountsFromSidebar,
+    watchSidebarCounts,
+    feedNameForLabel,
+    sidebarViewKey,
     updateUnreadCount,
     clearUnreadCountCache,
     computeKnownLabelTokens,
@@ -74,34 +79,14 @@ function createMockTabBar(tabs: { value: string; type: string }[]): void {
     document.body.appendChild(bar);
 }
 
-/** Build a mock inbox/sent sidebar link with optional unread indicators. */
-function createMockInboxLink(options: {
-    href: string;
-    ariaLabel?: string;
-    title?: string;
-    bsUText?: string;
-    innerText?: string;
-}): void {
-    const nav = document.createElement('div');
-    nav.setAttribute('role', 'navigation');
-
-    const link = document.createElement('a');
-    link.href = options.href;
-    if (options.ariaLabel) link.setAttribute('aria-label', options.ariaLabel);
-    if (options.title) link.title = options.title;
-    if (options.bsUText) {
-        const bsU = document.createElement('span');
-        bsU.className = 'bsU';
-        bsU.textContent = options.bsUText;
-        link.appendChild(bsU);
-    }
-    if (options.innerText) {
-        const textNode = document.createTextNode(options.innerText);
-        link.appendChild(textNode);
-    }
-
-    nav.appendChild(link);
-    document.body.appendChild(nav);
+/**
+ * One row of Gmail's sidebar as measured on 2026-11-26: the count sits beside
+ * the link, in the row, not inside the link.
+ */
+function gmailRow(href: string, count: string | null, aria?: string): string {
+    return `<div class="aim"><div class="TO"><div class="TN"><div class="aio"><span class="nU"><a href="https://mail.google.com/mail/u/0/#${href}"${
+        aria ? ` aria-label="${aria}"` : ''
+    }>x</a></span>${count === null ? '' : `<div class="bsU">${count}</div>`}</div></div></div></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,83 +194,93 @@ describe('buildLabelMapFromDOM', () => {
 // getUnreadCountFromDOM
 // ---------------------------------------------------------------------------
 
-describe('getUnreadCountFromDOM', () => {
-    test('finds inbox count from .bsU element', () => {
-        const tab: Tab = { id: 't1', title: 'Inbox', value: '#inbox', type: 'hash' };
+describe("Gmail's sidebar is the count a badge shows", () => {
+    const tab = (type: 'label' | 'hash', value: string): Tab => ({ id: 't', title: 'x', type, value });
 
-        createMockInboxLink({
-            href: '#inbox',
-            ariaLabel: 'Inbox',
-            bsUText: '5',
-        });
-
-        expect(getUnreadCountFromDOM(tab)).toBe('5');
+    test('the inbox shows the number Gmail shows, read beside the link', () => {
+        document.body.innerHTML = gmailRow('inbox', '9', 'Inbox 9 unread');
+        expect(readSidebarCount(findSidebarLink(tab('hash', '#inbox'))!)).toBe('9');
     });
 
-    test('parses inbox count from aria-label "N unread" pattern', () => {
-        const tab: Tab = { id: 't1', title: 'Inbox', value: '#inbox', type: 'hash' };
-
-        createMockInboxLink({
-            href: '#inbox',
-            ariaLabel: 'Inbox 3 unread',
-        });
-
-        expect(getUnreadCountFromDOM(tab)).toBe('3');
+    test('a nested label with a space is found by its decoded name', () => {
+        document.body.innerHTML = gmailRow('label/Delete/Professional+Newsletters', '7');
+        expect(readSidebarCount(findSidebarLink(tab('label', 'Delete/Professional Newsletters'))!)).toBe('7');
     });
 
-    test('parses inbox count from title "(N)" pattern', () => {
-        const tab: Tab = { id: 't1', title: 'Inbox', value: '#inbox', type: 'hash' };
-
-        createMockInboxLink({
-            href: '#inbox',
-            ariaLabel: 'Inbox',
-            title: 'Inbox (7)',
-        });
-
-        // aria-label match runs first: 'Inbox' has no number pattern,
-        // so falls to title match
-        expect(getUnreadCountFromDOM(tab)).toBe('7');
+    test('a pinned #label/ view in Gmail encoding finds the same row', () => {
+        document.body.innerHTML = gmailRow('label/Work%2FClients', '6');
+        expect(readSidebarCount(findSidebarLink(tab('hash', '#label/Work%2FClients'))!)).toBe('6');
     });
 
-    test('returns empty string when no count found for inbox', () => {
-        const tab: Tab = { id: 't1', title: 'Inbox', value: '#inbox', type: 'hash' };
-
-        createMockInboxLink({
-            href: '#inbox',
-            ariaLabel: 'Inbox',
-        });
-
-        expect(getUnreadCountFromDOM(tab)).toBe('');
+    test('a row with no number means no badge, not a fallback', () => {
+        document.body.innerHTML = gmailRow('label/Family', null);
+        expect(readSidebarCount(findSidebarLink(tab('label', 'Family'))!)).toBe('');
     });
 
-    test('finds label count from link with matching href', () => {
-        const tab: Tab = { id: 't1', title: 'Work', value: 'Work', type: 'label' };
-
-        const link = document.createElement('a');
-        link.href = 'https://mail.google.com/#label/Work';
-        link.setAttribute('aria-label', 'Work 2 unread');
-        document.body.appendChild(link);
-
-        expect(getUnreadCountFromDOM(tab)).toBe('2');
+    test('the number is read in any language, the aria-label only as a last resort', () => {
+        document.body.innerHTML = gmailRow('inbox', '1.234', 'Posteingang 1.234 ungelesen');
+        expect(readSidebarCount(findSidebarLink(tab('hash', '#inbox'))!)).toBe('1.234');
     });
 
-    test('returns empty string for label with no matching link', () => {
-        const tab: Tab = { id: 't1', title: 'NonExistent', value: 'NonExistent', type: 'label' };
+    test('text that is not a number is not shown', () => {
+        document.body.innerHTML = gmailRow('inbox', 'New');
+        expect(readSidebarCount(findSidebarLink(tab('hash', '#inbox'))!)).toBe('');
+    });
 
-        expect(getUnreadCountFromDOM(tab)).toBe('');
+    test("a parent row does not take a child row's count", () => {
+        document.body.innerHTML = `<div class="aim"><div class="TO"><a href="#label/Parent">p</a>
+            <div class="TO"><a href="#label/Parent%2FChild">c</a><div class="bsU">4</div></div></div></div>`;
+        expect(readSidebarCount(findSidebarLink(tab('label', 'Parent'))!)).toBe('');
+        expect(readSidebarCount(findSidebarLink(tab('label', 'Parent/Child'))!)).toBe('4');
+    });
+
+    test('searches have no sidebar row; system views and categories do', () => {
+        expect(sidebarViewKey(tab('hash', '#search/is%3Aunread'))).toBeNull();
+        expect(sidebarViewKey(tab('hash', '#category/updates'))).toBe('category/updates');
+        expect(sidebarViewKey(tab('label', 'Inbox'))).toBe('inbox');
+    });
+
+    test('refreshCountsFromSidebar updates every badge Gmail counts and leaves the rest', () => {
+        document.body.innerHTML = gmailRow('inbox', '9') + gmailRow('label/Work', '3');
+        createMockTabBar([
+            { value: '#inbox', type: 'hash' },
+            { value: 'Work', type: 'label' },
+            { value: '#search/is%3Aunread', type: 'hash' },
+        ]);
+        const spans = document.querySelectorAll('#gmail-labels-as-tabs-bar .unread-count');
+        spans[2].textContent = 'kept';
+        refreshCountsFromSidebar();
+        expect([...spans].map((s) => s.textContent)).toEqual(['9', '3', 'kept']);
+    });
+
+    test('the watcher fires once on finding the sidebar and again when a count changes', async () => {
+        jest.useFakeTimers();
+        try {
+            document.body.innerHTML = gmailRow('inbox', '9');
+            const onChange = jest.fn();
+            const stop = watchSidebarCounts(onChange);
+            jest.advanceTimersByTime(300);
+            expect(onChange).toHaveBeenCalledTimes(1);
+            document.querySelector('.bsU')!.textContent = '10';
+            await Promise.resolve();
+            jest.advanceTimersByTime(300);
+            expect(onChange).toHaveBeenCalledTimes(2);
+            stop();
+            document.querySelector('.bsU')!.textContent = '11';
+            await Promise.resolve();
+            jest.advanceTimersByTime(300);
+            expect(onChange).toHaveBeenCalledTimes(2);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
 
-// ---------------------------------------------------------------------------
-// handleUnreadUpdates
-// ---------------------------------------------------------------------------
-
 describe('handleUnreadUpdates', () => {
-    test('updates badge for system label ^i (inbox)', () => {
-        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
+    test('updates the badge of a label Gmail\'s sidebar does not show', () => {
+        createMockTabBar([{ value: 'Work', type: 'label' }]);
 
-        // Need sidebar for buildLabelMapFromDOM called internally
-        handleUnreadUpdates([{ label: '^i', count: 3 }]);
+        handleUnreadUpdates([{ label: 'Work', count: 3 }]);
 
         const bar = document.getElementById('gmail-labels-as-tabs-bar')!;
         const countSpan = bar.querySelector('.unread-count');
@@ -303,9 +298,9 @@ describe('handleUnreadUpdates', () => {
     });
 
     test('clears badge when count is 0', () => {
-        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
+        createMockTabBar([{ value: 'Work', type: 'label' }]);
 
-        handleUnreadUpdates([{ label: '^i', count: 0 }]);
+        handleUnreadUpdates([{ label: 'Work', count: 0 }]);
 
         const bar = document.getElementById('gmail-labels-as-tabs-bar')!;
         const countSpan = bar.querySelector('.unread-count');
@@ -319,12 +314,12 @@ describe('handleUnreadUpdates', () => {
 
     test('handles multiple updates in one call', () => {
         createMockTabBar([
-            { value: '#inbox', type: 'hash' },
+            { value: 'Work', type: 'label' },
             { value: '#starred', type: 'hash' },
         ]);
 
         handleUnreadUpdates([
-            { label: '^i', count: 2 },
+            { label: 'Work', count: 2 },
             { label: '^t', count: 4 },
         ]);
 
@@ -332,6 +327,16 @@ describe('handleUnreadUpdates', () => {
         const counts = bar.querySelectorAll('.unread-count');
         expect(counts[0].textContent).toBe('2');
         expect(counts[1].textContent).toBe('4');
+    });
+
+    test("never puts the sync protocol's inbox figure on the inbox tab", () => {
+        // ^i counts every category; Gmail shows Primary. 446 against 9, measured.
+        document.body.innerHTML = gmailRow('inbox', '9');
+        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
+        const span = document.querySelector('#gmail-labels-as-tabs-bar .unread-count')!;
+        span.textContent = '9';
+        handleUnreadUpdates([{ label: '^i', count: 446 }]);
+        expect(span.textContent).toBe('9');
     });
 });
 
@@ -359,8 +364,8 @@ describe('updateUnreadCount feed selection', () => {
         (global as any).fetch = fetchMock;
     });
 
-    test('fetches the Atom feed for the inbox tab and shows the count', async () => {
-        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+    test('fetches the Atom feed for a label Gmail\'s sidebar does not show', async () => {
+        const tab: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
         const el = makeTabEl();
         await updateUnreadCount(tab, el);
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -377,14 +382,14 @@ describe('updateUnreadCount feed selection', () => {
     });
 
     test('serves a repeated request from cache without a second fetch', async () => {
-        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        const tab: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
         await updateUnreadCount(tab, makeTabEl());
         await updateUnreadCount(tab, makeTabEl());
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     test('coalesces concurrent requests for the same label into one fetch', async () => {
-        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        const tab: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
         await Promise.all([
             updateUnreadCount(tab, makeTabEl()),
             updateUnreadCount(tab, makeTabEl()),
@@ -394,7 +399,7 @@ describe('updateUnreadCount feed selection', () => {
     });
 
     test('passes an abort signal so a stalled feed cannot hang forever', async () => {
-        const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+        const tab: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
         await updateUnreadCount(tab, makeTabEl());
 
         const init = fetchMock.mock.calls[0][1];
@@ -415,7 +420,7 @@ describe('updateUnreadCount feed selection', () => {
             );
             (global as any).fetch = stalled;
 
-            const tab: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+            const tab: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
             const first = updateUnreadCount(tab, makeTabEl());
             // The fetch waits for a concurrency slot before it starts its own
             // clock, so let that microtask land before advancing time.
@@ -451,7 +456,7 @@ describe('unread counts on a bad network', () => {
         return el;
     }
 
-    const inbox: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+    const work: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
 
     function feedReturning(count: number): jest.Mock {
         return jest.fn().mockResolvedValue({
@@ -473,7 +478,7 @@ describe('unread counts on a bad network', () => {
         // request made a busy label look empty for the next 30 seconds.
         (global as any).fetch = feedReturning(12);
         const good = makeTabEl();
-        await updateUnreadCount(inbox, good);
+        await updateUnreadCount(work, good);
         expect(good.querySelector('.unread-count')!.textContent).toBe('12');
 
         jest.useFakeTimers();
@@ -482,14 +487,14 @@ describe('unread counts on a bad network', () => {
         // Past the success TTL, so this really does re-fetch and really does fail.
         jest.advanceTimersByTime(31_000);
         const afterFailure = makeTabEl();
-        await updateUnreadCount(inbox, afterFailure);
+        await updateUnreadCount(work, afterFailure);
         expect(afterFailure.querySelector('.unread-count')!.textContent).toBe('12');
     });
 
     test('a failure is not cached as zero, so recovery is not blocked for the full TTL', async () => {
         jest.useFakeTimers();
         (global as any).fetch = jest.fn().mockRejectedValue(new Error('offline'));
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
 
         const recovered = feedReturning(4);
         (global as any).fetch = recovered;
@@ -497,7 +502,7 @@ describe('unread counts on a bad network', () => {
         // First backoff step is 5s, well short of the 30s success TTL.
         jest.advanceTimersByTime(6_000);
         const el = makeTabEl();
-        await updateUnreadCount(inbox, el);
+        await updateUnreadCount(work, el);
 
         expect(recovered).toHaveBeenCalledTimes(1);
         expect(el.querySelector('.unread-count')!.textContent).toBe('4');
@@ -508,32 +513,32 @@ describe('unread counts on a bad network', () => {
         const failing = jest.fn().mockRejectedValue(new Error('offline'));
         (global as any).fetch = failing;
 
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(failing).toHaveBeenCalledTimes(1);
 
         // Inside the 5s window: no second attempt.
         jest.advanceTimersByTime(4_000);
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(failing).toHaveBeenCalledTimes(1);
 
         // Past it: second attempt, which pushes the window out to 10s.
         jest.advanceTimersByTime(2_000);
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(failing).toHaveBeenCalledTimes(2);
 
         jest.advanceTimersByTime(6_000);
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(failing).toHaveBeenCalledTimes(2);
 
         jest.advanceTimersByTime(5_000);
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(failing).toHaveBeenCalledTimes(3);
     });
 
     test('an http error is a failure, not a count of zero', async () => {
         (global as any).fetch = feedReturning(7);
         const el1 = makeTabEl();
-        await updateUnreadCount(inbox, el1);
+        await updateUnreadCount(work, el1);
         expect(el1.querySelector('.unread-count')!.textContent).toBe('7');
 
         jest.useFakeTimers();
@@ -541,20 +546,20 @@ describe('unread counts on a bad network', () => {
         jest.advanceTimersByTime(31_000);
 
         const el2 = makeTabEl();
-        await updateUnreadCount(inbox, el2);
+        await updateUnreadCount(work, el2);
         expect(el2.querySelector('.unread-count')!.textContent).toBe('7');
     });
 
     test('a genuine zero is still a zero, not a failure', async () => {
         (global as any).fetch = feedReturning(0);
         const el = makeTabEl();
-        await updateUnreadCount(inbox, el);
+        await updateUnreadCount(work, el);
         expect(el.querySelector('.unread-count')!.textContent).toBe('');
 
         // No failure recorded, so the normal 30s TTL applies rather than a
         // 5s backoff: a second render must not re-fetch.
         const before = ((global as any).fetch as jest.Mock).mock.calls.length;
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
         expect(((global as any).fetch as jest.Mock).mock.calls.length).toBe(before);
     });
 
@@ -635,7 +640,7 @@ describe('live XHR counts and the feed cache', () => {
         return el;
     }
 
-    const inbox: Tab = { id: 't', title: 'Inbox', type: 'hash', value: '#inbox' };
+    const work: Tab = { id: 't', title: 'Work', type: 'label', value: 'Work' };
 
     beforeEach(() => {
         clearUnreadCountCache();
@@ -646,13 +651,13 @@ describe('live XHR counts and the feed cache', () => {
     });
 
     test('a redraw inside the TTL shows the live count, not the older feed count', async () => {
-        await updateUnreadCount(inbox, makeTabEl());
+        await updateUnreadCount(work, makeTabEl());
 
-        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
-        handleUnreadUpdates([{ label: '^i', count: 3 }]);
+        createMockTabBar([{ value: 'Work', type: 'label' }]);
+        handleUnreadUpdates([{ label: 'Work', count: 3 }]);
 
         const redrawn = makeTabEl();
-        await updateUnreadCount(inbox, redrawn);
+        await updateUnreadCount(work, redrawn);
         expect(redrawn.querySelector('.unread-count')!.textContent).toBe('3');
         expect((global as any).fetch).toHaveBeenCalledTimes(1);
     });
@@ -667,18 +672,18 @@ describe('live XHR counts and the feed cache', () => {
         );
 
         const el = makeTabEl();
-        const pending = updateUnreadCount(inbox, el);
+        const pending = updateUnreadCount(work, el);
         await microtasks();
 
-        createMockTabBar([{ value: '#inbox', type: 'hash' }]);
-        handleUnreadUpdates([{ label: '^i', count: 3 }]);
+        createMockTabBar([{ value: 'Work', type: 'label' }]);
+        handleUnreadUpdates([{ label: 'Work', count: 3 }]);
 
         resolveFeed({ ok: true, text: async () => '<feed><fullcount>9</fullcount></feed>' });
         await pending;
         expect(el.querySelector('.unread-count')!.textContent).toBe('3');
 
         const redrawn = makeTabEl();
-        await updateUnreadCount(inbox, redrawn);
+        await updateUnreadCount(work, redrawn);
         expect(redrawn.querySelector('.unread-count')!.textContent).toBe('3');
     });
 });
@@ -701,9 +706,9 @@ describe('pinned #label/ hash tabs fetch the right feed', () => {
     }
 
     test.each([
-        ['#label/My+Label', 'feed/atom/My%20Label'],
-        ['#label/Parent%2FChild', 'feed/atom/Parent%2FChild'],
-    ])('%s is decoded once before it is encoded for the feed', async (value, expected) => {
+        ['#label/My+Label', 'feed/atom/My-Label'],
+        ['#label/Parent%2FChild', 'feed/atom/Parent-Child'],
+    ])('%s is decoded once, then named the way the feed names it', async (value, expected) => {
         const tab: Tab = { id: 't', title: 'x', type: 'hash', value };
         await updateUnreadCount(tab, makeTabEl());
         const url = (global as any).fetch.mock.calls[0][0] as string;
@@ -722,15 +727,26 @@ describe('normalizeLabel with a literal percent sign', () => {
     });
 });
 
-describe('the sidebar fallback for a pinned #label/ view', () => {
-    test('finds the link for an encoded nested label rather than encoding it twice', () => {
-        document.body.innerHTML = `
-            <div role="navigation">
-                <a href="https://mail.google.com/mail/u/0/#label/Work%2FClients" title="Clients">
-                    <div class="bsU">6</div>
-                </a>
-            </div>`;
-        const count = getUnreadCountFromDOM({ id: 'p', title: 'Clients', type: 'hash', value: '#label/Work%2FClients' } as any);
-        expect(count).toBe('6');
+describe('the Atom feed fallback', () => {
+    test('names a label the way the feed does: every slash and space is a dash', () => {
+        expect(feedNameForLabel('Delete/Professional Newsletters')).toBe('Delete-Professional-Newsletters');
+        expect(feedNameForLabel('Loan & Insurance')).toBe('Loan-&-Insurance');
+    });
+
+    test('the inbox and sent have no feed fallback', () => {
+        expect(resolveFeedLabel({ id: 't', title: 'x', type: 'hash', value: '#inbox' })).toBeNull();
+        expect(resolveFeedLabel({ id: 't', title: 'x', type: 'label', value: 'Inbox' })).toBeNull();
+        expect(resolveFeedLabel({ id: 't', title: 'x', type: 'hash', value: '#sent' })).toBeNull();
+    });
+
+    test('a label with a sidebar row is never fetched', async () => {
+        clearUnreadCountCache();
+        (global as any).fetch = jest.fn();
+        document.body.innerHTML = gmailRow('label/Work', '5');
+        const el = document.createElement('div');
+        el.innerHTML = '<span class="unread-count"></span>';
+        await updateUnreadCount({ id: 't', title: 'Work', type: 'label', value: 'Work' }, el);
+        expect((global as any).fetch).not.toHaveBeenCalled();
+        expect(el.textContent).toBe('5');
     });
 });

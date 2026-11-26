@@ -5,6 +5,8 @@ export {};
  * Unit tests for the tab color palette utilities.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { TAB_COLORS, TAB_COLOR_LABELS, isValidTabColor, normalizeTabColor, tabColorClass } from '../src/utils/colors';
 
 describe('isValidTabColor', () => {
@@ -46,5 +48,12 @@ describe('palette integrity', () => {
             expect(typeof TAB_COLOR_LABELS[c]).toBe('string');
             expect(TAB_COLOR_LABELS[c].length).toBeGreaterThan(0);
         });
+    });
+});
+
+describe('every token is drawn', () => {
+    test.each(['src/ui/toolbar.css', 'src/options.css'])('%s gives every token an accent', (file) => {
+        const css = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        for (const c of TAB_COLORS) expect(css).toMatch(new RegExp(`\\.tab-color-${c} \\{ --tab-accent: #[0-9a-f]{6}; \\}`));
     });
 });

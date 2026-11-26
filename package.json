@@ -1,6 +1,6 @@
 {
   "name": "gmail-labels-as-tabs",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Injects a user-configurable tabs bar into Gmail linked to labels.",
   "scripts": {
     "clean": "rm -rf dist",
@@ -26,7 +26,7 @@
     "@types/node": "^20.11.24",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
-    "esbuild": "^0.27.0",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.2.0",
